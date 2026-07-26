@@ -4,17 +4,19 @@
 //
 // Auth: a Google Cloud service account with the Search Console API enabled,
 // added as a user on the GSC property. Set GSC_CLIENT_EMAIL and GSC_PRIVATE_KEY.
+//
+// Uses google-auth-library (small) + a direct REST call instead of the full
+// `googleapis` package, which is too large and crashes the Vercel build.
 
-import { google } from "googleapis";
+import { JWT } from "google-auth-library";
 import { BRAND } from "./brand";
 
-function client() {
-  const auth = new google.auth.JWT({
+function auth() {
+  return new JWT({
     email: process.env.GSC_CLIENT_EMAIL,
     key: (process.env.GSC_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
     scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
   });
-  return google.searchconsole({ version: "v1", auth });
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
@@ -28,17 +30,32 @@ export type QueryRow = {
 };
 
 async function query(dimensions: string[], rowLimit = 250): Promise<QueryRow[]> {
-  const sc = client();
-  const res = await sc.searchanalytics.query({
-    siteUrl: BRAND.gscProperty,
-    requestBody: {
+  const jwt = auth();
+  const { access_token } = await jwt.authorize();
+  const endpoint =
+    "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
+    encodeURIComponent(BRAND.gscProperty) +
+    "/searchAnalytics/query";
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       startDate: daysAgo(28),
       endDate: daysAgo(1),
       dimensions,
       rowLimit,
-    },
+    }),
   });
-  return (res.data.rows as QueryRow[]) || [];
+
+  if (!res.ok) {
+    throw new Error(`GSC query failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { rows?: QueryRow[] };
+  return data.rows || [];
 }
 
 // Queries ranking 5-20 with real impressions: a nudge could move them to page 1.
