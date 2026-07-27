@@ -23,12 +23,19 @@ type PlannedTask = {
 
 export async function runOrchestration() {
   // 1) Open a run record.
-  const { data: run } = await db
+  const { data: run, error: runErr } = await db
     .from("runs")
     .insert({ status: "running" })
     .select()
     .single();
-  const runId = run!.id;
+  if (runErr || !run) {
+    throw new Error(
+      "Could not create a run row in Supabase. " +
+        (runErr?.message || "no row returned") +
+        " — verify SUPABASE_SERVICE_ROLE_KEY is the secret key and the 'runs' table exists with RLS off."
+    );
+  }
+  const runId = run.id;
 
   try {
     // 2) Gather live signals. If GSC isn't wired yet, degrade gracefully.
@@ -81,7 +88,10 @@ Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
 
     return { runId, planned: tasks.length, produced };
   } catch (err) {
-    await db.from("runs").update({ status: "error", error: String(err) }).eq("id", runId);
+    // Don't let a failed status-write mask the real error.
+    try {
+      await db.from("runs").update({ status: "error" }).eq("id", runId);
+    } catch {}
     throw err;
   }
 }
