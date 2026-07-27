@@ -21,7 +21,7 @@ WRITE FOR E-E-A-T (this is how Google decides if it ranks):
 SEO RULES (modern, not keyword-stuffing):
 - ONE primary keyword ("${keyword}") used naturally in the title, H1, first paragraph, and a couple of headings — plus natural local variations. Do NOT repeat it unnaturally.
 - Structure with H2s that answer real questions people search (use question-style H2s where natural — this also helps AI assistants quote you).
-- Cover the topic COMPLETELY (this usually lands around 1200-1800 words — aim for completeness, never padding).
+- Cover the topic COMPLETELY and in depth — aim for 1200-1800 words of genuinely useful content. Do NOT write a short or thin post; a shallow post will not rank. Include enough real local detail, examples, and step-by-step specifics to fully satisfy the searcher.
 - Include a short FAQ section (3-5 real questions) near the end — great for featured snippets AND for AI assistants (ChatGPT/Gemini) that pull direct answers.
 - Add 2-3 internal-link suggestions to relevant service/city pages (write them as [anchor text](/suggested-path)).
 - End with a clear, specific call to action.

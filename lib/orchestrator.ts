@@ -64,6 +64,10 @@ async function runBrand(brand: Brand) {
 
 You are the SEO operations lead. Below is this site's real Search Console data (last 28 days). Decide the ${MAX_TASKS_PER_RUN} highest-impact actions right now. Prefer quick wins (striking-distance rankings, weak titles) over big new builds unless a content gap is glaring.
 
+TARGETING RULES:
+- Target PAID / high-commercial-intent keywords (cost, prices, hire, same-day, "[service] [city]").
+- Do NOT create pages/blogs whose primary keyword contains "free" (it attracts wrong-intent, non-paying visitors) unless the explicit goal is to redirect that intent toward paid.
+
 STRIKING DISTANCE (ranking 5-20 — small push = page 1):
 ${JSON.stringify(striking, null, 2)}
 
