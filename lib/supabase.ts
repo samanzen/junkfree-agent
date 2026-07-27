@@ -31,6 +31,7 @@ export type TaskType =
   | "improve_content"
   | "new_page"
   | "new_blog"
+  | "geo_answers"
   | "technical_fix";
 
 export type Draft = {

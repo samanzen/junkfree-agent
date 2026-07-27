@@ -9,6 +9,8 @@ import { db, TaskType } from "./supabase";
 import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
+import { generateAndStore } from "./images";
+import { writeAnswerContent } from "./geo-agent";
 
 const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 4);
 
@@ -124,8 +126,31 @@ Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
       produced++;
     }
 
-    // 6) CITATIONS — only refresh occasionally (they don't change fast). Run when
-    // the brand has few suggestions on file.
+    // 6) GEO / AEO — answer-optimized FAQ content so AI assistants (ChatGPT,
+    // Gemini) recommend this business. Refresh occasionally.
+    const { count: geoCount } = await db
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id)
+      .eq("task_type", "geo_answers");
+    if (!geoCount) {
+      const answers = await writeAnswerContent(brand).catch(() => null);
+      if (answers?.faqs?.length) {
+        const md = answers.faqs.map((f) => `**${f.q}**\n\n${f.a}`).join("\n\n");
+        await db.from("drafts").insert({
+          brand_id: brand.id,
+          run_id: runId,
+          task_type: "geo_answers",
+          title: "AI-answer FAQ content (GEO/AEO)",
+          body: md,
+          rationale: "Answer-optimized content so ChatGPT/Gemini recommend the business + FAQPage schema for snippets.",
+          status: "pending_review",
+        });
+        produced++;
+      }
+    }
+
+    // 7) CITATIONS — refresh only when the brand has few on file.
     const { count } = await db
       .from("citations")
       .select("id", { count: "exact", head: true })
@@ -165,11 +190,18 @@ async function execute(
   t: PlannedTask
 ): Promise<{ title: string; body: string } | null> {
   const kw = t.target_keyword || "";
+  const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
   switch (t.task_type) {
-    case "new_blog":
-      return { title: `Blog: ${kw}`, body: await writeContent(brand, kw, "Blog post") };
-    case "new_page":
-      return { title: `Page: ${kw}`, body: await writeContent(brand, kw, "Local service page") };
+    case "new_blog": {
+      const body = await writeContent(brand, kw, "Blog post");
+      const img = await generateAndStore(brand, kw, slugify(kw)).catch(() => null);
+      return { title: `Blog: ${kw}`, body: img ? `![header](${img})\n\n${body}` : body };
+    }
+    case "new_page": {
+      const body = await writeContent(brand, kw, "Local service page");
+      const img = await generateAndStore(brand, kw, slugify(kw)).catch(() => null);
+      return { title: `Page: ${kw}`, body: img ? `![header](${img})\n\n${body}` : body };
+    }
     case "improve_content":
       return { title: `Audit + rewrite: ${t.target_url || kw}`, body: await auditPage(brand, kw, "") };
     case "fix_meta":

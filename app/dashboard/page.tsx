@@ -6,7 +6,7 @@ type Draft = { id: string; brand_id: string; task_type: string; target_url: stri
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
 
-const LABEL: Record<string, string> = { fix_meta: "Meta / intent fix", improve_content: "Content audit", new_page: "New page", new_blog: "New blog" };
+const LABEL: Record<string, string> = { fix_meta: "Meta / intent fix", improve_content: "Content audit", new_page: "New page", new_blog: "New blog", geo_answers: "AI-answer content (GEO)" };
 
 export default function Dashboard() {
   const [brands, setBrands] = useState<Brand[]>([]);
