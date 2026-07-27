@@ -90,8 +90,8 @@ export default function Dashboard() {
   );
 }
 
-const card: React.CSSProperties = { border: "1px solid #e4e4dd", borderRadius: 10, padding: 16, marginBottom: 14 };
+const card: React.CSSProperties = { border: "1px solid #e4e4dd", borderRadius: 10, padding: 16, marginBottom: 14, background: "#ffffff", color: "#1a1a1a" };
 const tag: React.CSSProperties = { fontSize: 11, fontWeight: 600, background: "#f0f0e8", padding: "2px 8px", borderRadius: 4 };
-const pre: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 12, background: "#faf9f5", padding: 12, borderRadius: 6, maxHeight: 220, overflow: "auto", margin: 0 };
+const pre: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 12, color: "#1a1a1a", background: "#ffffff", padding: 12, borderRadius: 6, maxHeight: 220, overflow: "auto", margin: 0, border: "1px solid #e4e4dd" };
 const btn: React.CSSProperties = { background: "#228B5A", color: "#fff", border: 0, padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 };
 const ghost: React.CSSProperties = { background: "transparent", color: "#889", border: "1px solid #ddd", padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer" };
