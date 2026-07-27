@@ -58,3 +58,17 @@ export async function generateAndStore(brand: Brand, topic: string, slug: string
   const { data } = db.storage.from("blog-images").getPublicUrl(path);
   return data.publicUrl || null;
 }
+
+// Generate a header image + one in-body image for richer posts. Returns both
+// URLs (either may be null if generation fails). Kept to 2 to control cost.
+export async function generatePostImages(
+  brand: Brand,
+  topic: string,
+  slug: string
+): Promise<{ header: string | null; body: string | null }> {
+  const header = await generateAndStore(brand, topic, `${slug}-header`).catch(() => null);
+  const body = await generateAndStore(brand, `${topic} — detail, close-up context`, `${slug}-body`).catch(
+    () => null
+  );
+  return { header, body };
+}
