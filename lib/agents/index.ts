@@ -19,6 +19,7 @@ WRITE FOR E-E-A-T (this is how Google decides if it ranks):
 - TRUST: honest about pricing/what's included; no hype, no empty filler.
 
 SEO RULES (modern, not keyword-stuffing):
+- NEVER invent or state specific prices, dollar amounts, or numeric price ranges. Pricing is quoted per job. Explain what pricing depends on (volume, access, materials) and direct readers to request a free, no-obligation quote. Do not use example prices even to illustrate.
 - ONE primary keyword ("${keyword}") used naturally in the title, H1, first paragraph, and a couple of headings — plus natural local variations. Do NOT repeat it unnaturally.
 - Structure with H2s that answer real questions people search (use question-style H2s where natural — this also helps AI assistants quote you).
 - Cover the topic COMPLETELY and in depth — aim for 1200-1800 words of genuinely useful content. Do NOT write a short or thin post; a shallow post will not rank. Include enough real local detail, examples, and step-by-step specifics to fully satisfy the searcher.

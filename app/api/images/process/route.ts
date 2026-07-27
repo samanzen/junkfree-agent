@@ -20,6 +20,16 @@ export async function POST() {
   const target = (drafts || []).find((d) => !String(d.body).includes("![header]"));
   if (!target) return NextResponse.json({ done: true });
 
+  // COST CAP: at most 1 image-post per day across all brands. Counts drafts that
+  // already have an image and were created today.
+  const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+  const { data: todays } = await db
+    .from("drafts")
+    .select("body,created_at")
+    .gte("created_at", startOfDay.toISOString());
+  const doneToday = (todays || []).filter((d) => String(d.body).includes("![header](http")).length;
+  if (doneToday >= 1) return NextResponse.json({ done: true, capped: true });
+
   const brand = await getBrandById(target.brand_id);
   if (!brand) return NextResponse.json({ done: true });
 
