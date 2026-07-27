@@ -32,17 +32,28 @@ export default function Dashboard() {
     await fetch(`/api/platform/${table}/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     load();
   }
+  async function processImages() {
+    // Adds AI images to content drafts one at a time (each call is quick).
+    for (let i = 0; i < 12; i++) {
+      try {
+        const r = await (await fetch("/api/images/process", { method: "POST" })).json();
+        load();
+        if (r.done) break;
+      } catch { break; }
+    }
+  }
   async function runNow() {
     setRunning(true);
-    // Fire-and-forget: the run can take longer than the browser/plan timeout,
-    // but it keeps working server-side and saves drafts as it goes. We just
-    // kick it off and refresh the queue a few times instead of blocking.
+    // Content run is fire-and-forget (may exceed the plan timeout but keeps
+    // working server-side). Poll the queue, then generate images once content
+    // has landed.
     fetch("/api/cron/orchestrate", { method: "POST" }).catch(() => {});
     let ticks = 0;
-    const iv = setInterval(() => {
+    const iv = setInterval(async () => {
       ticks++;
       load();
-      if (ticks >= 6) { clearInterval(iv); setRunning(false); }
+      if (ticks === 4) processImages();          // start images once drafts appear
+      if (ticks >= 8) { clearInterval(iv); setRunning(false); }
     }, 12000);
   }
 

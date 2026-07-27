@@ -9,7 +9,6 @@ import { db, TaskType } from "./supabase";
 import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
-import { generatePostImages } from "./images";
 import { writeAnswerContent } from "./geo-agent";
 
 const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 3);
@@ -192,16 +191,10 @@ async function execute(
   const kw = t.target_keyword || "";
   const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
   switch (t.task_type) {
-    case "new_blog": {
-      const body = await writeContent(brand, kw, "Blog post");
-      const imgs = await generatePostImages(brand, kw, slugify(kw)).catch(() => ({ header: null, body: null }));
-      return { title: `Blog: ${kw}`, body: withImages(body, imgs) };
-    }
-    case "new_page": {
-      const body = await writeContent(brand, kw, "Local service page");
-      const imgs = await generatePostImages(brand, kw, slugify(kw)).catch(() => ({ header: null, body: null }));
-      return { title: `Page: ${kw}`, body: withImages(body, imgs) };
-    }
+    case "new_blog":
+      return { title: `Blog: ${kw}`, body: await writeContent(brand, kw, "Blog post") };
+    case "new_page":
+      return { title: `Page: ${kw}`, body: await writeContent(brand, kw, "Local service page") };
     case "improve_content":
       return { title: `Audit + rewrite: ${t.target_url || kw}`, body: await auditPage(brand, kw, "") };
     case "fix_meta":
@@ -214,18 +207,6 @@ async function execute(
   }
 }
 
-
-// Place the header image at the very top and the in-body image after the first
-// H2 (or a third of the way in) so posts read naturally, not top-heavy.
-function withImages(md: string, imgs: { header: string | null; body: string | null }): string {
-  let out = md;
-  if (imgs.body) {
-    const idx = out.indexOf("\n## ", 200);
-    if (idx > -1) out = out.slice(0, idx) + `\n\n![illustration](${imgs.body})\n` + out.slice(idx);
-  }
-  if (imgs.header) out = `![header](${imgs.header})\n\n` + out;
-  return out;
-}
 
 async function safe<T>(fn: () => Promise<T>): Promise<T | []> {
   try {
