@@ -39,7 +39,13 @@ export default function Dashboard() {
   }
   async function runNow() {
     setRunningNow(true);
-    await fetch("/api/cron/orchestrate", { headers: { authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET}` } });
+    try {
+      const res = await fetch("/api/cron/orchestrate", { method: "POST" });
+      const result = await res.json();
+      if (!result.ok) alert("Run finished with an issue: " + (result.error || "unknown"));
+    } catch (e) {
+      alert("Run failed: " + String(e));
+    }
     setRunningNow(false);
     load();
   }
