@@ -1,15 +1,11 @@
 // Google Search Console = the eyes of the autonomous system.
-// It tells the orchestrator which pages are underperforming and where the
-// "striking distance" opportunities are (queries ranking 5-20).
+// Brand-aware: takes a GSC property so one engine reads data for every brand.
 //
 // Auth: a Google Cloud service account with the Search Console API enabled,
-// added as a user on the GSC property. Set GSC_CLIENT_EMAIL and GSC_PRIVATE_KEY.
-//
-// Uses google-auth-library (small) + a direct REST call instead of the full
-// `googleapis` package, which is too large and crashes the Vercel build.
+// added as a user on each brand's GSC property (GSC_CLIENT_EMAIL/GSC_PRIVATE_KEY).
+// Uses google-auth-library (small) + a direct REST call.
 
 import { JWT } from "google-auth-library";
-import { BRAND } from "./brand";
 
 function auth() {
   return new JWT({
@@ -29,12 +25,12 @@ export type QueryRow = {
   position: number;
 };
 
-async function query(dimensions: string[], rowLimit = 250): Promise<QueryRow[]> {
+async function query(gscProperty: string, dimensions: string[], rowLimit = 250): Promise<QueryRow[]> {
   const jwt = auth();
   const { access_token } = await jwt.authorize();
   const endpoint =
     "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
-    encodeURIComponent(BRAND.gscProperty) +
+    encodeURIComponent(gscProperty) +
     "/searchAnalytics/query";
 
   const res = await fetch(endpoint, {
@@ -59,8 +55,8 @@ async function query(dimensions: string[], rowLimit = 250): Promise<QueryRow[]> 
 }
 
 // Queries ranking 5-20 with real impressions: a nudge could move them to page 1.
-export async function strikingDistance() {
-  const rows = await query(["query", "page"]);
+export async function strikingDistance(gscProperty: string) {
+  const rows = await query(gscProperty, ["query", "page"]);
   return rows
     .filter((r) => r.position >= 5 && r.position <= 20 && r.impressions >= 20)
     .sort((a, b) => b.impressions - a.impressions)
@@ -75,11 +71,26 @@ export async function strikingDistance() {
 }
 
 // Pages with lots of impressions but poor CTR: usually a weak title/meta.
-export async function lowCtrPages() {
-  const rows = await query(["page"]);
+export async function lowCtrPages(gscProperty: string) {
+  const rows = await query(gscProperty, ["page"]);
   return rows
     .filter((r) => r.impressions >= 100 && r.ctr < 0.02)
     .sort((a, b) => b.impressions - a.impressions)
     .slice(0, 15)
     .map((r) => ({ page: r.keys[0], impressions: r.impressions, ctr: r.ctr }));
+}
+
+// Pages ranking for queries that may signal wrong intent (e.g. "free"), so the
+// intent-fixer can qualify them. Returns page -> the queries bringing it traffic.
+export async function pagesByIntentSignal(gscProperty: string, signal: string) {
+  const rows = await query(gscProperty, ["query", "page"]);
+  const map = new Map<string, string[]>();
+  for (const r of rows) {
+    if (r.keys[0]?.toLowerCase().includes(signal.toLowerCase()) && r.impressions >= 20) {
+      const page = r.keys[1];
+      if (!map.has(page)) map.set(page, []);
+      map.get(page)!.push(r.keys[0]);
+    }
+  }
+  return [...map.entries()].map(([page, queries]) => ({ page, queries })).slice(0, 10);
 }

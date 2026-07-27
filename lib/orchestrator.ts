@@ -1,18 +1,16 @@
-// THE BRAIN.
-// One run = gather signals -> decide the highest-value work -> execute it ->
-// queue drafts. This is what makes the system autonomous: nobody tells it what
-// to do; it looks at the site's real search performance and figures it out.
+// THE BRAIN — now multi-tenant.
+// One run loops over every active brand and, for each, does the full local-SEO
+// suite: read GSC signals, plan content work, fix search intent, draft GBP posts,
+// and surface citation/backlink opportunities. Safe fixes can auto-publish.
 
 import { callClaude, extractJSON } from "./anthropic";
-import { brandBlock } from "./brand";
+import { getActiveBrands, brandBlock, type Brand } from "./brands";
 import { db, TaskType } from "./supabase";
-import { strikingDistance, lowCtrPages } from "./gsc";
+import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
+import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 
-// How many pieces of work to actually execute per run. Keeps cost bounded and
-// avoids flooding the site with content (a real spam-penalty risk if unchecked).
 const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 4);
-const AUTO_PUBLISH = process.env.AUTO_PUBLISH === "true";
 
 type PlannedTask = {
   task_type: TaskType;
@@ -21,54 +19,68 @@ type PlannedTask = {
   rationale: string;
 };
 
+// Entry point: run every active brand. Returns a per-brand summary.
 export async function runOrchestration() {
-  // 1) Open a run record.
-  const { data: run, error: runErr } = await db
+  const brands = await getActiveBrands();
+  if (!brands.length) {
+    throw new Error("No active brands found. Run supabase/platform.sql to seed brands.");
+  }
+  const results = [];
+  for (const brand of brands) {
+    try {
+      results.push(await runBrand(brand));
+    } catch (err) {
+      results.push({ brand: brand.slug, error: String(err) });
+    }
+  }
+  return { brands: results.length, results };
+}
+
+async function runBrand(brand: Brand) {
+  const { data: run } = await db
     .from("runs")
-    .insert({ status: "running" })
+    .insert({ status: "running", brand_id: brand.id })
     .select()
     .single();
-  if (runErr || !run) {
-    throw new Error(
-      "Could not create a run row in Supabase. " +
-        (runErr?.message || "no row returned") +
-        " — verify SUPABASE_SERVICE_ROLE_KEY is the secret key and the 'runs' table exists with RLS off."
-    );
-  }
-  const runId = run.id;
+  const runId = run!.id;
+  let produced = 0;
 
   try {
-    // 2) Gather live signals. If GSC isn't wired yet, degrade gracefully.
-    const [striking, lowCtr] = await Promise.all([
-      safe(strikingDistance),
-      safe(lowCtrPages),
+    // 1) Gather live GSC signals (degrade gracefully if GSC not wired for a brand).
+    const gsc = brand.gsc_property;
+    const [striking, lowCtr, intentPages] = await Promise.all([
+      gsc ? safe(() => strikingDistance(gsc)) : Promise.resolve([]),
+      gsc ? safe(() => lowCtrPages(gsc)) : Promise.resolve([]),
+      gsc && brand.intent_notes
+        ? safe(() => pagesByIntentSignal(gsc, "free"))
+        : Promise.resolve([]),
     ]);
 
-    // 3) Ask the orchestrator model to turn signals into a ranked task list.
+    // 2) Plan the highest-value content work from the signals.
     const planText = await callClaude({
       maxTokens: 1500,
-      user: `${brandBlock()}
+      user: `${brandBlock(brand)}
 
-You are the SEO operations lead. Below is this site's real Search Console data for the last 28 days. Decide the ${MAX_TASKS_PER_RUN} highest-impact actions to take right now. Prefer quick wins (striking-distance rankings, weak titles) over big new builds unless a content gap is glaring.
+You are the SEO operations lead. Below is this site's real Search Console data (last 28 days). Decide the ${MAX_TASKS_PER_RUN} highest-impact actions right now. Prefer quick wins (striking-distance rankings, weak titles) over big new builds unless a content gap is glaring.
 
-STRIKING DISTANCE (queries ranking 5-20 — small push = page 1):
+STRIKING DISTANCE (ranking 5-20 — small push = page 1):
 ${JSON.stringify(striking, null, 2)}
 
-LOW CTR PAGES (ranking but not getting clicks — usually weak title/meta):
+LOW CTR PAGES (ranking but few clicks — usually weak title/meta):
 ${JSON.stringify(lowCtr, null, 2)}
 
 Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
-[{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...optional","target_keyword":"...","rationale":"why this, in one line"}]`,
+[{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...optional","target_keyword":"...","rationale":"why, one line"}]`,
     });
-
     const tasks = (extractJSON<PlannedTask[]>(planText) || []).slice(0, MAX_TASKS_PER_RUN);
 
-    // 4) Execute each task with the right specialist, store the deliverable.
-    let produced = 0;
+    // 3) Execute content tasks. Meta fixes can auto-publish if the brand allows.
     for (const t of tasks) {
-      const draft = await execute(t);
+      const draft = await execute(brand, t);
       if (!draft) continue;
+      const autoApprove = brand.auto_publish_meta && t.task_type === "fix_meta";
       await db.from("drafts").insert({
+        brand_id: brand.id,
         run_id: runId,
         task_type: t.task_type,
         target_url: t.target_url || null,
@@ -76,9 +88,62 @@ Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
         title: draft.title,
         body: draft.body,
         rationale: t.rationale,
-        status: AUTO_PUBLISH && t.task_type === "fix_meta" ? "approved" : "pending_review",
+        status: autoApprove ? "approved" : "pending_review",
       });
       produced++;
+    }
+
+    // 4) INTENT FIXER — the "free" problem. Rewrite wrong-intent pages.
+    for (const p of intentPages.slice(0, 2)) {
+      const fix = await fixIntent(brand, p.page, p.queries);
+      if (fix) {
+        await db.from("drafts").insert({
+          brand_id: brand.id,
+          run_id: runId,
+          task_type: "fix_meta",
+          target_url: p.page,
+          title: `Intent fix: ${p.page}`,
+          body: fix,
+          rationale: `Page attracts wrong-intent ("${p.queries[0]}") traffic — qualify for paying customers.`,
+          status: "pending_review",
+        });
+        produced++;
+      }
+    }
+
+    // 5) GBP POST — active Google Business Profile = stronger map-pack ranking.
+    const post = await draftGbpPost(brand);
+    if (post) {
+      await db.from("gbp_posts").insert({
+        brand_id: brand.id,
+        title: post.title,
+        body: post.body,
+        cta: post.cta,
+        status: "pending_review",
+      });
+      produced++;
+    }
+
+    // 6) CITATIONS — only refresh occasionally (they don't change fast). Run when
+    // the brand has few suggestions on file.
+    const { count } = await db
+      .from("citations")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id);
+    if (!count) {
+      const cites = await findCitations(brand);
+      if (cites?.length) {
+        await db.from("citations").insert(
+          cites.map((c) => ({
+            brand_id: brand.id,
+            name: c.name,
+            url: c.url,
+            category: c.category,
+            priority: c.priority,
+            rationale: c.rationale,
+          }))
+        );
+      }
     }
 
     await db
@@ -86,32 +151,31 @@ Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
       .update({ status: "done", tasks_planned: tasks.length, drafts_produced: produced })
       .eq("id", runId);
 
-    return { runId, planned: tasks.length, produced };
+    return { brand: brand.slug, planned: tasks.length, produced };
   } catch (err) {
-    // Don't let a failed status-write mask the real error.
     try {
       await db.from("runs").update({ status: "error" }).eq("id", runId);
     } catch {}
-    throw err;
+    return { brand: brand.slug, error: String(err) };
   }
 }
 
-async function execute(t: PlannedTask): Promise<{ title: string; body: string } | null> {
+async function execute(
+  brand: Brand,
+  t: PlannedTask
+): Promise<{ title: string; body: string } | null> {
   const kw = t.target_keyword || "";
   switch (t.task_type) {
     case "new_blog":
-      return { title: `Blog: ${kw}`, body: await writeContent(kw, "Blog post") };
+      return { title: `Blog: ${kw}`, body: await writeContent(brand, kw, "Blog post") };
     case "new_page":
-      return { title: `Page: ${kw}`, body: await writeContent(kw, "Local service page") };
+      return { title: `Page: ${kw}`, body: await writeContent(brand, kw, "Local service page") };
     case "improve_content":
-      return {
-        title: `Audit + rewrite: ${t.target_url || kw}`,
-        body: await auditPage(kw, ""),
-      };
+      return { title: `Audit + rewrite: ${t.target_url || kw}`, body: await auditPage(brand, kw, "") };
     case "fix_meta":
       return {
         title: `Meta rewrite: ${t.target_url || kw}`,
-        body: await rewriteMeta(t.target_url || "", `Target keyword: ${kw}`),
+        body: await rewriteMeta(brand, t.target_url || "", `Target keyword: ${kw}`),
       };
     default:
       return null;
@@ -122,6 +186,6 @@ async function safe<T>(fn: () => Promise<T>): Promise<T | []> {
   try {
     return await fn();
   } catch {
-    return [] as unknown as T; // GSC not configured yet — orchestrator still runs.
+    return [] as unknown as T;
   }
 }
