@@ -34,9 +34,16 @@ export default function Dashboard() {
   }
   async function runNow() {
     setRunning(true);
-    try { const r = await (await fetch("/api/cron/orchestrate", { method: "POST" })).json(); if (!r.ok && r.error) alert("Run issue: " + r.error); }
-    catch (e) { alert("Run failed: " + String(e)); }
-    setRunning(false); load();
+    // Fire-and-forget: the run can take longer than the browser/plan timeout,
+    // but it keeps working server-side and saves drafts as it goes. We just
+    // kick it off and refresh the queue a few times instead of blocking.
+    fetch("/api/cron/orchestrate", { method: "POST" }).catch(() => {});
+    let ticks = 0;
+    const iv = setInterval(() => {
+      ticks++;
+      load();
+      if (ticks >= 6) { clearInterval(iv); setRunning(false); }
+    }, 12000);
   }
 
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
@@ -50,7 +57,7 @@ export default function Dashboard() {
           <h1 style={{ fontSize: 20, margin: 0 }}>SEO Platform — Mission Control</h1>
           <p style={{ color: "#667", fontSize: 13, margin: "4px 0 0" }}>Multi-brand local SEO. Agents run daily; review and approve their work.</p>
         </div>
-        <button onClick={runNow} disabled={running} style={btn}>{running ? "Running…" : "Run agents now"}</button>
+        <button onClick={runNow} disabled={running} style={btn}>{running ? "Running… (keeps working in background)" : "Run agents now"}</button>
       </header>
 
       {/* Brand switcher */}

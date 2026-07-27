@@ -12,7 +12,7 @@ import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { generatePostImages } from "./images";
 import { writeAnswerContent } from "./geo-agent";
 
-const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 4);
+const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
 type PlannedTask = {
   task_type: TaskType;
