@@ -96,7 +96,7 @@ export default function Dashboard() {
             </div>
             <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{d.title}</h3>
             <p style={{ fontSize: 12.5, color: "#667", margin: "0 0 10px" }}>{d.rationale}</p>
-            <pre style={pre}>{d.body.slice(0, 1200)}{d.body.length > 1200 ? "…" : ""}</pre>
+            <DraftBody body={d.body} />
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               {d.status === "pending_review" && <button onClick={() => draftAct(d.id, "approve")} style={btn}>Approve</button>}
               {d.status === "approved" && <button onClick={() => draftAct(d.id, "publish")} style={{ ...btn, background: "#188a5a" }}>Publish</button>}
@@ -148,6 +148,56 @@ function Tab({ on, onClick, label }: { on: boolean; onClick: () => void; label: 
   return <button onClick={onClick} style={{ background: "transparent", border: 0, borderBottom: on ? "2px solid #228B5A" : "2px solid transparent", color: on ? "#1a1a1a" : "#889", padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>;
 }
 function Empty() { return <p style={{ color: "#889" }}>Nothing here yet. Hit “Run agents now”.</p>; }
+
+// Renders a draft body. If it's JSON (meta/intent fixes), show the title & meta
+// options as readable, copyable suggestions instead of raw JSON or a blank box.
+function DraftBody({ body }: { body: string }) {
+  let parsed: unknown = null;
+  try {
+    const t = body.replace(/```json/gi, "").replace(/```/g, "").trim();
+    if (t.startsWith("{") || t.startsWith("[")) parsed = JSON.parse(t);
+  } catch { /* not JSON — fall through to text */ }
+
+  if (parsed && typeof parsed === "object") {
+    const p = parsed as Record<string, unknown>;
+    const titles = (p.titles as string[]) || (p.title ? [p.title as string] : []);
+    const metas = (p.metas as string[]) || (p.meta ? [p.meta as string] : []);
+    const opening = p.opening as string | undefined;
+    const why = p.why as string | undefined;
+    if (titles.length || metas.length || opening) {
+      return (
+        <div style={{ ...pre, display: "block" }}>
+          {titles.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <strong style={{ fontSize: 12, color: "#556" }}>Title tag options:</strong>
+              {titles.map((t, i) => (
+                <div key={i} style={optRow} onClick={() => navigator.clipboard?.writeText(t)} title="Click to copy">• {t}</div>
+              ))}
+            </div>
+          )}
+          {metas.length > 0 && (
+            <div style={{ marginBottom: opening ? 10 : 0 }}>
+              <strong style={{ fontSize: 12, color: "#556" }}>Meta description options:</strong>
+              {metas.map((m, i) => (
+                <div key={i} style={optRow} onClick={() => navigator.clipboard?.writeText(m)} title="Click to copy">• {m}</div>
+              ))}
+            </div>
+          )}
+          {opening && (
+            <div>
+              <strong style={{ fontSize: 12, color: "#556" }}>New opening paragraph:</strong>
+              <div style={{ ...optRow, whiteSpace: "pre-wrap" }} onClick={() => navigator.clipboard?.writeText(opening)}>{opening}</div>
+            </div>
+          )}
+          {why && <p style={{ fontSize: 11.5, color: "#889", margin: "10px 0 0" }}>Why: {why}</p>}
+          <p style={{ fontSize: 10.5, color: "#aab", margin: "8px 0 0" }}>Tip: click any option to copy it.</p>
+        </div>
+      );
+    }
+  }
+  return <pre style={pre}>{body.slice(0, 1400)}{body.length > 1400 ? "…" : ""}</pre>;
+}
+const optRow: React.CSSProperties = { fontSize: 12.5, padding: "6px 8px", margin: "4px 0", background: "#f7f7f2", borderRadius: 5, cursor: "pointer", border: "1px solid #ececE4" };
 
 const card: React.CSSProperties = { border: "1px solid #e4e4dd", borderRadius: 10, padding: 16, marginBottom: 14, background: "#fff" };
 const chip: React.CSSProperties = { fontSize: 11, fontWeight: 600, background: "#f0f0e8", padding: "2px 8px", borderRadius: 4 };
