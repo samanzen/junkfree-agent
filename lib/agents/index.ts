@@ -57,3 +57,20 @@ Return ONLY JSON:
 Cover: title, meta, H1, headings, keyword usage, local specifics/E-E-A-T, internal links, FAQ/answer-content for AI assistants, CTA, readability, schema.`,
   });
 }
+
+// Revise an existing draft based on owner feedback ("make it shorter", "wrong
+// tone", "add pricing transparency"). Keeps what works, fixes what's flagged.
+export async function reviseDraft(brand: Brand, current: string, feedback: string) {
+  return callClaude({
+    maxTokens: 4000,
+    user: `${brandBlock(brand)}
+
+Here is a draft you produced:
+"""${current}"""
+
+The owner gave this feedback:
+"""${feedback}"""
+
+Revise the draft to fully address the feedback while keeping everything that already works. Keep the same format (if it starts with TITLE TAG:/META: lines, keep them). Apply all brand rules (deep E-E-A-T, no invented prices, no "free" in titles, local specifics). Return ONLY the revised content, nothing else.`,
+  });
+}

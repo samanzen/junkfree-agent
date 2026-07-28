@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-type Brand = { id: string; slug: string; name: string };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean };
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
@@ -17,7 +17,9 @@ export default function Dashboard() {
   const [tab, setTab] = useState<"content" | "gbp" | "citations">("content");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [rewriting, setRewriting] = useState("");
+  const [feedbackFor, setFeedbackFor] = useState<string>("");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [busy, setBusy] = useState("");
 
   async function load() {
     const res = await fetch("/api/platform");
@@ -35,6 +37,19 @@ export default function Dashboard() {
     } catch (e) { alert("Action failed: " + String(e)); }
     load();
   }
+  async function sendFeedback(id: string) {
+    if (!feedbackText.trim()) return;
+    setBusy(id);
+    try {
+      const r = await (await fetch(`/api/drafts/${id}/revise`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: feedbackText }) })).json();
+      if (r.ok === false) alert(r.error || "Revision failed");
+    } catch (e) { alert("Revision failed: " + String(e)); }
+    setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
+  }
+  async function toggleAuto(brandId: string, current: boolean) {
+    await fetch(`/api/brand/${brandId}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
+    load();
+  }
   async function rowAct(table: string, id: string, status: string) {
     await fetch(`/api/platform/${table}/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     load();
@@ -48,22 +63,6 @@ export default function Dashboard() {
         if (r.done) break;
       } catch { break; }
     }
-  }
-  async function rewriteExisting() {
-    setRewriting("Rewriting existing posts… (0 done)");
-    let n = 0;
-    for (let i = 0; i < 20; i++) {
-      try {
-        const r = await (await fetch("/api/rewrite-existing", { method: "POST" })).json();
-        if (r.done) break;
-        n++;
-        setRewriting(`Rewriting existing posts… (${n} done, ${r.remaining ?? "?"} left)`);
-        load();
-      } catch { break; }
-    }
-    setRewriting("");
-    alert("Done rewriting existing blog posts. They now render deep content on the live site.");
-    load();
   }
   async function runNow() {
     setRunning(true);
@@ -99,11 +98,22 @@ export default function Dashboard() {
         <button onClick={runNow} disabled={running} style={btn}>{running ? "Running…" : "Run agents now"}</button>
       </header>
 
-      {/* Brand switcher */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      {/* Brand switcher + publish mode */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {brands.map((b) => (
           <button key={b.id} onClick={() => setBrandId(b.id)} style={brandId === b.id ? pillOn : pill}>{b.name}</button>
         ))}
+        {(() => {
+          const b = brands.find((x) => x.id === brandId) as (Brand & { auto_publish_meta?: boolean }) | undefined;
+          if (!b) return null;
+          const auto = !!b.auto_publish_meta;
+          return (
+            <button onClick={() => toggleAuto(b.id, auto)} title="Review = you approve each item. Auto = agent publishes automatically."
+              style={{ marginLeft: "auto", ...pill, background: auto ? "#7a3ea8" : "#e8e8e0", color: auto ? "#fff" : "#556" }}>
+              {auto ? "⚡ Auto-publish ON" : "👁 Review mode"}
+            </button>
+          );
+        })()}
       </div>
 
       {/* Tabs */}
@@ -129,7 +139,17 @@ export default function Dashboard() {
               {d.status === "pending_review" && <button onClick={() => draftAct(d.id, "approve")} style={btn}>Approve</button>}
               {d.status === "approved" && <button onClick={() => draftAct(d.id, "publish")} style={{ ...btn, background: "#188a5a" }}>Publish</button>}
               <button onClick={() => draftAct(d.id, "approve?action=dismiss")} style={ghost}>Dismiss</button>
+              <button onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }} style={ghost}>💬 Give feedback</button>
             </div>
+            {feedbackFor === d.id && (
+              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                <input autoFocus value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
+                  placeholder="Tell the agent what to fix (e.g. make it shorter, wrong tone, add X)…"
+                  style={{ flex: 1, padding: "9px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13 }} />
+                <button onClick={() => sendFeedback(d.id)} disabled={busy === d.id} style={btn}>{busy === d.id ? "Revising…" : "Send"}</button>
+              </div>
+            )}
           </article>
         )) : <Empty />
       )}

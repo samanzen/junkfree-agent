@@ -98,13 +98,25 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   }
   if (!body) return;
 
-  const autoApprove = brand.auto_publish_meta && type === "fix_meta" && !p.intent;
-  await db.from("drafts").insert({
+  // Auto mode: publish immediately. Review mode: wait for approval.
+  const autoMode = brand.auto_publish_meta;
+  const { data: inserted } = await db.from("drafts").insert({
     brand_id: brand.id, run_id: runId, task_type: p.intent ? "fix_meta" : type,
     target_url: (p.target_url as string) || null, target_keyword: kw || null,
     title, body, rationale: (p.rationale as string) || "Search-intent qualification.",
-    status: autoApprove ? "approved" : "pending_review",
-  });
+    status: autoMode ? "approved" : "pending_review",
+  }).select().single();
+
+  // In auto mode, immediately publish blog/page content live.
+  if (autoMode && inserted && (type === "new_blog" || type === "new_page")) {
+    const raw = kw || title.replace(/^(Blog|Page):\s*/i, "");
+    const base = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70);
+    const slug = type === "new_page" ? base : `blog/${base}`;
+    const cleanBody = body.replace(/^\s*TITLE TAG:.*$/im, "").replace(/^\s*META:.*$/im, "").trim();
+    const cleanTitle = body.match(/^\s*TITLE TAG:\s*(.+)$/im)?.[1]?.trim() || title.replace(/^(Blog|Page):\s*/i, "");
+    await db.from("content").upsert({ slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() });
+    await db.from("drafts").update({ status: "published" }).eq("id", inserted.id);
+  }
 }
 
 export async function stepGeo(brand: Brand) {
