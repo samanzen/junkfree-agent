@@ -10,6 +10,8 @@ import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
+import { keywordStrategy, competitorGaps } from "./intelligence";
+import { activeLessons, analysePerformance } from "./learning";
 
 const MAX_TASKS_PER_RUN = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -47,31 +49,42 @@ async function runBrand(brand: Brand) {
   let produced = 0;
 
   try {
-    // 1) Gather live GSC signals (degrade gracefully if GSC not wired for a brand).
+    // 1) Gather intelligence: real GSC signals + DataForSEO strategy/competitor
+    // data + accumulated lessons. This is the "brain" input to planning.
     const gsc = brand.gsc_property;
-    const [striking, lowCtr, intentPages] = await Promise.all([
+    const [striking, lowCtr, intentPages, strategy, recon, lessons] = await Promise.all([
       gsc ? safe(() => strikingDistance(gsc)) : Promise.resolve([]),
       gsc ? safe(() => lowCtrPages(gsc)) : Promise.resolve([]),
-      gsc && brand.intent_notes
-        ? safe(() => pagesByIntentSignal(gsc, "free"))
-        : Promise.resolve([]),
+      gsc && brand.intent_notes ? safe(() => pagesByIntentSignal(gsc, "free")) : Promise.resolve([]),
+      safe(() => keywordStrategy(brand)),
+      safe(() => competitorGaps(brand)),
+      safe(() => activeLessons(brand)),
     ]);
 
-    // 2) Plan the highest-value content work from the signals.
+    // 2) Plan the highest-value work using ALL the intelligence above.
     const planText = await callClaude({
-      maxTokens: 1500,
+      maxTokens: 1800,
       user: `${brandBlock(brand)}
 
-You are the SEO operations lead. Below is this site's real Search Console data (last 28 days). Decide the ${MAX_TASKS_PER_RUN} highest-impact actions right now. Prefer quick wins (striking-distance rankings, weak titles) over big new builds unless a content gap is glaring.
+You are the SEO operations lead. Use ALL the intelligence below to choose the ${MAX_TASKS_PER_RUN} highest-impact actions right now. Favour quick wins (striking distance, weak titles) but also advance topical authority with strategic new content.
 
 TARGETING RULES:
-- Target PAID / high-commercial-intent keywords (cost, prices, hire, same-day, "[service] [city]").
-- Do NOT create pages/blogs whose primary keyword contains "free" (it attracts wrong-intent, non-paying visitors) unless the explicit goal is to redirect that intent toward paid.
+- Target PAID / high-commercial-intent + long-tail keywords. NEVER target keywords containing "free".
+- Prefer targets with real search volume where known.
 
-STRIKING DISTANCE (ranking 5-20 — small push = page 1):
+LESSONS LEARNED (apply these — they came from measuring past results):
+${(lessons as string[])?.length ? (lessons as string[]).map((l) => "- " + l).join("\n") : "none yet"}
+
+KEYWORD STRATEGY (topical authority map + real-data targets):
+${JSON.stringify(strategy, null, 2)}
+
+COMPETITOR GAPS (keywords competitors rank for that we should target):
+${JSON.stringify((recon as { gaps?: unknown[] })?.gaps || [], null, 2)}
+
+STRIKING DISTANCE (GSC pos 5-20 — small push = page 1):
 ${JSON.stringify(striking, null, 2)}
 
-LOW CTR PAGES (ranking but few clicks — usually weak title/meta):
+LOW CTR PAGES (weak title/meta):
 ${JSON.stringify(lowCtr, null, 2)}
 
 Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
@@ -173,6 +186,9 @@ Return ONLY a JSON array of up to ${MAX_TASKS_PER_RUN} tasks:
         );
       }
     }
+
+    // 8) LEARNING LOOP — measure performance, learn, feed lessons forward.
+    await safe(() => analysePerformance(brand));
 
     await db
       .from("runs")
