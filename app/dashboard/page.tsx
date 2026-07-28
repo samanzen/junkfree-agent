@@ -65,17 +65,31 @@ export default function Dashboard() {
   }
   async function runNow() {
     setRunning(true); setRunStatus("waking the agents");
-    try {
-      await fetch("/api/run", { method: "POST" });
-      for (let i = 0; i < 60; i++) {
-        const r = await (await fetch("/api/step", { method: "POST" })).json();
+    try { await fetch("/api/run", { method: "POST" }); } catch {}
+    // Process the queue one step at a time. A slow step may time out at the
+    // platform limit and return a non-JSON page — that's fine, the work
+    // continues server-side, so we just keep going and refresh.
+    let idle = 0;
+    for (let i = 0; i < 80; i++) {
+      let done = false;
+      try {
+        const res = await fetch("/api/step", { method: "POST" });
+        const r = await res.json();
         if (r.kind) setRunStatus(`running · ${r.kind}${r.remaining ? ` · ${r.remaining} queued` : ""}`);
-        load();
-        if (r.done) break;
+        done = !!r.done;
+        idle = 0;
+      } catch {
+        // step timed out or returned non-JSON; wait briefly and continue
+        setRunStatus("running · heavy step…");
+        idle++;
+        await new Promise((res) => setTimeout(res, 3000));
+        if (idle > 6) done = true; // give up after repeated empties
       }
-      setRunStatus("generating images");
-      await processImages();
-    } catch (e) { alert("Run error: " + String(e)); }
+      load();
+      if (done) break;
+    }
+    setRunStatus("generating images");
+    try { await processImages(); } catch {}
     setRunning(false); setRunStatus(""); load();
   }
 
