@@ -217,13 +217,13 @@ function DraftBody({ body }: { body: string }) {
       );
     }
   }
-  return <pre style={pre}>{body.slice(0, 1400)}{body.length > 1400 ? "…" : ""}</pre>;
+  return <pre style={pre}>{body}</pre>;
 }
 const optRow: React.CSSProperties = { fontSize: 12.5, padding: "6px 8px", margin: "4px 0", background: "#f7f7f2", borderRadius: 5, cursor: "pointer", border: "1px solid #ececE4" };
 
 const card: React.CSSProperties = { border: "1px solid #e4e4dd", borderRadius: 10, padding: 16, marginBottom: 14, background: "#fff" };
 const chip: React.CSSProperties = { fontSize: 11, fontWeight: 600, background: "#f0f0e8", padding: "2px 8px", borderRadius: 4 };
-const pre: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 12, color: "#1a1a1a", background: "#fff", padding: 12, borderRadius: 6, maxHeight: 220, overflow: "auto", margin: 0, border: "1px solid #e4e4dd" };
+const pre: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 12, color: "#1a1a1a", background: "#fff", padding: 12, borderRadius: 6, maxHeight: 420, overflow: "auto", margin: 0, border: "1px solid #e4e4dd" };
 const btn: React.CSSProperties = { background: "#228B5A", color: "#fff", border: 0, padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 };
 const ghost: React.CSSProperties = { background: "transparent", color: "#889", border: "1px solid #ddd", padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer" };
 const pill: React.CSSProperties = { background: "#f0f0e8", color: "#556", border: 0, padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", fontWeight: 600 };
