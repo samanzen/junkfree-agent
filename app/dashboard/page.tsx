@@ -90,10 +90,7 @@ export default function Dashboard() {
           <h1 style={{ fontSize: 20, margin: 0 }}>SEO Platform — Mission Control</h1>
           <p style={{ color: "#667", fontSize: 13, margin: "4px 0 0" }}>Multi-brand local SEO. Agents run daily; review and approve their work.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={rewriteExisting} disabled={!!rewriting} style={{ ...btn, background: "#555" }}>{rewriting || "Rewrite existing posts"}</button>
-          <button onClick={runNow} disabled={running} style={btn}>{running ? "Running…" : "Run agents now"}</button>
-        </div>
+        <button onClick={runNow} disabled={running} style={btn}>{running ? "Running…" : "Run agents now"}</button>
       </header>
 
       {/* Brand switcher */}
