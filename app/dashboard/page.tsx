@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Overview from "./Overview";
 
 type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean };
@@ -25,14 +27,33 @@ export default function Dashboard() {
   const [feedbackFor, setFeedbackFor] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
   const [busy, setBusy] = useState("");
+  const [role, setRole] = useState<string>("");
+  const [myBrand, setMyBrand] = useState<string | null>(null);
+  const [authed, setAuthed] = useState(false);
+  const router = useRouter();
 
   async function load() {
     const d = await (await fetch("/api/platform")).json();
-    setBrands(d.brands); setDrafts(d.drafts); setGbp(d.gbp); setCitations(d.citations);
-    if (!brandId && d.brands[0]) setBrandId(d.brands[0].id);
+    let bs = d.brands as Brand[];
+    // Customers only see their own brand; admins see all.
+    if (role === "customer" && myBrand) bs = bs.filter((b) => b.id === myBrand);
+    setBrands(bs); setDrafts(d.drafts); setGbp(d.gbp); setCitations(d.citations);
+    if (!brandId && bs[0]) setBrandId(bs[0].id);
     setLoading(false);
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabaseBrowser().auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) { router.push("/login"); return; }
+      const me = await (await fetch("/api/me", { headers: { authorization: `Bearer ${token}` } })).json();
+      setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
+    })();
+    /* eslint-disable-next-line */
+  }, []);
+  useEffect(() => { if (authed) load(); /* eslint-disable-next-line */ }, [authed, role, myBrand]);
+
+  async function signOut() { await supabaseBrowser().auth.signOut(); router.push("/login"); }
 
   async function draftAct(id: string, path: string) {
     try {
@@ -99,6 +120,8 @@ export default function Dashboard() {
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
   const auto = !!brand?.auto_publish_meta;
 
+  if (!authed) return <div className="sr"><div className="wrap"><p className="muted">Authenticating…</p></div></div>;
+
   return (
     <div className="sr">
       <style>{CSS}</style>
@@ -117,19 +140,22 @@ export default function Dashboard() {
         </header>
 
         <div className="brandrow">
-          <div className="seg">
-            {brands.map((b) => (
-              <button key={b.id} className={b.id === brandId ? "on" : ""} onClick={() => setBrandId(b.id)}>
-                <span className={`dot ${b.id === brandId ? "" : "off"}`} />{b.name}
-              </button>
-            ))}
-          </div>
+          {(role === "admin" || brands.length > 1) && (
+            <div className="seg">
+              {brands.map((b) => (
+                <button key={b.id} className={b.id === brandId ? "on" : ""} onClick={() => setBrandId(b.id)}>
+                  <span className={`dot ${b.id === brandId ? "" : "off"}`} />{b.name}
+                </button>
+              ))}
+            </div>
+          )}
           {brand && (
             <button className={`mode ${auto ? "auto" : ""}`} onClick={() => toggleAuto(brand.id, auto)}
               title="Review: you approve each item. Auto: the agent publishes on its own.">
               {auto ? "◉ Auto-publish" : "◎ Review mode"}
             </button>
           )}
+          <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 
         <nav className="tabs">
