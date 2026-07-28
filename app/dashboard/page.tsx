@@ -6,24 +6,27 @@ type Draft = { id: string; brand_id: string; task_type: string; target_url: stri
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
 
-const LABEL: Record<string, string> = { fix_meta: "Meta / intent fix", improve_content: "Content audit", new_page: "New page", new_blog: "New blog", geo_answers: "AI-answer content (GEO)" };
+const LABEL: Record<string, string> = {
+  fix_meta: "meta / intent", improve_content: "content audit", new_page: "new page",
+  new_blog: "new blog", geo_answers: "AI-answer (GEO)",
+};
 
 export default function Dashboard() {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
-  const [brandId, setBrandId] = useState<string>("");
+  const [brandId, setBrandId] = useState("");
   const [tab, setTab] = useState<"content" | "gbp" | "citations">("content");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [feedbackFor, setFeedbackFor] = useState<string>("");
+  const [runStatus, setRunStatus] = useState("");
+  const [feedbackFor, setFeedbackFor] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
   const [busy, setBusy] = useState("");
 
   async function load() {
-    const res = await fetch("/api/platform");
-    const d = await res.json();
+    const d = await (await fetch("/api/platform")).json();
     setBrands(d.brands); setDrafts(d.drafts); setGbp(d.gbp); setCitations(d.citations);
     if (!brandId && d.brands[0]) setBrandId(d.brands[0].id);
     setLoading(false);
@@ -46,8 +49,8 @@ export default function Dashboard() {
     } catch (e) { alert("Revision failed: " + String(e)); }
     setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
   }
-  async function toggleAuto(brandId: string, current: boolean) {
-    await fetch(`/api/brand/${brandId}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
+  async function toggleAuto(id: string, current: boolean) {
+    await fetch(`/api/brand/${id}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
     load();
   }
   async function rowAct(table: string, id: string, status: string) {
@@ -55,202 +58,219 @@ export default function Dashboard() {
     load();
   }
   async function processImages() {
-    // Adds AI images to content drafts one at a time (each call is quick).
     for (let i = 0; i < 12; i++) {
-      try {
-        const r = await (await fetch("/api/images/process", { method: "POST" })).json();
-        load();
-        if (r.done) break;
-      } catch { break; }
+      try { const r = await (await fetch("/api/images/process", { method: "POST" })).json(); load(); if (r.done) break; } catch { break; }
     }
   }
   async function runNow() {
-    setRunning(true);
+    setRunning(true); setRunStatus("waking the agents");
     try {
-      // Enqueue the run (one plan job per brand), then process the queue one
-      // small job at a time so it never hits the free-tier 60s limit.
       await fetch("/api/run", { method: "POST" });
       for (let i = 0; i < 60; i++) {
         const r = await (await fetch("/api/step", { method: "POST" })).json();
+        if (r.kind) setRunStatus(`running · ${r.kind}${r.remaining ? ` · ${r.remaining} queued` : ""}`);
         load();
         if (r.done) break;
       }
-      // Finally, add AI images to any new content drafts.
+      setRunStatus("generating images");
       await processImages();
-    } catch (e) {
-      alert("Run error: " + String(e));
-    }
-    setRunning(false);
-    load();
+    } catch (e) { alert("Run error: " + String(e)); }
+    setRunning(false); setRunStatus(""); load();
   }
 
+  const brand = brands.find((b) => b.id === brandId);
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
   const bGbp = gbp.filter((g) => g.brand_id === brandId && g.status === "pending_review");
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
+  const auto = !!brand?.auto_publish_meta;
 
   return (
-    <main style={{ maxWidth: 900, margin: "0 auto", padding: 24, fontFamily: "system-ui, sans-serif", color: "#1a1a1a" }}>
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div>
-          <h1 style={{ fontSize: 20, margin: 0 }}>SEO Platform — Mission Control</h1>
-          <p style={{ color: "#667", fontSize: 13, margin: "4px 0 0" }}>Multi-brand local SEO. Agents run daily; review and approve their work.</p>
-        </div>
-        <button onClick={runNow} disabled={running} style={btn}>{running ? "Running…" : "Run agents now"}</button>
-      </header>
+    <div className="sr">
+      <style>{CSS}</style>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
-      {/* Brand switcher + publish mode */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        {brands.map((b) => (
-          <button key={b.id} onClick={() => setBrandId(b.id)} style={brandId === b.id ? pillOn : pill}>{b.name}</button>
-        ))}
-        {(() => {
-          const b = brands.find((x) => x.id === brandId) as (Brand & { auto_publish_meta?: boolean }) | undefined;
-          if (!b) return null;
-          const auto = !!b.auto_publish_meta;
-          return (
-            <button onClick={() => toggleAuto(b.id, auto)} title="Review = you approve each item. Auto = agent publishes automatically."
-              style={{ marginLeft: "auto", ...pill, background: auto ? "#7a3ea8" : "#e8e8e0", color: auto ? "#fff" : "#556" }}>
-              {auto ? "⚡ Auto-publish ON" : "👁 Review mode"}
+      <div className="wrap">
+        <header className="cmd">
+          <div>
+            <div className="eyebrow"><span className={`pulse ${running ? "live" : ""}`} /> autonomous seo platform</div>
+            <h1>Mission Control</h1>
+          </div>
+          <button className={`run ${running ? "on" : ""}`} onClick={runNow} disabled={running}>
+            {running ? <span className="runstat">{runStatus || "running"}</span> : "Run agents"}
+          </button>
+        </header>
+
+        <div className="brandrow">
+          <div className="seg">
+            {brands.map((b) => (
+              <button key={b.id} className={b.id === brandId ? "on" : ""} onClick={() => setBrandId(b.id)}>
+                <span className={`dot ${b.id === brandId ? "" : "off"}`} />{b.name}
+              </button>
+            ))}
+          </div>
+          {brand && (
+            <button className={`mode ${auto ? "auto" : ""}`} onClick={() => toggleAuto(brand.id, auto)}
+              title="Review: you approve each item. Auto: the agent publishes on its own.">
+              {auto ? "◉ Auto-publish" : "◎ Review mode"}
             </button>
-          );
-        })()}
-      </div>
+          )}
+        </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid #e4e4dd", marginBottom: 16 }}>
-        <Tab on={tab === "content"} onClick={() => setTab("content")} label={`Content (${bDrafts.length})`} />
-        <Tab on={tab === "gbp"} onClick={() => setTab("gbp")} label={`Google Posts (${bGbp.length})`} />
-        <Tab on={tab === "citations"} onClick={() => setTab("citations")} label={`Backlinks (${bCites.length})`} />
-      </div>
+        <nav className="tabs">
+          <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
+          <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>
+          <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>
+        </nav>
 
-      {loading && <p style={{ color: "#889" }}>Loading…</p>}
+        {loading && <p className="muted">Loading signal…</p>}
 
-      {tab === "content" && !loading && (
-        bDrafts.length ? bDrafts.map((d) => (
-          <article key={d.id} style={card}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 6 }}>
-              <span style={chip}>{LABEL[d.task_type] || d.task_type}</span>
-              <span style={{ fontSize: 12, color: d.status === "approved" ? "#188a5a" : "#a76" }}>{d.status.replace("_", " ")}</span>
-            </div>
-            <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{d.title}</h3>
-            <p style={{ fontSize: 12.5, color: "#667", margin: "0 0 10px" }}>{d.rationale}</p>
+        {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
+          <article className="card" key={d.id}>
+            <div className="meta"><span className="kind">{LABEL[d.task_type] || d.task_type}</span><span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span></div>
+            <h3>{d.title}</h3>
+            <p className="why">{d.rationale}</p>
             <DraftBody body={d.body} />
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              {d.status === "pending_review" && <button onClick={() => draftAct(d.id, "approve")} style={btn}>Approve</button>}
-              {d.status === "approved" && <button onClick={() => draftAct(d.id, "publish")} style={{ ...btn, background: "#188a5a" }}>Publish</button>}
-              <button onClick={() => draftAct(d.id, "approve?action=dismiss")} style={ghost}>Dismiss</button>
-              <button onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }} style={ghost}>💬 Give feedback</button>
+            <div className="acts">
+              {d.status === "pending_review" && <button className="primary" onClick={() => draftAct(d.id, "approve")}>Approve &amp; publish</button>}
+              {d.status === "approved" && <button className="primary" onClick={() => draftAct(d.id, "publish")}>Publish</button>}
+              <button className="ghost" onClick={() => draftAct(d.id, "approve?action=dismiss")}>Dismiss</button>
+              <button className="ghost" onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }}>Give feedback</button>
             </div>
             {feedbackFor === d.id && (
-              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <div className="fb">
                 <input autoFocus value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
-                  placeholder="Tell the agent what to fix (e.g. make it shorter, wrong tone, add X)…"
-                  style={{ flex: 1, padding: "9px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13 }} />
-                <button onClick={() => sendFeedback(d.id)} disabled={busy === d.id} style={btn}>{busy === d.id ? "Revising…" : "Send"}</button>
+                  placeholder="Tell the agent what to change — shorter, different tone, add local detail…" />
+                <button className="primary" onClick={() => sendFeedback(d.id)} disabled={busy === d.id}>{busy === d.id ? "Revising…" : "Send"}</button>
               </div>
             )}
           </article>
-        )) : <Empty />
-      )}
+        )) : <Empty label="No content in the queue. Hit Run agents." />)}
 
-      {tab === "gbp" && !loading && (
-        bGbp.length ? bGbp.map((g) => (
-          <article key={g.id} style={card}>
-            <span style={chip}>Google Business post</span>
-            <h3 style={{ margin: "8px 0 4px", fontSize: 15 }}>{g.title}</h3>
-            <pre style={pre}>{g.body}</pre>
-            <p style={{ fontSize: 12, color: "#667", margin: "8px 0 0" }}>CTA: {g.cta}</p>
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button onClick={() => rowAct("gbp_posts", g.id, "approved")} style={btn}>Mark posted</button>
-              <button onClick={() => rowAct("gbp_posts", g.id, "dismissed")} style={ghost}>Dismiss</button>
+        {!loading && tab === "gbp" && (bGbp.length ? bGbp.map((g) => (
+          <article className="card" key={g.id}>
+            <div className="meta"><span className="kind">google business post</span></div>
+            <h3>{g.title}</h3>
+            <DraftBody body={g.body} />
+            <p className="why">Call to action: {g.cta}</p>
+            <div className="acts">
+              <button className="primary" onClick={() => rowAct("gbp_posts", g.id, "approved")}>Mark posted</button>
+              <button className="ghost" onClick={() => rowAct("gbp_posts", g.id, "dismissed")}>Dismiss</button>
             </div>
           </article>
-        )) : <Empty />
-      )}
+        )) : <Empty label="No Google posts yet. Hit Run agents." />)}
 
-      {tab === "citations" && !loading && (
-        bCites.length ? bCites.map((c) => (
-          <article key={c.id} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {!loading && tab === "citations" && (bCites.length ? bCites.map((c) => (
+          <article className="card row" key={c.id}>
             <div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <strong style={{ fontSize: 14 }}>{c.name}</strong>
-                <span style={chip}>{c.category}</span>
-                <span style={{ fontSize: 11, color: "#a76" }}>priority {c.priority}</span>
-              </div>
-              <p style={{ fontSize: 12.5, color: "#667", margin: "4px 0 0" }}>{c.rationale}</p>
-              {c.url && <a href={c.url} target="_blank" style={{ fontSize: 12, color: "#228B5A" }}>{c.url}</a>}
+              <div className="meta"><strong>{c.name}</strong><span className="kind">{c.category}</span><span className="prio">P{c.priority}</span></div>
+              <p className="why">{c.rationale}</p>
+              {c.url && <a className="link" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>}
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => rowAct("citations", c.id, "live")} style={btn}>Done</button>
-              <button onClick={() => rowAct("citations", c.id, "skipped")} style={ghost}>Skip</button>
+            <div className="acts">
+              <button className="primary" onClick={() => rowAct("citations", c.id, "live")}>Done</button>
+              <button className="ghost" onClick={() => rowAct("citations", c.id, "skipped")}>Skip</button>
             </div>
           </article>
-        )) : <Empty />
-      )}
-    </main>
+        )) : <Empty label="No backlink opportunities yet. Hit Run agents." />)}
+      </div>
+    </div>
   );
 }
 
-function Tab({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
-  return <button onClick={onClick} style={{ background: "transparent", border: 0, borderBottom: on ? "2px solid #228B5A" : "2px solid transparent", color: on ? "#1a1a1a" : "#889", padding: "8px 12px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{label}</button>;
-}
-function Empty() { return <p style={{ color: "#889" }}>Nothing here yet. Hit “Run agents now”.</p>; }
+function Empty({ label }: { label: string }) { return <div className="empty">{label}</div>; }
 
-// Renders a draft body. If it's JSON (meta/intent fixes), show the title & meta
-// options as readable, copyable suggestions instead of raw JSON or a blank box.
 function DraftBody({ body }: { body: string }) {
-  let parsed: unknown = null;
-  try {
-    const t = body.replace(/```json/gi, "").replace(/```/g, "").trim();
-    if (t.startsWith("{") || t.startsWith("[")) parsed = JSON.parse(t);
-  } catch { /* not JSON — fall through to text */ }
-
-  if (parsed && typeof parsed === "object") {
-    const p = parsed as Record<string, unknown>;
-    const titles = (p.titles as string[]) || (p.title ? [p.title as string] : []);
-    const metas = (p.metas as string[]) || (p.meta ? [p.meta as string] : []);
-    const opening = p.opening as string | undefined;
-    const why = p.why as string | undefined;
+  let parsed: Record<string, unknown> | null = null;
+  try { const t = body.replace(/```json/gi, "").replace(/```/g, "").trim(); if (t.startsWith("{")) parsed = JSON.parse(t); } catch {}
+  if (parsed) {
+    const titles = (parsed.titles as string[]) || (parsed.title ? [parsed.title as string] : []);
+    const metas = (parsed.metas as string[]) || (parsed.meta ? [parsed.meta as string] : []);
+    const opening = parsed.opening as string | undefined;
     if (titles.length || metas.length || opening) {
+      const copy = (t: string) => navigator.clipboard?.writeText(t);
       return (
-        <div style={{ ...pre, display: "block" }}>
-          {titles.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <strong style={{ fontSize: 12, color: "#556" }}>Title tag options:</strong>
-              {titles.map((t, i) => (
-                <div key={i} style={optRow} onClick={() => navigator.clipboard?.writeText(t)} title="Click to copy">• {t}</div>
-              ))}
-            </div>
-          )}
-          {metas.length > 0 && (
-            <div style={{ marginBottom: opening ? 10 : 0 }}>
-              <strong style={{ fontSize: 12, color: "#556" }}>Meta description options:</strong>
-              {metas.map((m, i) => (
-                <div key={i} style={optRow} onClick={() => navigator.clipboard?.writeText(m)} title="Click to copy">• {m}</div>
-              ))}
-            </div>
-          )}
-          {opening && (
-            <div>
-              <strong style={{ fontSize: 12, color: "#556" }}>New opening paragraph:</strong>
-              <div style={{ ...optRow, whiteSpace: "pre-wrap" }} onClick={() => navigator.clipboard?.writeText(opening)}>{opening}</div>
-            </div>
-          )}
-          {why && <p style={{ fontSize: 11.5, color: "#889", margin: "10px 0 0" }}>Why: {why}</p>}
-          <p style={{ fontSize: 10.5, color: "#aab", margin: "8px 0 0" }}>Tip: click any option to copy it.</p>
+        <div className="body">
+          {titles.length > 0 && <><div className="fieldlabel">title tag</div>{titles.map((t, i) => <div key={i} className="opt" onClick={() => copy(t)}>{t}</div>)}</>}
+          {metas.length > 0 && <><div className="fieldlabel">meta description</div>{metas.map((m, i) => <div key={i} className="opt" onClick={() => copy(m)}>{m}</div>)}</>}
+          {opening && <><div className="fieldlabel">new opening</div><div className="opt" onClick={() => copy(opening)}>{opening}</div></>}
+          <div className="hint">click any option to copy</div>
         </div>
       );
     }
   }
-  return <pre style={pre}>{body}</pre>;
+  return <pre className="body prose">{body}</pre>;
 }
-const optRow: React.CSSProperties = { fontSize: 12.5, padding: "6px 8px", margin: "4px 0", background: "#f7f7f2", borderRadius: 5, cursor: "pointer", border: "1px solid #ececE4" };
 
-const card: React.CSSProperties = { border: "1px solid #e4e4dd", borderRadius: 10, padding: 16, marginBottom: 14, background: "#fff" };
-const chip: React.CSSProperties = { fontSize: 11, fontWeight: 600, background: "#f0f0e8", padding: "2px 8px", borderRadius: 4 };
-const pre: React.CSSProperties = { whiteSpace: "pre-wrap", fontSize: 12, color: "#1a1a1a", background: "#fff", padding: 12, borderRadius: 6, maxHeight: 420, overflow: "auto", margin: 0, border: "1px solid #e4e4dd" };
-const btn: React.CSSProperties = { background: "#228B5A", color: "#fff", border: 0, padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 };
-const ghost: React.CSSProperties = { background: "transparent", color: "#889", border: "1px solid #ddd", padding: "7px 14px", borderRadius: 6, fontSize: 13, cursor: "pointer" };
-const pill: React.CSSProperties = { background: "#f0f0e8", color: "#556", border: 0, padding: "6px 14px", borderRadius: 20, fontSize: 13, cursor: "pointer", fontWeight: 600 };
-const pillOn: React.CSSProperties = { ...pill, background: "#228B5A", color: "#fff" };
+const CSS = `
+.sr { --bg:#0B0F17; --surface:#141B26; --surface2:#1B2432; --line:#263041; --text:#E6EBF2; --muted:#7E8CA0;
+  --accent:#34E0C4; --accent-dim:rgba(52,224,196,.12); --amber:#F5B461; --coral:#FF6B6B; --violet:#A78BFA;
+  min-height:100vh; background:radial-gradient(1200px 600px at 80% -10%, rgba(52,224,196,.06), transparent 60%), var(--bg);
+  color:var(--text); font-family:'Space Grotesk',-apple-system,Segoe UI,Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+.sr * { box-sizing:border-box; }
+.sr .wrap { max-width:860px; margin:0 auto; padding:40px 20px 80px; }
+.sr .eyebrow { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.sr .pulse { width:7px; height:7px; border-radius:50%; background:var(--muted); }
+.sr .pulse.live { background:var(--accent); animation:pulse 1.6s ease-out infinite; }
+@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(52,224,196,.5)} 70%{box-shadow:0 0 0 8px rgba(52,224,196,0)} 100%{box-shadow:0 0 0 0 rgba(52,224,196,0)} }
+.sr .cmd { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:28px; }
+.sr h1 { font-size:34px; font-weight:700; letter-spacing:-.02em; margin:0; }
+.sr .run { background:var(--accent); color:#04231e; border:0; padding:13px 22px; border-radius:10px; font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap; transition:transform .1s, box-shadow .2s; box-shadow:0 0 24px rgba(52,224,196,.25); }
+.sr .run:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 0 32px rgba(52,224,196,.4); }
+.sr .run.on { background:var(--surface2); color:var(--accent); box-shadow:none; cursor:default; overflow:hidden; position:relative; }
+.sr .run.on::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(52,224,196,.15),transparent); animation:scan 1.4s linear infinite; }
+@keyframes scan { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+.sr .runstat { font-family:'JetBrains Mono',monospace; font-size:12px; position:relative; z-index:1; }
+.sr .brandrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
+.sr .seg { display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:4px; }
+.sr .seg button { display:flex; align-items:center; gap:7px; background:transparent; border:0; color:var(--muted); padding:8px 14px; border-radius:7px; font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; }
+.sr .seg button.on { background:var(--surface2); color:var(--text); }
+.sr .dot { width:6px; height:6px; border-radius:50%; background:var(--accent); }
+.sr .dot.off { background:var(--line); }
+.sr .mode { margin-left:auto; background:var(--surface); border:1px solid var(--line); color:var(--muted); padding:9px 15px; border-radius:9px; font-family:'JetBrains Mono',monospace; font-size:12px; cursor:pointer; letter-spacing:.02em; }
+.sr .mode.auto { background:rgba(167,139,250,.14); border-color:rgba(167,139,250,.4); color:var(--violet); }
+.sr .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:22px; }
+.sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:11px 16px; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; }
+.sr .tabs button.on { color:var(--text); border-bottom-color:var(--accent); }
+.sr .tabs button span { font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--surface2); color:var(--muted); padding:1px 7px; border-radius:20px; }
+.sr .tabs button.on span { background:var(--accent-dim); color:var(--accent); }
+.sr .card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:14px; }
+.sr .card.row { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.sr .meta { display:flex; align-items:center; gap:10px; margin-bottom:9px; flex-wrap:wrap; }
+.sr .kind { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; background:var(--surface2); color:var(--muted); padding:3px 9px; border-radius:5px; }
+.sr .stat { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--amber); }
+.sr .stat.approved { color:var(--accent); }
+.sr .prio { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--amber); }
+.sr h3 { font-size:17px; font-weight:600; margin:0 0 5px; letter-spacing:-.01em; }
+.sr .why { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 14px; }
+.sr .body { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px; max-height:440px; overflow:auto; }
+.sr .prose { white-space:pre-wrap; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.6; color:#C6D0DE; margin:0; }
+.sr .fieldlabel { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px; }
+.sr .fieldlabel:first-child { margin-top:0; }
+.sr .opt { font-size:13px; color:var(--text); background:var(--surface2); border:1px solid var(--line); padding:9px 11px; border-radius:7px; margin-bottom:6px; cursor:pointer; transition:border-color .15s; }
+.sr .opt:hover { border-color:var(--accent); }
+.sr .hint { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); margin-top:8px; }
+.sr .acts { display:flex; gap:9px; margin-top:14px; flex-wrap:wrap; }
+.sr .primary { background:var(--accent); color:#04231e; border:0; padding:9px 16px; border-radius:8px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; }
+.sr .primary:disabled { opacity:.6; cursor:default; }
+.sr .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:9px 16px; border-radius:8px; font-family:inherit; font-size:13px; cursor:pointer; }
+.sr .ghost:hover { color:var(--text); border-color:var(--muted); }
+.sr .fb { display:flex; gap:9px; margin-top:12px; }
+.sr .fb input { flex:1; background:var(--bg); border:1px solid var(--line); color:var(--text); padding:10px 13px; border-radius:8px; font-family:inherit; font-size:13px; }
+.sr .fb input:focus { outline:none; border-color:var(--accent); }
+.sr .link { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent); text-decoration:none; word-break:break-all; }
+.sr .muted { color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:13px; }
+.sr .empty { border:1px dashed var(--line); border-radius:14px; padding:40px; text-align:center; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:13px; }
+@media (max-width:640px){
+  .sr .wrap { padding:26px 14px 60px; }
+  .sr .cmd { flex-direction:column; align-items:stretch; gap:14px; }
+  .sr h1 { font-size:27px; }
+  .sr .run { width:100%; }
+  .sr .card.row { flex-direction:column; align-items:stretch; }
+  .sr .mode { margin-left:0; }
+  .sr .brandrow { gap:8px; }
+  .sr .fb { flex-direction:column; }
+}
+@media (prefers-reduced-motion:reduce){ .sr .pulse.live,.sr .run.on::after{ animation:none; } }
+`;
