@@ -99,3 +99,26 @@ export async function serpTop(keyword: string): Promise<{ position: number; titl
 export function isConfigured() {
   return !!authHeader();
 }
+
+// Domain overview: organic traffic estimate, organic keyword count, rank.
+export async function domainOverview(domain: string): Promise<{ organic_traffic: number | null; organic_keywords: number | null } | null> {
+  const data = await post<Task<unknown>>(
+    "/dataforseo_labs/google/domain_rank_overview/live",
+    { target: domain, location_code: LOCATION_CANADA, language_code: LANG }
+  );
+  const item = (data?.tasks?.[0]?.result?.[0] as { items?: { metrics?: { organic?: { etv?: number; count?: number } } }[] })?.items?.[0];
+  const organic = item?.metrics?.organic;
+  if (!organic) return null;
+  return { organic_traffic: Math.round(organic.etv || 0), organic_keywords: organic.count ?? null };
+}
+
+// Backlinks summary: total backlinks + referring domains.
+export async function backlinksSummary(domain: string): Promise<{ backlinks: number | null; referring_domains: number | null } | null> {
+  const data = await post<Task<unknown>>(
+    "/backlinks/summary/live",
+    { target: domain, internal_list_limit: 1, backlinks_status_type: "live" }
+  );
+  const r = data?.tasks?.[0]?.result?.[0] as { backlinks?: number; referring_domains?: number } | undefined;
+  if (!r) return null;
+  return { backlinks: r.backlinks ?? null, referring_domains: r.referring_domains ?? null };
+}

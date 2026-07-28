@@ -10,6 +10,7 @@ import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
 import { keywordStrategy, competitorGaps } from "./intelligence";
 import { activeLessons, analysePerformance } from "./learning";
+import { snapshot } from "./metrics";
 import { auditSite } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
 
@@ -149,6 +150,7 @@ export async function stepCitations(brand: Brand) {
 
 export async function stepPerformance(brand: Brand) {
   await safe(() => analysePerformance(brand));
+  await safe(() => snapshot(brand)); // capture KPI snapshot for the analytics charts
 }
 
 // AUDIT: crawl the live site, find weak/thin pages, and queue improvements.
