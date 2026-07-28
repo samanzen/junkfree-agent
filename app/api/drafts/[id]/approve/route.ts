@@ -19,12 +19,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Blog/page content, and GEO answer content, go live on approve.
   if (draft.task_type === "new_blog" || draft.task_type === "new_page" || draft.task_type === "geo_answers") {
     const raw = draft.target_keyword || draft.title.replace(/^(Blog|Page):\s*/i, "");
-    const base = draft.task_type === "geo_answers"
-      ? `${slugify((draft.title || "faq").replace(/AI-answer.*/i, "junk-removal-faq"))}`
-      : slugify(raw);
-    const slug = draft.task_type === "new_page" ? base : `blog/${base}`;
+    const base = slugify(raw);
+    // GEO answer content upgrades the EXISTING /faq page (no duplicate page,
+    // avoids keyword cannibalization). Blogs -> /blog/..., pages -> top-level.
+    const slug = draft.task_type === "geo_answers" ? "faq" : (draft.task_type === "new_page" ? base : `blog/${base}`);
     const { title, meta, body } = splitFrontMatter(draft.body, draft.title);
-    const finalTitle = draft.task_type === "geo_answers" ? "Junk Removal FAQ — Common Questions Answered" : title;
+    const finalTitle = draft.task_type === "geo_answers" ? "Frequently Asked Questions — Junk Free" : title;
 
     const { error: pubErr } = await db.from("content").upsert({
       slug,
