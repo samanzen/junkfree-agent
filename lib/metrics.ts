@@ -5,7 +5,9 @@
 import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance, lowCtrPages } from "./gsc";
-import { domainOverview, backlinksSummary, isConfigured } from "./dataforseo";
+import { domainOverview, backlinksSummary, rankedKeywords, isConfigured } from "./dataforseo";
+import { auditSite } from "./auditor";
+import { checkAiVisibility } from "./geo-agent";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -27,30 +29,42 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
   const domain = domainOf(brand);
   const gsc = brand.gsc_property;
 
-  const [striking, overview, backlinks] = await Promise.all([
+  const [striking, overview, backlinks, ranked, audit, aiVis] = await Promise.all([
     gsc ? strikingDistance(gsc).catch(() => []) : Promise.resolve([]),
     isConfigured() ? domainOverview(domain).catch(() => null) : Promise.resolve(null),
     isConfigured() ? backlinksSummary(domain).catch(() => null) : Promise.resolve(null),
+    isConfigured() ? rankedKeywords(domain).catch(() => []) : Promise.resolve([]),
+    auditSite(brand, 8).catch(() => ({ audited: 0, issues: [] as { severity: string }[] })),
+    checkAiVisibility(brand).catch(() => ({ mentioned: false })),
   ]);
 
-  const avgPos = striking.length ? striking.reduce((s, r) => s + r.position, 0) / striking.length : null;
+  // Striking distance + avg position: prefer GSC; fall back to DataForSEO rankings.
+  let strikingCount = striking.length;
+  let avgPos = striking.length ? striking.reduce((s, r) => s + r.position, 0) / striking.length : null;
+  if (!strikingCount && ranked.length) {
+    strikingCount = ranked.filter((k) => k.position >= 4 && k.position <= 20).length;
+    const positions = ranked.map((k) => k.position).filter((p) => p > 0);
+    avgPos = positions.length ? positions.reduce((a, b) => a + b, 0) / positions.length : null;
+  }
+
+  // Site health: 100 minus weighted issues found by the auditor.
+  const issues = (audit as { issues?: { severity: string }[] }).issues || [];
+  const penalty = issues.reduce((sum, i) => sum + (i.severity === "high" ? 15 : i.severity === "medium" ? 7 : 3), 0);
+  const siteHealth = (audit as { audited?: number }).audited ? Math.max(0, 100 - penalty) : null;
+
+  // AI visibility: mentioned in an AI answer for the core discovery query => 100.
+  const aiVisibility = (aiVis as { mentioned?: boolean }).mentioned ? 100 : 0;
 
   const snap: Snapshot = {
     organic_traffic: overview?.organic_traffic ?? null,
     organic_keywords: overview?.organic_keywords ?? null,
     backlinks: backlinks?.backlinks ?? null,
     referring_domains: backlinks?.referring_domains ?? null,
-    striking_distance: striking.length || null,
+    striking_distance: strikingCount || null,
     avg_position: avgPos ? Math.round(avgPos * 10) / 10 : null,
-    ai_visibility: null, // filled by GEO visibility checks (separate cadence)
-    site_health: null,   // filled from latest audit
+    ai_visibility: aiVisibility,
+    site_health: siteHealth,
   };
-
-  // Pull latest site-health from the newest audit-derived report, if present.
-  const { data: rep } = await db.from("reports").select("metrics").eq("brand_id", brand.id)
-    .order("created_at", { ascending: false }).limit(1);
-  const health = (rep?.[0]?.metrics as { site_health?: number } | undefined)?.site_health;
-  if (typeof health === "number") snap.site_health = health;
 
   await db.from("metric_snapshots").insert({ brand_id: brand.id, ...snap, captured_at: new Date().toISOString() });
   return snap;
