@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Overview from "./Overview";
 
 type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean };
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
@@ -17,7 +18,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"content" | "gbp" | "citations">("content");
+  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -118,12 +119,15 @@ export default function Dashboard() {
         </div>
 
         <nav className="tabs">
+          <button className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
           <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
           <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>
           <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>
         </nav>
 
         {loading && <p className="muted">Loading signal…</p>}
+
+        {tab === "overview" && brandId && <Overview brandId={brandId} />}
 
         {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
           <article className="card" key={d.id}>
@@ -273,4 +277,24 @@ const CSS = `
   .sr .fb { flex-direction:column; }
 }
 @media (prefers-reduced-motion:reduce){ .sr .pulse.live,.sr .run.on::after{ animation:none; } }
+.sr .ov { display:flex; flex-direction:column; gap:16px; }
+.sr .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.sr .kpi { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; }
+.sr .klabel { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.sr .kval { font-size:26px; font-weight:700; letter-spacing:-.02em; }
+.sr .krow { display:flex; align-items:center; gap:8px; margin-top:6px; min-height:16px; }
+.sr .kd { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:500; }
+.sr .kd.good { color:var(--accent); }
+.sr .kd.bad { color:var(--coral); }
+.sr .khint { font-size:10.5px; color:var(--muted); }
+.sr .panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.sr .panelhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.sr .small { font-size:11px; }
+.sr .kwt { width:100%; border-collapse:collapse; }
+.sr .kwt th { text-align:left; font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); font-weight:500; }
+.sr .kwt td { padding:11px 10px; font-size:13px; border-bottom:1px solid var(--line); }
+.sr .kwt tr:last-child td { border-bottom:0; }
+.sr .kwt .kw { color:var(--text); }
+.sr .kwt .pos { font-family:'JetBrains Mono',monospace; background:var(--accent-dim); color:var(--accent); padding:2px 8px; border-radius:5px; font-size:12px; }
+@media (max-width:640px){ .sr .kpis { grid-template-columns:repeat(2,1fr); } .sr .kwt th:nth-child(3),.sr .kwt td:nth-child(3){ display:none; } }
 `;
