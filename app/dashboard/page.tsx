@@ -61,17 +61,22 @@ export default function Dashboard() {
   }
   async function runNow() {
     setRunning(true);
-    // Content run is fire-and-forget (may exceed the plan timeout but keeps
-    // working server-side). Poll the queue, then generate images once content
-    // has landed.
-    fetch("/api/cron/orchestrate", { method: "POST" }).catch(() => {});
-    let ticks = 0;
-    const iv = setInterval(async () => {
-      ticks++;
-      load();
-      if (ticks === 4) processImages();          // start images once drafts appear
-      if (ticks >= 8) { clearInterval(iv); setRunning(false); }
-    }, 12000);
+    try {
+      // Enqueue the run (one plan job per brand), then process the queue one
+      // small job at a time so it never hits the free-tier 60s limit.
+      await fetch("/api/run", { method: "POST" });
+      for (let i = 0; i < 60; i++) {
+        const r = await (await fetch("/api/step", { method: "POST" })).json();
+        load();
+        if (r.done) break;
+      }
+      // Finally, add AI images to any new content drafts.
+      await processImages();
+    } catch (e) {
+      alert("Run error: " + String(e));
+    }
+    setRunning(false);
+    load();
   }
 
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
