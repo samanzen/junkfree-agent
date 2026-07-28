@@ -10,6 +10,7 @@ import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
 import { keywordStrategy, competitorGaps } from "./intelligence";
 import { activeLessons, analysePerformance } from "./learning";
+import { auditSite } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
@@ -70,6 +71,7 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
   await enqueue(brand.id, "geo", { runId });
   await enqueue(brand.id, "gbp", { runId });
   await enqueue(brand.id, "citations", { runId });
+  await enqueue(brand.id, "audit", { runId });
   await enqueue(brand.id, "performance", { runId });
 
   return { planned: tasks.length };
@@ -137,6 +139,32 @@ export async function stepPerformance(brand: Brand) {
   await safe(() => analysePerformance(brand));
 }
 
+// AUDIT: crawl the live site, find weak/thin pages, and queue improvements.
+// Runs at most once/day per brand to control cost, and skips pages already
+// improved recently.
+export async function stepAudit(brand: Brand, runId: string) {
+  // Only re-audit if we haven't audited this brand today.
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const { count } = await db.from("jobs").select("id", { count: "exact", head: true })
+    .eq("brand_id", brand.id).eq("kind", "audit").eq("status", "done").gte("created_at", start.toISOString());
+  // (this job itself is still "running", so >0 means a prior audit already ran today)
+  if ((count || 0) > 0) return;
+
+  const result = await safe(() => auditSite(brand, 12));
+  const issues = (result as { issues?: { url: string; problem: string; severity: string; fix: string; task_type: string }[] } | null)?.issues || [];
+
+  // Queue the top 2 highest-severity content fixes as improvement tasks.
+  const high = issues.filter((i) => i.severity === "high").slice(0, 2);
+  for (const issue of high) {
+    await enqueue(brand.id, "content", {
+      task_type: issue.task_type === "improve_content" ? "improve_content" : "fix_meta",
+      target_url: issue.url,
+      rationale: `Auditor: ${issue.problem} — ${issue.fix}`,
+      runId,
+    });
+  }
+}
+
 // Dispatch a claimed job to the right step.
 export async function runJob(job: { brand_id: string; kind: JobKind; payload: Record<string, unknown> }) {
   const b = (await getBrandById(job.brand_id)) as Brand | null;
@@ -147,6 +175,7 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
     case "geo": return void (await stepGeo(b));
     case "gbp": return void (await stepGbp(b));
     case "citations": return void (await stepCitations(b));
+    case "audit": return void (await stepAudit(b, (job.payload.runId as string) || ""));
     case "performance": return void (await stepPerformance(b));
   }
 }

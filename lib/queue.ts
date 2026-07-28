@@ -10,6 +10,7 @@ export type JobKind =
   | "geo"         // GEO answer content
   | "gbp"         // Google Business post
   | "citations"   // backlink opportunities
+  | "audit"        // crawl site, queue fixes for weak pages
   | "performance"; // learning loop
 
 export async function enqueue(brandId: string, kind: JobKind, payload: Record<string, unknown> = {}) {
