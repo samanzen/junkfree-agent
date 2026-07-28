@@ -28,7 +28,13 @@ export default function Dashboard() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  async function draftAct(id: string, path: string) { await fetch(`/api/drafts/${id}/${path}`, { method: "POST" }); load(); }
+  async function draftAct(id: string, path: string) {
+    try {
+      const r = await (await fetch(`/api/drafts/${id}/${path}`, { method: "POST" })).json();
+      if (r.ok === false && r.error) alert(r.error);
+    } catch (e) { alert("Action failed: " + String(e)); }
+    load();
+  }
   async function rowAct(table: string, id: string, status: string) {
     await fetch(`/api/platform/${table}/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     load();

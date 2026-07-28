@@ -23,14 +23,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const slug = draft.task_type === "new_blog" ? `blog/${base}` : base;
     const { title, meta, body } = splitFrontMatter(draft.body, draft.title);
 
-    await db.from("content").upsert({
+    const { error: pubErr } = await db.from("content").upsert({
       slug,
       brand_id: draft.brand_id,
-      task_type: draft.task_type,
       title,
       body,          // markdown; the site renders it
       published_at: new Date().toISOString(),
     });
+    if (pubErr) {
+      return NextResponse.json({ ok: false, error: "Publish failed: " + pubErr.message }, { status: 500 });
+    }
     await db.from("drafts").update({ status: "published" }).eq("id", id);
     return NextResponse.json({ ok: true, status: "published", slug, meta });
   }
