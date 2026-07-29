@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import CountUp from "./CountUp";
 
 type Snap = {
   organic_traffic: number | null; organic_keywords: number | null;
@@ -26,11 +27,8 @@ export default function Overview({ brandId }: { brandId: string }) {
     }).catch(() => setLoading(false));
   }, [brandId]);
 
-  if (loading) return <p className="muted">Loading analytics…</p>;
-
-  if (!cur) return (
-    <div className="empty">No analytics yet. Run the agents once to capture your first KPI snapshot.</div>
-  );
+  if (loading) return <p className="lmuted">Loading analytics…</p>;
+  if (!cur) return <div className="lempty">No analytics yet. Run the agents once to capture your first KPI snapshot.</div>;
 
   const delta = (k: keyof Snap): number | null => {
     if (!prev || cur[k] == null || prev[k] == null) return null;
@@ -38,77 +36,70 @@ export default function Overview({ brandId }: { brandId: string }) {
   };
   const chartData = series.map((s) => ({
     d: new Date(s.captured_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-    traffic: s.organic_traffic ?? 0, keywords: s.organic_keywords ?? 0, pos: s.avg_position ?? 0,
+    traffic: s.organic_traffic ?? 0,
   }));
 
+  const cards: { label: string; value: number | null; d: number | null; suffix?: string; hint?: string; invert?: boolean; color: string }[] = [
+    { label: "Organic traffic", value: cur.organic_traffic, d: delta("organic_traffic"), color: "#6C5CE7" },
+    { label: "Organic keywords", value: cur.organic_keywords, d: delta("organic_keywords"), color: "#0984E3" },
+    { label: "Backlinks", value: cur.backlinks, d: delta("backlinks"), color: "#00B894" },
+    { label: "Referring domains", value: cur.referring_domains, d: delta("referring_domains"), color: "#E17055" },
+    { label: "Striking distance", value: cur.striking_distance, d: delta("striking_distance"), hint: "keywords in pos 5–20", color: "#E84393" },
+    { label: "Avg position", value: cur.avg_position, d: delta("avg_position"), invert: true, hint: "lower is better", color: "#00CEC9" },
+    { label: "AI visibility", value: cur.ai_visibility, suffix: "%", d: delta("ai_visibility"), hint: "cited in ChatGPT / Gemini", color: "#A29BFE" },
+    { label: "Site health", value: cur.site_health, suffix: "%", d: delta("site_health"), color: "#FDCB6E" },
+  ];
+
   return (
-    <div className="ov">
-      {/* KPI cards */}
-      <div className="kpis">
-        <Kpi label="Organic traffic" value={cur.organic_traffic} d={delta("organic_traffic")} />
-        <Kpi label="Organic keywords" value={cur.organic_keywords} d={delta("organic_keywords")} />
-        <Kpi label="Backlinks" value={cur.backlinks} d={delta("backlinks")} />
-        <Kpi label="Referring domains" value={cur.referring_domains} d={delta("referring_domains")} />
-        <Kpi label="Striking distance" value={cur.striking_distance} d={delta("striking_distance")} hint="keywords in pos 5–20" />
-        <Kpi label="Avg position" value={cur.avg_position} d={delta("avg_position")} invert hint="lower is better" />
-        <Kpi label="AI visibility" value={cur.ai_visibility} suffix="%" d={delta("ai_visibility")} hint="cited in ChatGPT / Gemini" />
-        <Kpi label="Site health" value={cur.site_health} suffix="%" d={delta("site_health")} />
+    <div className="lov">
+      <div className="lkpis">
+        {cards.map((c, i) => {
+          const up = c.d != null && c.d > 0;
+          const good = c.invert ? !up : up;
+          return (
+            <div className="lkpi" key={c.label} style={{ animationDelay: `${i * 60}ms` }}>
+              <div className="ltop"><span className="lbar" style={{ background: c.color }} /><span className="llabel">{c.label}</span></div>
+              <div className="lval"><CountUp value={c.value} decimals={c.label === "Avg position" ? 1 : 0} suffix={c.suffix || ""} /></div>
+              <div className="lrow">
+                {c.d != null && c.d !== 0 && <span className={`ld ${good ? "good" : "bad"}`}>{up ? "↑" : "↓"} {Math.abs(c.d).toLocaleString()}</span>}
+                {c.hint && <span className="lhint">{c.hint}</span>}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Trend chart */}
       {chartData.length > 1 && (
-        <div className="panel">
-          <div className="panelhead"><span className="fieldlabel">position tracking</span><span className="muted small">last {chartData.length} snapshots</span></div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-              <defs>
-                <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#34E0C4" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="#34E0C4" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="d" tick={{ fill: "#7E8CA0", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#263041" }} />
-              <YAxis tick={{ fill: "#7E8CA0", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: "#141B26", border: "1px solid #263041", borderRadius: 8, color: "#E6EBF2", fontSize: 12 }} />
-              <Area type="monotone" dataKey="traffic" stroke="#34E0C4" strokeWidth={2} fill="url(#g)" name="Est. traffic" />
+        <div className="lpanel">
+          <div className="lphead"><h3>Traffic trend</h3><span className="lmuted small">last {chartData.length} snapshots</span></div>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -18, bottom: 0 }}>
+              <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6C5CE7" stopOpacity={0.25} /><stop offset="100%" stopColor="#6C5CE7" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
+              <XAxis dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
+              <YAxis tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} />
+              <Area type="monotone" dataKey="traffic" stroke="#6C5CE7" strokeWidth={2.5} fill="url(#lg)" name="Est. traffic" animationDuration={1100} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {/* Top keywords table */}
-      <div className="panel">
-        <div className="panelhead"><span className="fieldlabel">top keywords — striking distance</span></div>
+      <div className="lpanel">
+        <div className="lphead"><h3>Top keywords — striking distance</h3></div>
         {kws.length ? (
-          <table className="kwt">
+          <table className="lkwt">
             <thead><tr><th>Keyword</th><th>Position</th><th>Impressions</th><th>CTR</th></tr></thead>
-            <tbody>
-              {kws.map((k, i) => (
-                <tr key={i}>
-                  <td className="kw">{k.keyword}</td>
-                  <td><span className="pos">{k.position}</span></td>
-                  <td>{k.impressions.toLocaleString()}</td>
-                  <td>{(k.ctr * 100).toFixed(1)}%</td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{kws.map((k, i) => (
+              <tr key={i} style={{ animationDelay: `${i * 40}ms` }}>
+                <td className="lkw">{k.keyword}</td>
+                <td><span className="lpos">{k.position}</span></td>
+                <td>{k.impressions.toLocaleString()}</td>
+                <td>{(k.ctr * 100).toFixed(1)}%</td>
+              </tr>
+            ))}</tbody>
           </table>
-        ) : <p className="muted small">No ranking data yet — connect Search Console and run the agents.</p>}
-      </div>
-    </div>
-  );
-}
-
-function Kpi({ label, value, d, suffix, hint, invert }: { label: string; value: number | null; d: number | null; suffix?: string; hint?: string; invert?: boolean }) {
-  const up = d != null && d > 0;
-  const good = invert ? !up : up;
-  return (
-    <div className="kpi">
-      <div className="klabel">{label}</div>
-      <div className="kval">{value == null ? "—" : value.toLocaleString()}{value != null && suffix ? suffix : ""}</div>
-      <div className="krow">
-        {d != null && d !== 0 && <span className={`kd ${good ? "good" : "bad"}`}>{up ? "▲" : "▼"} {Math.abs(d).toLocaleString()}</span>}
-        {hint && <span className="khint">{hint}</span>}
+        ) : <p className="lmuted small">No ranking data yet — connect Search Console and run the agents.</p>}
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ export default function Login() {
   return (
     <div className="lg">
       <style>{CSS}</style>
+      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
       <div className="card">
         <div className="brand"><span className="dot" /> Autonomous SEO Platform</div>
         <h1>Sign in</h1>
@@ -35,15 +36,15 @@ export default function Login() {
 }
 
 const CSS = `
-.lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:radial-gradient(900px 500px at 50% -10%, rgba(52,224,196,.08), transparent 60%), #0B0F17; font-family:'Space Grotesk',-apple-system,Segoe UI,sans-serif; color:#E6EBF2; padding:20px; }
-.lg .card { width:100%; max-width:380px; background:#141B26; border:1px solid #263041; border-radius:16px; padding:32px; }
-.lg .brand { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#7E8CA0; margin-bottom:20px; }
-.lg .dot { width:7px; height:7px; border-radius:50%; background:#34E0C4; }
-.lg h1 { font-size:24px; margin:0 0 4px; }
-.lg .sub { color:#7E8CA0; font-size:13px; margin:0 0 22px; }
-.lg input { width:100%; background:#0B0F17; border:1px solid #263041; color:#E6EBF2; padding:12px 14px; border-radius:9px; font-size:14px; margin-bottom:12px; font-family:inherit; }
-.lg input:focus { outline:none; border-color:#34E0C4; }
-.lg button { width:100%; background:#34E0C4; color:#04231e; border:0; padding:13px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; }
+.lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#F6F8FB,#EEF1FF); font-family:'Space Grotesk',-apple-system,Segoe UI,sans-serif; color:#1A2030; padding:20px; }
+.lg .card { width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0; border-radius:20px; padding:36px; box-shadow:0 12px 40px rgba(16,24,40,.08); }
+.lg .brand { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8A93A6; margin-bottom:22px; }
+.lg .dot { width:8px; height:8px; border-radius:50%; background:#6C5CE7; box-shadow:0 0 0 4px rgba(108,92,231,.15); }
+.lg h1 { font-size:26px; margin:0 0 4px; color:#12172A; }
+.lg .sub { color:#8A93A6; font-size:13px; margin:0 0 24px; }
+.lg input { width:100%; background:#F6F8FB; border:1px solid #E7EAF0; color:#1A2030; padding:13px 15px; border-radius:11px; font-size:14px; margin-bottom:12px; font-family:inherit; }
+.lg input:focus { outline:none; border-color:#6C5CE7; background:#fff; }
+.lg button { width:100%; background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:14px; border-radius:11px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; box-shadow:0 6px 18px rgba(108,92,231,.3); }
 .lg button:disabled { opacity:.6; }
-.lg .err { color:#FF6B6B; font-size:13px; margin-bottom:10px; }
+.lg .err { color:#E14B4B; font-size:13px; margin-bottom:10px; }
 `;
