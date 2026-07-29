@@ -12,9 +12,9 @@ const PUBLIC_ROUTES = new Set([
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Only intercept API routes and the dashboard. Static assets, fonts,
+  // Only intercept API routes and the dashboard/portal. Static assets, fonts,
   // Next internals (_next/*) are excluded by the matcher below.
-  if (!pathname.startsWith("/api/") && pathname !== "/dashboard") {
+  if (!pathname.startsWith("/api/") && pathname !== "/dashboard" && pathname !== "/portal") {
     return NextResponse.next();
   }
 
@@ -90,9 +90,10 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all API routes and the dashboard page.
+    // Match all API routes, the admin dashboard, and the customer portal.
     // Exclude Next.js internals and static files.
     "/api/:path*",
     "/dashboard",
+    "/portal",
   ],
 };
