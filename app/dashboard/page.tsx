@@ -31,9 +31,12 @@ export default function Dashboard() {
   const [myBrand, setMyBrand] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
+  const [token, setToken] = useState<string>("");
 
   async function load() {
-    const d = await (await fetch("/api/platform")).json();
+    const sess = await supabaseBrowser().auth.getSession();
+    const tok = sess.data.session?.access_token || token;
+    const d = await (await fetch("/api/platform", { headers: tok ? { authorization: `Bearer ${tok}` } : {} })).json();
     let bs = d.brands as Brand[];
     // Customers only see their own brand; admins see all.
     if (role === "customer" && myBrand) bs = bs.filter((b) => b.id === myBrand);
@@ -46,6 +49,7 @@ export default function Dashboard() {
       const { data } = await supabaseBrowser().auth.getSession();
       const token = data.session?.access_token;
       if (!token) { router.push("/login"); return; }
+      setToken(token);
       const me = await (await fetch("/api/me", { headers: { authorization: `Bearer ${token}` } })).json();
       setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
     })();
