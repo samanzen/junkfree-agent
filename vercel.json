@@ -1,5 +1,7 @@
 {
   "crons": [
-    { "path": "/api/cron/orchestrate", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/orchestrate", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/rank-sync",   "schedule": "0 6 * * *" },
+    { "path": "/api/cron/rank-enrich", "schedule": "0 7 * * 1" }
   ]
 }

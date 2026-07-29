@@ -4,11 +4,12 @@
 import { callClaude, extractJSON } from "./anthropic";
 import { brandBlock, getBrandById, type Brand } from "./brands";
 import { db, TaskType } from "./supabase";
-import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
+import { strikingDistance, lowCtrPages, pagesByIntentSignal, fullKeywordSync } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
 import { keywordStrategy, competitorGaps } from "./intelligence";
+import { keywordDifficulty, classifySearchIntent, keywordVolumes } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
 import { auditSite } from "./auditor";
@@ -191,7 +192,270 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
     case "citations": return void (await stepCitations(b));
     case "audit": return void (await stepAudit(b, (job.payload.runId as string) || ""));
     case "performance": return void (await stepPerformance(b));
+    case "rank_sync": return void (await stepRankSync(b));
+    case "rank_enrich": return void (await stepRankEnrich(b));
   }
 }
 
 
+
+// ── Sprint 4: Rank Sync & Enrich steps ──────────────────────────────────────
+
+
+// Standard CTR curve by position (used for traffic opportunity estimates).
+// Source: industry consensus averages for organic Google results.
+function estimatedCtr(position: number): number {
+  if (position <= 1) return 0.28;
+  if (position <= 2) return 0.15;
+  if (position <= 3) return 0.11;
+  if (position <= 4) return 0.08;
+  if (position <= 5) return 0.07;
+  if (position <= 6) return 0.06;
+  if (position <= 7) return 0.05;
+  if (position <= 8) return 0.04;
+  if (position <= 9) return 0.03;
+  if (position <= 10) return 0.025;
+  if (position <= 15) return 0.015;
+  if (position <= 20) return 0.008;
+  return 0.003;
+}
+
+// RANK SYNC: fetch all GSC keyword data, upsert tracked_keywords +
+// keyword_positions, compute distribution snapshot, detect status changes.
+export async function stepRankSync(brand: Brand) {
+  if (!brand.gsc_property) return { skipped: "no gsc_property" };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await fullKeywordSync(brand.gsc_property).catch(() => []);
+  if (!rows.length) return { skipped: "no GSC data" };
+
+  // --- Upsert tracked_keywords ---
+  // Build a map of keyword → row for fast lookup
+  const byKeyword = new Map(rows.map((r) => [r.keyword, r]));
+  const keywords = [...byKeyword.keys()];
+
+  // Fetch existing tracked_keywords for this brand to compute status changes
+  const { data: existing } = await db
+    .from("tracked_keywords")
+    .select("id, keyword, best_position, worst_position, status")
+    .eq("brand_id", brand.id);
+  const existingMap = new Map(
+    (existing || []).map((e) => [e.keyword, e])
+  );
+
+  // Upsert each keyword
+  for (const kw of keywords) {
+    const row = byKeyword.get(kw)!;
+    const prev = existingMap.get(kw);
+    const pos = row.position;
+
+    // Compute lifetime best/worst
+    const newBest = prev?.best_position == null || pos < prev.best_position ? pos : prev.best_position;
+    const newWorst = prev?.worst_position == null || pos > prev.worst_position ? pos : prev.worst_position;
+
+    await db.from("tracked_keywords").upsert({
+      brand_id: brand.id,
+      keyword: kw,
+      best_position: newBest,
+      best_position_date: newBest === pos ? today : undefined,
+      worst_position: newWorst,
+      first_seen_date: prev ? undefined : today,
+      last_seen_date: null, // currently ranking
+      status: prev ? computeStatus(prev.best_position, pos) : "new",
+    }, { onConflict: "brand_id,keyword", ignoreDuplicates: false });
+  }
+
+  // Mark keywords that were tracked but not in today's GSC as "lost"
+  const lostKeywords = (existing || []).filter(
+    (e) => !byKeyword.has(e.keyword) && e.status !== "lost"
+  );
+  for (const lost of lostKeywords) {
+    await db.from("tracked_keywords").update({
+      status: "lost",
+      last_seen_date: today,
+    }).eq("id", lost.id);
+  }
+
+  // --- Fetch keyword IDs for the position insert ---
+  const { data: kwIds } = await db
+    .from("tracked_keywords")
+    .select("id, keyword")
+    .eq("brand_id", brand.id)
+    .in("keyword", keywords);
+  const kwIdMap = new Map((kwIds || []).map((k) => [k.keyword, k.id]));
+
+  // --- Upsert keyword_positions ---
+  const positionRows = rows
+    .filter((r) => kwIdMap.has(r.keyword))
+    .map((r) => ({
+      brand_id: brand.id,
+      keyword_id: kwIdMap.get(r.keyword)!,
+      keyword: r.keyword,
+      position: r.position,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: r.ctr,
+      landing_page: r.page,
+      captured_date: today,
+    }));
+
+  // Insert in batches of 200 to stay under payload limits
+  for (let i = 0; i < positionRows.length; i += 200) {
+    await db.from("keyword_positions").upsert(
+      positionRows.slice(i, i + 200),
+      { onConflict: "brand_id,keyword,captured_date", ignoreDuplicates: false }
+    );
+  }
+
+  // --- Compute position distribution snapshot ---
+  const dist = {
+    brand_id: brand.id,
+    captured_date: today,
+    top_3: 0, top_10: 0, top_20: 0, top_50: 0, top_100: 0, not_ranked: 0,
+    new_this_week: 0, lost_this_week: 0, improved_this_week: 0, declined_this_week: 0,
+    total_clicks: 0, total_impressions: 0, avg_ctr: 0,
+  };
+  let ctrSum = 0;
+  for (const r of rows) {
+    const p = r.position;
+    if (p <= 3) dist.top_3++;
+    if (p <= 10) dist.top_10++;
+    if (p <= 20) dist.top_20++;
+    if (p <= 50) dist.top_50++;
+    if (p <= 100) dist.top_100++;
+    dist.total_clicks += r.clicks;
+    dist.total_impressions += r.impressions;
+    ctrSum += r.ctr;
+  }
+  dist.not_ranked = lostKeywords.length;
+  dist.new_this_week = (existing || []).filter((e) => e.status === "new").length;
+  dist.lost_this_week = lostKeywords.length;
+  dist.avg_ctr = rows.length ? ctrSum / rows.length : 0;
+
+  await db.from("position_distribution_snapshots").upsert(dist, {
+    onConflict: "brand_id,captured_date",
+  });
+
+  return {
+    synced: rows.length,
+    lost: lostKeywords.length,
+    distribution: { top_10: dist.top_10, top_20: dist.top_20 },
+  };
+}
+
+function computeStatus(bestPosition: number | null, currentPosition: number): string {
+  if (!bestPosition) return "new";
+  const diff = currentPosition - bestPosition;
+  if (diff <= -3) return "improving";
+  if (diff >= 3) return "declining";
+  return "stable";
+}
+
+// RANK ENRICH: weekly DataForSEO enrichment + AI opportunity scoring.
+// Processes up to 50 keywords per run (batched to control cost).
+// Only processes keywords where enriched_at is null or > 7 days old.
+export async function stepRankEnrich(brand: Brand) {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+
+  const { data: toEnrich } = await db
+    .from("tracked_keywords")
+    .select("id, keyword, search_volume, best_position, status")
+    .eq("brand_id", brand.id)
+    .or(`enriched_at.is.null,enriched_at.lt.${sevenDaysAgo}`)
+    .neq("status", "lost")
+    .limit(50);
+
+  if (!toEnrich?.length) return { enriched: 0 };
+
+  const keywords = toEnrich.map((k) => k.keyword);
+
+  // --- DataForSEO: volume + CPC (confirmed endpoint) ---
+  const volumeData = await keywordVolumes(keywords).catch(() => []);
+  const volumeMap = new Map(volumeData.map((v) => [v.keyword, v]));
+
+  // --- DataForSEO: difficulty (unverified endpoint, fails gracefully) ---
+  const difficultyData = await keywordDifficulty(keywords).catch(() => []);
+  const difficultyMap = new Map(difficultyData.map((d) => [d.keyword, d.difficulty]));
+
+  // --- DataForSEO: intent (unverified endpoint, fails gracefully) ---
+  const intentData = await classifySearchIntent(keywords).catch(() => []);
+  const intentMap = new Map(intentData.map((i) => [i.keyword, i.intent]));
+
+  // --- AI opportunity scoring (Claude) ---
+  // Process in a single batch prompt for efficiency
+  const kwContext = toEnrich.map((k) => ({
+    keyword: k.keyword,
+    position: k.best_position,
+    volume: volumeMap.get(k.keyword)?.volume ?? null,
+    difficulty: difficultyMap.get(k.keyword) ?? null,
+    intent: intentMap.get(k.keyword) ?? null,
+    status: k.status,
+  }));
+
+  const aiText = await callClaude({
+    maxTokens: 2000,
+    user: `You are an SEO strategist for a local service business.
+
+BUSINESS: ${brand.name} — ${brand.services} in ${brand.service_area}.
+
+Score each keyword 0-100 for opportunity (100 = highest priority to work on now).
+Factors: local relevance, commercial intent, achievable position improvement, search volume vs difficulty.
+Penalize: already ranking top 3, zero volume, purely informational intent for service businesses.
+
+Keywords to score:
+${JSON.stringify(kwContext, null, 2)}
+
+Return ONLY JSON array:
+[{"keyword":"...","score":0-100,"reason":"one sentence why"}]`,
+  }).catch(() => null);
+
+  const aiScores = extractJSON<{ keyword: string; score: number; reason: string }[]>(aiText || "") || [];
+  const aiMap = new Map(aiScores.map((s) => [s.keyword, s]));
+
+  // --- Compute traffic + revenue opportunity ---
+  const brandData = brand as Brand & {
+    avg_job_value?: number;
+    lead_conversion_rate?: number;
+    visitor_lead_rate?: number;
+  };
+  const revenueConfigured =
+    brandData.avg_job_value != null &&
+    brandData.lead_conversion_rate != null &&
+    brandData.visitor_lead_rate != null;
+
+  // --- Upsert enriched data ---
+  const now = new Date().toISOString();
+  for (const kw of toEnrich) {
+    const vol = volumeMap.get(kw.keyword);
+    const volume = vol?.volume ?? kw.search_volume;
+    const ai = aiMap.get(kw.keyword);
+
+    // Traffic opportunity: estimated clicks if ranking #1
+    const estimatedClicks = volume
+      ? Math.round(volume * estimatedCtr(1))
+      : null;
+
+    // Revenue opportunity: only when brand has all three rate fields
+    let revenueImpact: string | null = null;
+    if (revenueConfigured && estimatedClicks) {
+      const leads = estimatedClicks * brandData.visitor_lead_rate!;
+      const customers = leads * brandData.lead_conversion_rate!;
+      const revenue = customers * brandData.avg_job_value!;
+      revenueImpact = `~$${Math.round(revenue).toLocaleString()}/month if ranking #1`;
+    }
+
+    await db.from("tracked_keywords").update({
+      search_volume: volume ?? undefined,
+      cpc: vol?.cpc ?? undefined,
+      keyword_difficulty: difficultyMap.get(kw.keyword) ?? undefined,
+      search_intent: intentMap.get(kw.keyword) ?? undefined,
+      ai_opportunity_score: ai?.score ?? undefined,
+      ai_opportunity_reason: ai?.reason ?? undefined,
+      estimated_monthly_clicks: estimatedClicks ?? undefined,
+      estimated_revenue_impact: revenueImpact,
+      enriched_at: now,
+    }).eq("id", kw.id);
+  }
+
+  return { enriched: toEnrich.length };
+}
