@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         event_label: payload.event_label || action.replace(/_/g, " "),
         event_detail: payload.rationale || null,
         occurred_at: new Date().toISOString(),
-      }).catch(() => {}); // non-critical
+      }); // non-critical — fire and forget
     }
 
     return NextResponse.json({ ok: true, action, queued: true });

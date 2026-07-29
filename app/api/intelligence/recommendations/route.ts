@@ -67,13 +67,13 @@ Return ONLY JSON array:
 
   // Store in cache (expires 4 hours from now)
   const expiresAt = new Date(Date.now() + 4 * 3600_000).toISOString();
-  await db.from("reports").insert({
+  try { await db.from("reports").insert({
     brand_id: brandId,
     section,
     summary: JSON.stringify(recommendations),
     cache_expires_at: expiresAt,
     created_at: new Date().toISOString(),
-  }).catch(() => {}); // insert only; old rows expire naturally via cache_expires_at
+  }); } catch {} // insert only; old rows expire naturally via cache_expires_at
 
   return NextResponse.json({ recommendations, cached: false });
 }
