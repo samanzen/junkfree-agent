@@ -26,7 +26,7 @@ const GREEN = "#00B894";
 const AMBER = "#F5B461";
 const CORAL = "#FF6B6B";
 
-export default function Overview({ brandId }: { brandId: string }) {
+export default function Overview({ brandId, token }: { brandId: string; token?: string }) {
   const [data, setData] = useState<{
     current: Snap | null; previous: Snap | null;
     series: Snap[]; keywords: Kw[]; lowCtrPages: LowCtr[]; agent: Agent;
@@ -38,13 +38,13 @@ export default function Overview({ brandId }: { brandId: string }) {
     if (!brandId) return;
     setLoading(true);
     setData(null);
-    fetch(`/api/analytics?brand=${brandId}`)
+    fetch(`/api/analytics?brand=${brandId}`, token ? { headers: { authorization: `Bearer ${token}` } } : {})
       .then((r) => r.json())
       .then((d) => {
         // If current is null but we know data exists, retry once after 2s
         if (!d.current) {
           setTimeout(() => {
-            fetch(`/api/analytics?brand=${brandId}`)
+            fetch(`/api/analytics?brand=${brandId}`, token ? { headers: { authorization: `Bearer ${token}` } } : {})
               .then((r2) => r2.json())
               .then((d2) => { setData(d2); setLoading(false); })
               .catch(() => setLoading(false));
