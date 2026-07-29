@@ -1,42 +1,38 @@
 import { NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { db } from "@/lib/supabase";
-import { domainOverview, backlinksSummary, isConfigured } from "@/lib/dataforseo";
+import { latestWithDelta, series } from "@/lib/metrics";
 
 export const maxDuration = 60;
 
 export async function GET() {
-  const brands = await getActiveBrands().catch((e) => ({ error: String(e) }));
-  if (!Array.isArray(brands)) return NextResponse.json({ step: "getActiveBrands", error: brands });
-  const brand = brands[0];
-  if (!brand) return NextResponse.json({ step: "no brands found" });
+  const brands = await getActiveBrands();
+  const results = [];
 
-  const domain = brand.site_url.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
-  const dfConfigured = isConfigured();
+  for (const brand of brands) {
+    // Count rows in metric_snapshots for this brand
+    const { count } = await db.from("metric_snapshots")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id);
 
-  let overview = null, overviewErr = null;
-  let backlinks = null, backlinksErr = null;
-  if (dfConfigured) {
-    try { overview = await domainOverview(domain); } catch (e) { overviewErr = String(e); }
-    try { backlinks = await backlinksSummary(domain); } catch (e) { backlinksErr = String(e); }
+    // Try latestWithDelta
+    const { current } = await latestWithDelta(brand.id);
+
+    // Get the raw rows
+    const { data: rows } = await db.from("metric_snapshots")
+      .select("brand_id, organic_traffic, organic_keywords, captured_at")
+      .eq("brand_id", brand.id)
+      .order("captured_at", { ascending: false })
+      .limit(3);
+
+    results.push({
+      brand: brand.name,
+      brand_id: brand.id,
+      snapshot_count: count,
+      latest_from_function: current,
+      raw_rows: rows,
+    });
   }
 
-  let insertErr = null;
-  const { error } = await db.from("metric_snapshots").insert({
-    brand_id: brand.id,
-    organic_traffic: overview?.organic_traffic ?? 99,
-    organic_keywords: overview?.organic_keywords ?? 88,
-    backlinks: backlinks?.backlinks ?? 77,
-    referring_domains: backlinks?.referring_domains ?? 66,
-    captured_at: new Date().toISOString(),
-  });
-  insertErr = error?.message ?? null;
-
-  return NextResponse.json({
-    brand: brand.name,
-    dataforseo_configured: dfConfigured,
-    overview, overviewErr,
-    backlinks, backlinksErr,
-    insertErr,
-  });
+  return NextResponse.json(results);
 }
