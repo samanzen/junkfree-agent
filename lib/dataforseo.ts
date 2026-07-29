@@ -122,3 +122,83 @@ export async function backlinksSummary(domain: string): Promise<{ backlinks: num
   if (!r) return null;
   return { backlinks: r.backlinks ?? null, referring_domains: r.referring_domains ?? null };
 }
+
+// ── Sprint 4: Position Tracking additions ────────────────────────────────────
+
+// Keyword difficulty scores (0-100) for up to 100 keywords at once.
+// Endpoint: /dataforseo_labs/google/bulk_keyword_difficulty/live
+// NOTE: This endpoint is documented in DataForSEO Labs API but not yet
+// confirmed against live account. Returns null per keyword on failure.
+// The UI shows "–" when difficulty is null rather than crashing.
+export async function keywordDifficulty(
+  keywords: string[]
+): Promise<{ keyword: string; difficulty: number | null }[]> {
+  if (!keywords.length) return [];
+  const data = await post<Task<unknown>>(
+    "/dataforseo_labs/google/bulk_keyword_difficulty/live",
+    { keywords: keywords.slice(0, 100), location_code: LOCATION_CANADA, language_code: LANG }
+  );
+  // Response shape: tasks[0].result[] where each item has keyword + keyword_difficulty
+  const items = (
+    data?.tasks?.[0]?.result as
+      | { keyword?: string; keyword_difficulty?: number }[]
+      | undefined
+  ) || [];
+  return items.map((item) => ({
+    keyword: item.keyword || "",
+    difficulty: typeof item.keyword_difficulty === "number" ? item.keyword_difficulty : null,
+  })).filter((x) => x.keyword);
+}
+
+// Search intent classification per keyword.
+// Endpoint: /dataforseo_labs/google/search_intent/live
+// NOTE: Documented in DataForSEO Labs but not yet confirmed against live account.
+// Returns null intent on failure. UI shows "–" when null.
+export async function classifySearchIntent(
+  keywords: string[]
+): Promise<{ keyword: string; intent: string | null }[]> {
+  if (!keywords.length) return [];
+  const data = await post<Task<unknown>>(
+    "/dataforseo_labs/google/search_intent/live",
+    { keywords: keywords.slice(0, 100), location_code: LOCATION_CANADA, language_code: LANG }
+  );
+  // Response shape: tasks[0].result[] where each item has keyword + search_intent_info.main_intent
+  const items = (
+    data?.tasks?.[0]?.result as
+      | { keyword?: string; search_intent_info?: { main_intent?: string } }[]
+      | undefined
+  ) || [];
+  return items.map((item) => ({
+    keyword: item.keyword || "",
+    intent: item.search_intent_info?.main_intent || null,
+  })).filter((x) => x.keyword);
+}
+
+// Extended domain rank info: includes domain authority-like score.
+// Reuses the confirmed /dataforseo_labs/google/domain_rank_overview/live endpoint
+// but extracts additional fields (rank score, organic_traffic_value).
+// Falls back gracefully if fields are absent.
+export async function domainRankDetail(domain: string): Promise<{
+  organic_keywords: number | null;
+  organic_traffic: number | null;
+  organic_traffic_value: number | null;
+  rank_score: number | null;
+} | null> {
+  const data = await post<Task<unknown>>(
+    "/dataforseo_labs/google/domain_rank_overview/live",
+    { target: domain, location_code: LOCATION_CANADA, language_code: LANG }
+  );
+  const item = (
+    data?.tasks?.[0]?.result?.[0] as
+      | { items?: { metrics?: { organic?: { count?: number; etv?: number; pos_1?: number } }; rank?: number }[] }
+      | undefined
+  )?.items?.[0];
+  if (!item) return null;
+  const organic = item.metrics?.organic;
+  return {
+    organic_keywords: organic?.count ?? null,
+    organic_traffic: organic?.etv ? Math.round(organic.etv) : null,
+    organic_traffic_value: null, // field name varies by plan; kept null until confirmed
+    rank_score: typeof item.rank === "number" ? item.rank : null,
+  };
+}

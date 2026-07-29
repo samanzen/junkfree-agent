@@ -5,13 +5,15 @@
 import { db } from "./supabase";
 
 export type JobKind =
-  | "plan"        // intelligence + planning -> enqueues content/geo/gbp/etc jobs
-  | "content"     // write one content draft (+ queue its images)
-  | "geo"         // GEO answer content
-  | "gbp"         // Google Business post
-  | "citations"   // backlink opportunities
-  | "audit"        // crawl site, queue fixes for weak pages
-  | "performance"; // learning loop
+  | "plan"
+  | "content"
+  | "geo"
+  | "gbp"
+  | "citations"
+  | "audit"
+  | "performance"
+  | "rank_sync"
+  | "rank_enrich";
 
 export async function enqueue(brandId: string, kind: JobKind, payload: Record<string, unknown> = {}) {
   await db.from("jobs").insert({ brand_id: brandId, kind, payload, status: "queued" });

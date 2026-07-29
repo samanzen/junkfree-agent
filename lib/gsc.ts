@@ -94,3 +94,91 @@ export async function pagesByIntentSignal(gscProperty: string, signal: string) {
   }
   return [...map.entries()].map(([page, queries]) => ({ page, queries })).slice(0, 10);
 }
+
+// ── Sprint 4: Position Tracking additions ────────────────────────────────────
+
+// Full keyword sync: all ranked keywords with complete GSC data.
+// Used by the rank_sync job to populate tracked_keywords + keyword_positions.
+// Fetches the last 28 days (GSC's standard window). rowLimit 2500 covers most sites.
+export async function fullKeywordSync(gscProperty: string, rowLimit = 2500): Promise<{
+  keyword: string;
+  page: string;
+  position: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+}[]> {
+  const rows = await query(gscProperty, ["query", "page"], rowLimit);
+  return rows
+    .filter((r) => r.position > 0 && r.impressions > 0)
+    .map((r) => ({
+      keyword: r.keys[0],
+      page: r.keys[1],
+      position: Math.round(r.position * 10) / 10,
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: r.ctr,
+    }));
+}
+
+// Page-level performance: aggregated GSC data per landing page.
+// Used for the content performance module.
+export async function pagePerformanceSummary(gscProperty: string): Promise<{
+  page: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}[]> {
+  const rows = await query(gscProperty, ["page"], 1000);
+  return rows
+    .filter((r) => r.impressions > 0)
+    .sort((a, b) => b.clicks - a.clicks)
+    .map((r) => ({
+      page: r.keys[0],
+      clicks: r.clicks,
+      impressions: r.impressions,
+      ctr: r.ctr,
+      position: Math.round(r.position * 10) / 10,
+    }));
+}
+
+// Daily position history for a single keyword over a date range.
+// Uses the "date" + "query" dimensions with a date filter.
+// This enables the per-keyword history charts in the keyword drawer.
+export async function keywordDailyHistory(
+  gscProperty: string,
+  keyword: string,
+  startDate: string,
+  endDate: string
+): Promise<{ date: string; position: number; clicks: number; impressions: number; ctr: number }[]> {
+  const jwt = auth();
+  const { access_token } = await jwt.authorize();
+  const endpoint =
+    "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
+    encodeURIComponent(gscProperty) +
+    "/searchAnalytics/query";
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      startDate,
+      endDate,
+      dimensions: ["date"],
+      dimensionFilterGroups: [{
+        filters: [{ dimension: "query", operator: "equals", expression: keyword }],
+      }],
+      rowLimit: 500,
+    }),
+  });
+  if (!res.ok) throw new Error(`GSC daily history failed: ${res.status}`);
+  const data = (await res.json()) as { rows?: QueryRow[] };
+  return (data.rows || []).map((r) => ({
+    date: r.keys[0],
+    position: Math.round(r.position * 10) / 10,
+    clicks: r.clicks,
+    impressions: r.impressions,
+    ctr: r.ctr,
+  }));
+}
