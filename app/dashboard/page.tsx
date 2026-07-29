@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import Overview from "./Overview";
+import IntelligencePage from "./intelligence/IntelligencePage";
 
 type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean };
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
@@ -20,7 +21,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations" | "intelligence">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -165,6 +166,7 @@ export default function Dashboard() {
 
         <nav className="tabs">
           <button className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
+          <button className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>🧠 Intelligence</button>
           <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
           <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>
           <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>
@@ -173,6 +175,7 @@ export default function Dashboard() {
         {loading && <p className="muted">Loading signal…</p>}
 
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
+        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} token={token} />}
 
         {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
           <article className="card" key={d.id}>
