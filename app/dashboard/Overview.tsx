@@ -37,9 +37,22 @@ export default function Overview({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (!brandId) return;
     setLoading(true);
+    setData(null);
     fetch(`/api/analytics?brand=${brandId}`)
       .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
+      .then((d) => {
+        // If current is null but we know data exists, retry once after 2s
+        if (!d.current) {
+          setTimeout(() => {
+            fetch(`/api/analytics?brand=${brandId}`)
+              .then((r2) => r2.json())
+              .then((d2) => { setData(d2); setLoading(false); })
+              .catch(() => setLoading(false));
+          }, 2000);
+        } else {
+          setData(d); setLoading(false);
+        }
+      })
       .catch(() => setLoading(false));
   }, [brandId]);
 
