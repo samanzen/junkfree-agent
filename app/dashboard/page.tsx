@@ -172,7 +172,7 @@ export default function Dashboard() {
 
         {loading && <p className="muted">Loading signal…</p>}
 
-        {tab === "overview" && brandId && <Overview brandId={brandId} />}
+        {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} />}
 
         {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
           <article className="card" key={d.id}>
