@@ -1,3 +1,10 @@
+// DEPRECATED — DO NOT USE.
+// This file is kept for reference only. All execution now goes through the
+// job-queue system: /api/run enqueues plan jobs, /api/step processes them
+// one at a time via lib/steps.ts. The cron endpoint now calls the queue path.
+// Do not import from this file in new code.
+//
+// Original description:
 // THE BRAIN — now multi-tenant.
 // One run loops over every active brand and, for each, does the full local-SEO
 // suite: read GSC signals, plan content work, fix search intent, draft GBP posts,

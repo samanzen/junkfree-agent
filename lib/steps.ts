@@ -2,7 +2,7 @@
 // The queue processes these one at a time. Together they equal a full run.
 
 import { callClaude, extractJSON } from "./anthropic";
-import { brandBlock, type Brand } from "./brands";
+import { brandBlock, getBrandById, type Brand } from "./brands";
 import { db, TaskType } from "./supabase";
 import { strikingDistance, lowCtrPages, pagesByIntentSignal } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
@@ -13,6 +13,7 @@ import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
 import { auditSite } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
+import { slugify, splitFrontMatter } from "./utils";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -111,10 +112,9 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   // In auto mode, immediately publish blog/page content live.
   if (autoMode && inserted && (type === "new_blog" || type === "new_page")) {
     const raw = kw || title.replace(/^(Blog|Page):\s*/i, "");
-    const base = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70);
+    const base = slugify(raw);
     const slug = type === "new_page" ? base : `blog/${base}`;
-    const cleanBody = body.replace(/^\s*TITLE TAG:.*$/im, "").replace(/^\s*META:.*$/im, "").trim();
-    const cleanTitle = body.match(/^\s*TITLE TAG:\s*(.+)$/im)?.[1]?.trim() || title.replace(/^(Blog|Page):\s*/i, "");
+    const { title: cleanTitle, body: cleanBody } = splitFrontMatter(body, title);
     await db.from("content").upsert({ slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() });
     await db.from("drafts").update({ status: "published" }).eq("id", inserted.id);
   }
@@ -194,7 +194,4 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
   }
 }
 
-async function getBrandById(id: string) {
-  const { data } = await db.from("brands").select("*").eq("id", id).single();
-  return data;
-}
+

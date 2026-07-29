@@ -1,16 +1,27 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 
-// One call feeds the whole dashboard: brands + their drafts, GBP posts,
-// citations, and review responses. Keeps the UI simple and fast.
-export async function GET() {
+// Feeds the admin dashboard. Accepts an optional ?brand=<uuid> query param
+// for server-side filtering — used by the customer portal to load only one
+// brand's data instead of all brands.
+export async function GET(req: NextRequest) {
+  const brandFilter = new URL(req.url).searchParams.get("brand") || null;
+
+  const brandsQuery = db.from("brands").select("*").eq("active", true).order("name");
+  const draftsQuery = db.from("drafts").select("*").order("created_at", { ascending: false }).limit(100);
+  const gbpQuery = db.from("gbp_posts").select("*").order("created_at", { ascending: false }).limit(50);
+  const citesQuery = db.from("citations").select("*").order("priority", { ascending: false }).limit(100);
+  const reviewsQuery = db.from("review_responses").select("*").order("created_at", { ascending: false }).limit(50);
+
+  // Apply brand filter server-side when requested.
   const [brands, drafts, gbp, citations, reviews] = await Promise.all([
-    db.from("brands").select("*").eq("active", true).order("name"),
-    db.from("drafts").select("*").order("created_at", { ascending: false }).limit(100),
-    db.from("gbp_posts").select("*").order("created_at", { ascending: false }).limit(50),
-    db.from("citations").select("*").order("priority", { ascending: false }).limit(100),
-    db.from("review_responses").select("*").order("created_at", { ascending: false }).limit(50),
+    brandFilter ? brandsQuery.eq("id", brandFilter) : brandsQuery,
+    brandFilter ? draftsQuery.eq("brand_id", brandFilter) : draftsQuery,
+    brandFilter ? gbpQuery.eq("brand_id", brandFilter) : gbpQuery,
+    brandFilter ? citesQuery.eq("brand_id", brandFilter) : citesQuery,
+    brandFilter ? reviewsQuery.eq("brand_id", brandFilter) : reviewsQuery,
   ]);
+
   return NextResponse.json({
     brands: brands.data || [],
     drafts: drafts.data || [],

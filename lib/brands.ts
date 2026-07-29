@@ -33,6 +33,12 @@ export async function getBrand(slug: string): Promise<Brand | null> {
   return (data as Brand) || null;
 }
 
+/** Look up a brand by its UUID primary key. Used by job dispatchers. */
+export async function getBrandById(id: string): Promise<Brand | null> {
+  const { data } = await db.from("brands").select("*").eq("id", id).single();
+  return (data as Brand) || null;
+}
+
 // The business-context block injected into every agent prompt for a brand.
 export function brandBlock(b: Brand): string {
   return `BUSINESS CONTEXT — apply throughout:

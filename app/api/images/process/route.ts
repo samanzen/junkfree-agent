@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { getBrandById } from "@/lib/brands";
 import { generatePostImages } from "@/lib/images";
 
 export const maxDuration = 60;
@@ -30,7 +31,7 @@ export async function POST() {
   const doneToday = (todays || []).filter((d) => String(d.body).includes("![header](http")).length;
   if (doneToday >= 1) return NextResponse.json({ done: true, capped: true });
 
-  const brand = await getBrandById(target.brand_id);
+  const brand = await getBrandById(target.brand_id).catch(() => null);
   if (!brand) return NextResponse.json({ done: true });
 
   const topic = (target.target_keyword || target.title || "local service").replace(/^(Blog|Page):\s*/, "");
@@ -49,7 +50,4 @@ export async function POST() {
   return NextResponse.json({ done: false, processed: target.id });
 }
 
-async function getBrandById(id: string) {
-  const { data } = await db.from("brands").select("*").eq("id", id).single();
-  return data;
-}
+
