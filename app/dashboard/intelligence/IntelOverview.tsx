@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import CountUp from "@/app/dashboard/CountUp";
 import MetricExplainer from "./MetricExplainer";
 import ExecSummary from "./ExecSummary";
+import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Overview = {
   top_3: number|null; top_10: number|null; top_20: number|null;
@@ -10,6 +11,7 @@ type Overview = {
   total_clicks: number|null; total_impressions: number|null;
   avg_ctr: number|null; avg_position: number|null; total_keywords: number|null;
   deltas: Record<string, number|null>; by_status: Record<string, number>; has_data: boolean;
+  status?: DataStatusKind;
 };
 
 const CARDS = [
@@ -39,13 +41,7 @@ export default function IntelOverview({ brandId, brandName, token }: { brandId: 
 
   if (loading) return <div className="io-skeleton"><div className="io-skel-grid">{[...Array(10)].map((_,i)=><div key={i} className="io-skel-card"/>)}</div></div>;
 
-  if (!data?.has_data) return (
-    <div className="io-empty">
-      <div style={{ fontSize: 40, marginBottom: 12 }}>📡</div>
-      <h3>No position data yet</h3>
-      <p>Run the agents to trigger a rank sync. Position data will appear here after the first sync completes.</p>
-    </div>
-  );
+  if (!data?.has_data) return <DataStatus status={data?.status || "never_synced"} />;
 
   return (
     <div className="io">

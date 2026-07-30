@@ -1,25 +1,32 @@
 "use client";
 import { useEffect, useState } from "react";
 import ActionButton from "./ActionButton";
+import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Kw = { keyword: string; current_position?: number; previous_position?: number; change?: number; position?: number; last_position?: number; search_volume?: number; ai_opportunity_reason?: string; landing_page?: string };
 type Data = { gains: Kw[]; drops: Kw[]; new_keywords: Kw[]; lost_keywords: Kw[]; almost_page_1: Kw[] };
 
 export default function WinnersLosers({ brandId }: { brandId: string }) {
   const [data, setData] = useState<Data | null>(null);
+  const [status, setStatus] = useState<DataStatusKind>("ok");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"gains"|"drops"|"new"|"lost"|"page1">("gains");
 
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/intelligence/winners-losers?brand=${brandId}`)
-      .then((r) => r.json())
-      .then((d) => { setData(d); setLoading(false); })
+    Promise.all([
+      fetch(`/api/intelligence/winners-losers?brand=${brandId}`).then((r) => r.json()),
+      fetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([d, ov]) => { setData(d); setStatus(ov?.status || "ok"); setLoading(false); })
       .catch(() => setLoading(false));
   }, [brandId]);
 
   if (loading) return <div className="wl-loading">Analysing keyword movements…</div>;
   if (!data) return null;
+
+  const totalRows = data.gains.length + data.drops.length + data.new_keywords.length + data.lost_keywords.length + data.almost_page_1.length;
+  if (totalRows === 0 && status !== "ok") return <DataStatus status={status} />;
 
   const tabs = [
     { key: "gains" as const, label: `↑ Gains`, count: data.gains.length, color: "#00B894" },

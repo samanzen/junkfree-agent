@@ -1,25 +1,29 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Snap = { captured_date: string; top_3: number; top_10: number; top_20: number; top_50: number; top_100: number; not_ranked: number; total_clicks: number };
 
 export default function PositionDistribution({ brandId }: { brandId: string }) {
   const [data, setData] = useState<Snap[]>([]);
+  const [status, setStatus] = useState<DataStatusKind>("ok");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/intelligence/distribution?brand=${brandId}&days=30`)
-      .then((r) => r.json())
-      .then((d) => { setData(d.distribution || []); setLoading(false); })
+    Promise.all([
+      fetch(`/api/intelligence/distribution?brand=${brandId}&days=30`).then((r) => r.json()),
+      fetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([d, ov]) => { setData(d.distribution || []); setStatus(ov?.status || "ok"); setLoading(false); })
       .catch(() => setLoading(false));
   }, [brandId]);
 
   const latest = data[data.length - 1];
 
   if (loading) return <div className="pd-loading">Loading distribution…</div>;
-  if (!latest) return <div className="pd-empty">No distribution data yet. Run the agents to sync rankings.</div>;
+  if (!latest) return <DataStatus status={status === "ok" ? "never_synced" : status} />;
 
   // Build breakdown from latest snapshot
   const breakdown = [

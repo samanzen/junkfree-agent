@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import ActionButton from "./ActionButton";
 import MetricExplainer from "./MetricExplainer";
+import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Kw = {
   id: string; keyword: string; status: string;
@@ -34,7 +35,16 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
   const [selected, setSelected] = useState<Kw | null>(null);
   const [addKw, setAddKw] = useState("");
   const [adding, setAdding] = useState(false);
+  const [status, setStatus] = useState<DataStatusKind>("ok");
   const limit = 50;
+
+  useEffect(() => {
+    if (!brandId) return;
+    fetch(`/api/intelligence/overview?brand=${brandId}`)
+      .then((r) => r.json())
+      .then((ov) => setStatus(ov?.status || "ok"))
+      .catch(() => {});
+  }, [brandId]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -110,7 +120,13 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                 <tr key={i}><td colSpan={9} className="kt-skel-row"><div className="kt-skel" /></td></tr>
               ))
             ) : keywords.length === 0 ? (
-              <tr><td colSpan={9} className="kt-empty">No keywords found. Run agents or add one above.</td></tr>
+              <tr><td colSpan={9} className="kt-empty">
+                {status === "ok" && !search && !statusFilter
+                  ? "No keywords found. Run agents or add one above."
+                  : status !== "ok" && !search && !statusFilter
+                  ? <DataStatus status={status} />
+                  : "No keywords match this filter."}
+              </td></tr>
             ) : keywords.map((kw) => (
               <tr key={kw.id} className="kt-row" onClick={() => setSelected(kw)}>
                 <td className="kt-td kt-kw">{kw.keyword}</td>

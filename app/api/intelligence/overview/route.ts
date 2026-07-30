@@ -47,6 +47,24 @@ export async function GET(req: NextRequest) {
     .order("captured_at", { ascending: false })
     .limit(1);
 
+  // Distinguish *why* there's no data so the UI can show an accurate status
+  // instead of a bare empty screen: GSC never connected vs. connected but
+  // never synced vs. synced and genuinely returned nothing.
+  const { data: brandRow } = await db
+    .from("brands").select("gsc_property").eq("id", brandId).single();
+  const { count: syncCount } = await db
+    .from("keyword_positions")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandId);
+
+  const status = !brandRow?.gsc_property
+    ? "no_gsc"
+    : cur
+    ? "ok"
+    : (syncCount || 0) > 0
+    ? "syncing"
+    : "never_synced";
+
   return NextResponse.json({
     // Position distribution
     top_3: cur?.top_3 ?? null,
@@ -78,5 +96,6 @@ export async function GET(req: NextRequest) {
     by_status: byStatus,
 
     has_data: !!cur,
+    status,
   });
 }
