@@ -4,6 +4,16 @@
 
 import { callClaude, extractJSON } from "./anthropic";
 import { brandBlock, type Brand } from "./brands";
+import { domainOf } from "./metrics";
+import { referringDomainsList, isConfigured } from "./dataforseo";
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return url.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
+  }
+}
 
 // Draft a Google Business Profile post. Active GBP profiles rank higher in the
 // map pack, and posting weekly is one of the strongest local signals.
@@ -37,20 +47,30 @@ Return only the response text.`,
 }
 
 // Find local citation & backlink opportunities. Can't build links, but gives a
-// prioritized outreach list — the highest-value free local-SEO work.
+// prioritized outreach list — the highest-value free local-SEO work. Filters
+// out anything that already links to us so only new opportunities surface.
 export async function findCitations(brand: Brand) {
+  const domain = domainOf(brand);
+  const existingDomains = isConfigured() ? await referringDomainsList(domain).catch(() => []) : [];
+  const knownSet = new Set(existingDomains.map((d) => d.replace(/^www\./, "").toLowerCase()));
+
   const text = await callClaude({
     search: true,
     maxTokens: 2000,
     user: `${brandBlock(brand)}
 
 TASK: List the best citation and backlink opportunities for this local ${brand.services || "service"} business in ${brand.service_area}. Focus on high-authority local directories, industry associations, local business groups, chambers of commerce, review platforms, and niche directories that actually help local map-pack + organic rankings. Prioritise ones a competitor likely already has.
+${knownSet.size ? `SITES THAT ALREADY LINK TO US — do NOT suggest these, only genuinely new opportunities:\n${[...knownSet].join(", ")}\n` : ""}
 Return ONLY JSON array (max 15):
 [{"name":"...","url":"...","category":"directory|association|local_news|review_platform|niche","priority":1-10,"rationale":"one line why it helps"}]`,
   });
-  return extractJSON<
+  const parsed = extractJSON<
     { name: string; url: string; category: string; priority: number; rationale: string }[]
   >(text);
+  if (!parsed) return parsed;
+  // Hard filter, independent of whether the prompt was followed: never
+  // surface a site we already have a live backlink from.
+  return parsed.filter((c) => !knownSet.has(hostnameOf(c.url)));
 }
 
 // Fix search intent on a page. Core use: pages ranking for "free" terms that

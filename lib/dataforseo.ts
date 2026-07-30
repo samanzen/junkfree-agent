@@ -174,6 +174,23 @@ export async function classifySearchIntent(
   })).filter((x) => x.keyword);
 }
 
+// Domains already linking to us — used to filter backlink/citation
+// suggestions down to genuinely new opportunities. Endpoint documented in
+// DataForSEO but not yet confirmed against a live account; fails
+// gracefully (empty array), same convention as the other calls in this file.
+export async function referringDomainsList(domain: string): Promise<string[]> {
+  const data = await post<Task<unknown>>(
+    "/backlinks/referring_domains/live",
+    { target: domain, limit: 1000, internal_list_limit: 1, backlinks_status_type: "live" }
+  );
+  const items = (
+    data?.tasks?.[0]?.result?.[0] as
+      | { items?: { domain?: string }[] }
+      | undefined
+  )?.items || [];
+  return items.map((it) => it.domain || "").filter(Boolean);
+}
+
 // Organic competitors: domains ranking for many of the same keywords.
 // Endpoint: /dataforseo_labs/google/competitors_domain/live
 // NOTE: Documented in DataForSEO Labs but not yet confirmed against a live
