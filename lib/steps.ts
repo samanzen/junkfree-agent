@@ -29,17 +29,63 @@ async function currentRun(brandId: string): Promise<string> {
   return data!.id;
 }
 
+// ── Content-idea de-duplication & existing-page detection ──────────────────
+// Prevents stepPlan() from suggesting a brand-new page/blog for a topic
+// that's already published or already queued, and catches keyword
+// cannibalization (two pages competing for the same topic).
+
+type ExistingTopic = { keyword: string | null; url: string | null; title: string };
+
+function normalizeTopic(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/^(blog|page|new blog|new page|intent fix|meta rewrite|audit \+ rewrite):\s*/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+async function existingTopics(brandId: string): Promise<ExistingTopic[]> {
+  const [{ data: content }, { data: drafts }] = await Promise.all([
+    db.from("content").select("slug, title").eq("brand_id", brandId),
+    db.from("drafts")
+      .select("target_keyword, target_url, title")
+      .eq("brand_id", brandId)
+      .neq("status", "dismissed")
+      .in("task_type", ["new_page", "new_blog", "improve_content"]),
+  ]);
+  return [
+    ...(content || []).map((c) => ({ keyword: null as string | null, url: c.slug as string, title: c.title as string })),
+    ...(drafts || []).map((d) => ({ keyword: d.target_keyword, url: d.target_url, title: d.title })),
+  ];
+}
+
+// First existing topic that substantially overlaps a candidate keyword/title,
+// or null if it looks genuinely new.
+function findExistingMatch(candidate: string | undefined | null, existing: ExistingTopic[]): ExistingTopic | null {
+  const norm = candidate ? normalizeTopic(candidate) : "";
+  if (!norm) return null;
+  for (const e of existing) {
+    const eKeyword = e.keyword ? normalizeTopic(e.keyword) : "";
+    const eTitle = normalizeTopic(e.title || "");
+    if (eKeyword && (eKeyword === norm || eKeyword.includes(norm) || norm.includes(eKeyword))) return e;
+    if (eTitle && (eTitle === norm || eTitle.includes(norm) || norm.includes(eTitle))) return e;
+  }
+  return null;
+}
+
 // PLAN: gather intelligence, decide tasks, and enqueue the execution jobs.
 export async function stepPlan(brand: Brand) {
   const gsc = brand.gsc_property;
-  const [striking, lowCtr, intentPages, strategy, recon, lessons] = await Promise.all([
+  const [striking, lowCtr, intentPages, strategy, recon, lessons, existing] = await Promise.all([
     gsc ? safe(() => strikingDistance(gsc)) : Promise.resolve(null),
     gsc ? safe(() => lowCtrPages(gsc)) : Promise.resolve(null),
     gsc && brand.intent_notes ? safe(() => pagesByIntentSignal(gsc, "free")) : Promise.resolve(null),
     safe(() => keywordStrategy(brand)),
     safe(() => competitorGaps(brand)),
     safe(() => activeLessons(brand)),
+    safe(() => existingTopics(brand.id)),
   ]);
+  const existingList = (existing as ExistingTopic[] | null) || [];
 
   const planText = await callClaude({
     maxTokens: 1800,
@@ -48,6 +94,10 @@ export async function stepPlan(brand: Brand) {
 You are the SEO operations lead. Use ALL intelligence below to choose the ${MAX_TASKS} highest-impact actions now. Favour quick wins but also build topical authority.
 
 RULES: Target paid/high-intent + long-tail keywords with real volume where known. NEVER target "free" keywords.
+NEVER propose "new_page" or "new_blog" for a topic already listed in EXISTING TOPICS below — if that topic needs work, propose "improve_content" targeting its existing URL instead. Also do not propose two of your own tasks in this batch for the same or overlapping topic (keyword cannibalization) — group related keywords under one page rather than forking a near-duplicate.
+
+EXISTING TOPICS (already published or queued — do not duplicate):
+${existingList.length ? existingList.map((e) => `- "${e.title}"${e.keyword ? ` (keyword: ${e.keyword})` : ""}${e.url ? ` → ${e.url}` : ""}`).join("\n") : "none yet"}
 
 LESSONS (from measuring past results — apply them):
 ${(lessons as string[])?.length ? (lessons as string[]).map((l) => "- " + l).join("\n") : "none yet"}
@@ -63,7 +113,31 @@ ${JSON.stringify(lowCtr || [], null, 2)}
 Return ONLY JSON array of up to ${MAX_TASKS}:
 [{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...","target_keyword":"...","rationale":"..."}]`,
   });
-  const tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
+  let tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
+
+  // Hard safety net — enforced regardless of whether the model followed the
+  // prompt: never let a new_page/new_blog through for a topic that already
+  // exists (redirect to improve_content on the existing URL instead), and
+  // never let two tasks in the same batch target overlapping keywords.
+  const claimedThisBatch: string[] = [];
+  tasks = tasks.map((t) => {
+    if (t.task_type !== "new_page" && t.task_type !== "new_blog") return t;
+    const match = findExistingMatch(t.target_keyword, existingList);
+    if (match) {
+      return {
+        ...t,
+        task_type: "improve_content" as TaskType,
+        target_url: match.url || t.target_url,
+        rationale: `${t.rationale} (redirected from new page — topic already exists)`,
+      };
+    }
+    const norm = normalizeTopic(t.target_keyword || "");
+    if (norm && claimedThisBatch.includes(norm)) {
+      return { ...t, task_type: "improve_content" as TaskType, rationale: `${t.rationale} (merged — overlapping keyword in this batch)` };
+    }
+    if (norm) claimedThisBatch.push(norm);
+    return t;
+  });
 
   const runId = await currentRun(brand.id);
 
