@@ -240,7 +240,22 @@ export async function stepAudit(brand: Brand, runId: string) {
   if ((count || 0) > 0) return;
 
   const result = await safe(() => auditSite(brand, 12));
+  const audited = (result as { audited?: number } | null)?.audited || 0;
   const issues = (result as { issues?: { url: string; problem: string; severity: string; fix: string; task_type: string }[] } | null)?.issues || [];
+
+  // Site Health score — derived from this same audit pass, no extra crawl or
+  // AI call. Cached in `reports` (section="site_health") so metrics.snapshot()
+  // can read it back with one fast query instead of re-running the crawl
+  // inline (that used to happen and is why it was stripped to keep snapshot()
+  // under the 60s function budget).
+  if (audited > 0) {
+    await db.from("reports").insert({
+      brand_id: brand.id,
+      section: "site_health",
+      summary: JSON.stringify({ score: siteHealthScore(issues), audited, issue_count: issues.length }),
+      cache_expires_at: new Date(Date.now() + 26 * 3600_000).toISOString(),
+    });
+  }
 
   // Queue the top 2 highest-severity content fixes as improvement tasks.
   const high = issues.filter((i) => i.severity === "high").slice(0, 2);
@@ -252,6 +267,19 @@ export async function stepAudit(brand: Brand, runId: string) {
       runId,
     });
   }
+}
+
+// 100 minus weighted deductions per issue severity found during the day's
+// site audit, floored at 0 — a simple, defensible technical-SEO score
+// derived entirely from auditSite()'s existing output.
+function siteHealthScore(issues: { severity: string }[]): number {
+  let score = 100;
+  for (const i of issues) {
+    if (i.severity === "high") score -= 15;
+    else if (i.severity === "medium") score -= 7;
+    else score -= 3;
+  }
+  return Math.max(0, Math.min(100, score));
 }
 
 // Dispatch a claimed job to the right step.

@@ -23,12 +23,23 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
   const domain = domainOf(brand);
   const gsc = brand.gsc_property;
 
-  const [striking, overview, backlinks, ranked] = await Promise.all([
+  const [striking, overview, backlinks, ranked, healthRows] = await Promise.all([
     gsc ? strikingDistance(gsc).catch(() => []) : Promise.resolve([]),
     isConfigured() ? domainOverview(domain).catch(() => null) : Promise.resolve(null),
     isConfigured() ? backlinksSummary(domain).catch(() => null) : Promise.resolve(null),
     isConfigured() ? rankedKeywords(domain).catch(() => []) : Promise.resolve([]),
+    // Site Health is computed by the daily audit job (lib/steps.ts stepAudit),
+    // not here — this is a single fast DB read, not a re-crawl, so it stays
+    // within the "lightweight snapshot" budget this function is named for.
+    db.from("reports").select("summary").eq("brand_id", brand.id).eq("section", "site_health")
+      .order("created_at", { ascending: false }).limit(1).then((r) => r.data || []),
   ]);
+
+  let site_health: number | null = null;
+  try {
+    const parsed = healthRows[0]?.summary ? JSON.parse(healthRows[0].summary) : null;
+    site_health = typeof parsed?.score === "number" ? parsed.score : null;
+  } catch { /* leave null */ }
 
   let strikingCount = striking.length;
   let avgPos = striking.length
@@ -48,7 +59,7 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     striking_distance: strikingCount || null,
     avg_position: avgPos ? Math.round(avgPos * 10) / 10 : null,
     ai_visibility: null,
-    site_health: null,
+    site_health,
   };
 
   await db.from("metric_snapshots").insert({
