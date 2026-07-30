@@ -160,7 +160,7 @@ export default function Dashboard() {
               {auto ? "◉ Auto-publish" : "◎ Review mode"}
             </button>
           )}
-          <a href="/portal" className="mode" style={{ textDecoration:"none", textAlign:"center" }} title="Preview customer view">👁 Customer view</a>
+          <a href={`/portal?brand=${brandId}`} className="mode" style={{ textDecoration:"none", textAlign:"center" }} title="Preview customer view">👁 Customer view</a>
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 

@@ -53,7 +53,12 @@ export default function Portal() {
 
       if (me.role === "admin") setIsAdmin(true);
 
-      // Admins without a specific brand see the first brand
+      // Customers are always locked to their own brand_id — a ?brand= in the
+      // URL never overrides that. Admins have no brand_id, so an explicit
+      // ?brand= (set by the dashboard's "Customer view" link, so the preview
+      // matches whichever brand was selected there) takes priority; only
+      // fall back to "first active brand" when no brand was specified at all
+      // (e.g. navigating to /portal directly).
       const bid = me.brand_id;
       if (!bid && me.role !== "admin") {
         setError("No brand linked to your account. Please contact support.");
@@ -61,11 +66,14 @@ export default function Portal() {
         return;
       }
 
-      // If admin, get the first active brand
       let resolvedBrandId = bid;
       if (!resolvedBrandId) {
-        const brands = await (await fetch("/api/platform")).json();
-        resolvedBrandId = brands.brands?.[0]?.id ?? null;
+        const requestedBrand = new URLSearchParams(window.location.search).get("brand");
+        resolvedBrandId = requestedBrand;
+        if (!resolvedBrandId) {
+          const brands = await (await fetch("/api/platform")).json();
+          resolvedBrandId = brands.brands?.[0]?.id ?? null;
+        }
       }
       if (!resolvedBrandId) {
         setError("No active brands found.");
