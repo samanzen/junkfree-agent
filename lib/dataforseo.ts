@@ -174,6 +174,32 @@ export async function classifySearchIntent(
   })).filter((x) => x.keyword);
 }
 
+// Organic competitors: domains ranking for many of the same keywords.
+// Endpoint: /dataforseo_labs/google/competitors_domain/live
+// NOTE: Documented in DataForSEO Labs but not yet confirmed against a live
+// account, same as keywordDifficulty/classifySearchIntent below — returns
+// [] on failure so competitor auto-discovery degrades to "nothing found"
+// rather than breaking the caller.
+export async function discoverCompetitors(
+  domain: string
+): Promise<{ domain: string; keywordOverlap: number | null }[]> {
+  const data = await post<Task<unknown>>(
+    "/dataforseo_labs/google/competitors_domain/live",
+    { target: domain, location_code: LOCATION_CANADA, language_code: LANG, limit: 15 }
+  );
+  const items = (
+    data?.tasks?.[0]?.result?.[0] as
+      | { items?: { domain?: string; intersections?: number }[] }
+      | undefined
+  )?.items || [];
+  return items
+    .map((it) => ({
+      domain: it.domain || "",
+      keywordOverlap: typeof it.intersections === "number" ? it.intersections : null,
+    }))
+    .filter((x) => x.domain && x.domain !== domain);
+}
+
 // Extended domain rank info: includes domain authority-like score.
 // Reuses the confirmed /dataforseo_labs/google/domain_rank_overview/live endpoint
 // but extracts additional fields (rank score, organic_traffic_value).

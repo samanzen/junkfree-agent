@@ -14,7 +14,7 @@ export type Snapshot = {
   site_health: number | null;
 };
 
-function domainOf(brand: Brand) {
+export function domainOf(brand: Brand) {
   return brand.site_url.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
 }
 

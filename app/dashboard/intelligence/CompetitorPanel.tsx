@@ -11,6 +11,8 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   const [gapLoading, setGapLoading] = useState(false);
   const [domain, setDomain] = useState("");
   const [adding, setAdding] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverMsg, setDiscoverMsg] = useState("");
 
   function load() {
     fetch(`/api/intelligence/competitors?brand=${brandId}`)
@@ -42,13 +44,32 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
     setSelected(null); setGaps([]); load();
   }
 
+  async function discover() {
+    setDiscovering(true); setDiscoverMsg("");
+    try {
+      const r = await fetch("/api/intelligence/competitors/discover", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId }),
+      }).then((res) => res.json());
+      const n = (r.discovered || []).length;
+      setDiscoverMsg(n ? `Found ${n} new competitor${n === 1 ? "" : "s"}.` : "No new competitors found.");
+      if (n) load();
+    } catch {
+      setDiscoverMsg("Discovery failed — try again later.");
+    }
+    setDiscovering(false);
+  }
+
   return (
     <div className="cp">
       {/* Add competitor */}
       <div className="cp-add">
         <input className="cp-input" placeholder="competitor-domain.com" value={domain} onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="cp-add-btn" onClick={add} disabled={adding}>{adding ? "Adding…" : "Add competitor"}</button>
+        <button className="cp-add-btn" onClick={discover} disabled={discovering} style={{ background: "#0984E3" }}>
+          {discovering ? "Discovering…" : "🔍 Discover competitors"}
+        </button>
       </div>
+      {discoverMsg && <div className="cp-meta" style={{ marginTop: -4 }}>{discoverMsg}</div>}
 
       {/* Competitor list */}
       <div className="cp-list">
