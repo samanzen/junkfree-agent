@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { keywordDailyHistory } from "@/lib/gsc";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 // Time series data for a single keyword — feeds the keyword drawer charts.
 // Tries stored keyword_positions first; falls back to live GSC API for gaps.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   const keyword = url.searchParams.get("keyword");
@@ -14,6 +18,8 @@ export async function GET(req: NextRequest) {
   if (!brandId || !keyword) {
     return NextResponse.json({ error: "brand and keyword required" }, { status: 400 });
   }
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const days = range === "7" ? 7 : range === "90" ? 90 : range === "180" ? 180 : range === "365" ? 365 : range === "all" ? 1095 : 30;
   const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);

@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const sort = url.searchParams.get("sort") || "ai_opportunity_score";
   const order = url.searchParams.get("order") === "asc";
@@ -53,10 +59,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { brand_id, keyword } = await req.json().catch(() => ({}));
   if (!brand_id || !keyword) {
     return NextResponse.json({ error: "brand_id and keyword required" }, { status: 400 });
   }
+  const accessErr = requireBrandAccess(auth, brand_id);
+  if (accessErr) return accessErr;
 
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await db.from("tracked_keywords").upsert({

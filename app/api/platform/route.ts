@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 // Feeds the admin dashboard. Accepts an optional ?brand=<uuid> query param
 // for server-side filtering — used by the customer portal to load only one
 // brand's data instead of all brands.
 export async function GET(req: NextRequest) {
-  const brandFilter = new URL(req.url).searchParams.get("brand") || null;
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
+  let brandFilter = new URL(req.url).searchParams.get("brand") || null;
+  if (brandFilter) {
+    const accessErr = requireBrandAccess(auth, brandFilter);
+    if (accessErr) return accessErr;
+  } else if (auth.role !== "admin") {
+    // Non-admins with no explicit ?brand= are scoped to their own brand
+    // instead of receiving every tenant's drafts/gbp/citations/reviews.
+    brandFilter = auth.brandId;
+  }
 
   const brandsQuery = db.from("brands").select("*").eq("active", true).order("name");
   const draftsQuery = db.from("drafts").select("*").order("created_at", { ascending: false }).limit(100);

@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { rankedKeywords } from "@/lib/dataforseo";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 // GET: list competitors for a brand with keyword gap summary.
 // POST: add a new competitor.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const { data: competitors } = await db
     .from("competitors")
@@ -40,10 +46,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { brand_id, domain, name } = await req.json().catch(() => ({}));
   if (!brand_id || !domain) {
     return NextResponse.json({ error: "brand_id and domain required" }, { status: 400 });
   }
+  const accessErr = requireBrandAccess(auth, brand_id);
+  if (accessErr) return accessErr;
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
 

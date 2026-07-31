@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 import ActionButton, { ActionType } from "./ActionButton";
 
 type Rec = { priority: number; category: string; title: string; explanation: string; estimated_impact: string; action_type: ActionType; action_label: string; action_payload: Record<string, unknown> };
@@ -14,7 +15,7 @@ export default function AIRecommendations({ brandId }: { brandId: string }) {
 
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/intelligence/recommendations?brand=${brandId}`)
+    authedFetch(`/api/intelligence/recommendations?brand=${brandId}`)
       .then((r) => r.json())
       .then((d) => { setRecs(d.recommendations || []); setLoading(false); })
       .catch(() => setLoading(false));

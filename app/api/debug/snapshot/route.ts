@@ -1,11 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { db } from "@/lib/supabase";
 import { latestWithDelta } from "@/lib/metrics";
+import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
 
 export const maxDuration = 60;
 
-export async function GET() {
+// Diagnostic endpoint — iterates every active brand, so it's admin-only.
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+  const adminErr = requireAdmin(auth);
+  if (adminErr) return adminErr;
+
   const brands = await getActiveBrands();
   const results = [];
 

@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { latestWithDelta, series } from "@/lib/metrics";
 import { strikingDistance } from "@/lib/gsc";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 // Customer-facing data API. Returns plain-English summaries — no agent
 // terminology, no raw markdown, no admin fields. Safe to expose to customers.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const brandId = new URL(req.url).searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const { data: brand } = await db.from("brands").select("*").eq("id", brandId).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

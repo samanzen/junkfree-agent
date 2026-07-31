@@ -1,22 +1,27 @@
-import { NextResponse } from "next/server";
-import { claimNext, finishJob, queuedCount } from "@/lib/queue";
-import { runJob } from "@/lib/steps";
+import { NextRequest, NextResponse } from "next/server";
+import { getBrandById } from "@/lib/brands";
+import { processOneJob } from "@/lib/runner";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
-// Process ONE queued job (small enough to finish under 60s). The dashboard
-// calls this repeatedly until { done: true }.
-export async function POST() {
-  const job = await claimNext();
-  if (!job) return NextResponse.json({ done: true });
-  try {
-    await runJob(job);
-  } catch (e) {
-    // mark done anyway so one bad job can't block the queue forever
-    await finishJob(job.id);
-    return NextResponse.json({ done: false, error: String(e), kind: job.kind });
-  }
-  await finishJob(job.id);
-  const remaining = await queuedCount();
-  return NextResponse.json({ done: remaining === 0, remaining, kind: job.kind });
+// Process ONE queued job for ONE brand (small enough to finish under 60s).
+// The dashboard calls this repeatedly until { done: true }. Scoped to a
+// single brand so a customer's browser can never drain another tenant's
+// queue, and an admin only ever drains the brand currently selected in the
+// dashboard.
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
+  const { brand_id } = await req.json().catch(() => ({}));
+  if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brand_id);
+  if (accessErr) return accessErr;
+
+  const brand = await getBrandById(brand_id);
+  if (!brand || !brand.active) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+
+  const result = await processOneJob(brand.id);
+  return NextResponse.json(result);
 }

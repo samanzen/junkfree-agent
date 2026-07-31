@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 30;
 
 // Five intelligence categories derived from position history comparisons.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const brandId = new URL(req.url).searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const today = new Date().toISOString().slice(0, 10);
   const sevenDaysAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);

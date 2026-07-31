@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 
 type Comp = { id: string; domain: string; name: string; last_keyword_count: number | null; last_checked_at: string | null };
 type Gap = { keyword: string; position: number; volume: number | null };
@@ -15,7 +16,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   const [discoverMsg, setDiscoverMsg] = useState("");
 
   function load() {
-    fetch(`/api/intelligence/competitors?brand=${brandId}`)
+    authedFetch(`/api/intelligence/competitors?brand=${brandId}`)
       .then((r) => r.json())
       .then((d) => setCompetitors(d.competitors || []));
   }
@@ -25,7 +26,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   async function add() {
     if (!domain.trim()) return;
     setAdding(true);
-    await fetch("/api/intelligence/competitors", {
+    await authedFetch("/api/intelligence/competitors", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ brand_id: brandId, domain: domain.trim() }),
@@ -35,19 +36,19 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
 
   async function loadGaps(comp: Comp) {
     setSelected(comp); setGapLoading(true); setGaps([]);
-    const d = await fetch(`/api/intelligence/competitors/${comp.id}`).then((r) => r.json());
+    const d = await authedFetch(`/api/intelligence/competitors/${comp.id}`).then((r) => r.json());
     setGaps(d.gaps || []); setGapLoading(false);
   }
 
   async function remove(id: string) {
-    await fetch(`/api/intelligence/competitors/${id}`, { method: "DELETE" });
+    await authedFetch(`/api/intelligence/competitors/${id}`, { method: "DELETE" });
     setSelected(null); setGaps([]); load();
   }
 
   async function discover() {
     setDiscovering(true); setDiscoverMsg("");
     try {
-      const r = await fetch("/api/intelligence/competitors/discover", {
+      const r = await authedFetch("/api/intelligence/competitors/discover", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId }),
       }).then((res) => res.json());
       const n = (r.discovered || []).length;
@@ -110,7 +111,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
                     <td style={{ textAlign: "center" as const }}>{g.volume?.toLocaleString() ?? "–"}</td>
                     <td>
                       <button className="cp-track-btn" onClick={async () => {
-                        await fetch("/api/intelligence/keywords", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId, keyword: g.keyword }) });
+                        await authedFetch("/api/intelligence/keywords", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId, keyword: g.keyword }) });
                         setGaps(gaps.filter((x) => x.keyword !== g.keyword));
                       }}>Track this</button>
                     </td>

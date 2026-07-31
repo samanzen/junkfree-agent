@@ -140,6 +140,7 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
   });
 
   const runId = await currentRun(brand.id);
+  await db.from("runs").update({ tasks_planned: tasks.length }).eq("id", runId);
 
   // Enqueue one content job per task, plus intent fixes, then the extras.
   for (const t of tasks) await enqueue(brand.id, "content", { ...t, runId });

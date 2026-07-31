@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
 import { discoverCompetitors } from "@/lib/dataforseo";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
@@ -13,8 +14,13 @@ export const maxDuration = 60;
 // tracked, and upserts the rest as normal (editable/removable) competitor
 // rows via the existing add/remove endpoints.
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { brand_id } = await req.json().catch(() => ({}));
   if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brand_id);
+  if (accessErr) return accessErr;
 
   const brand = await getBrandById(brand_id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

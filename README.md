@@ -20,11 +20,12 @@ Auto-publishing unreviewed AI pages at volume is a real ranking risk (Google's s
 ## Setup
 
 1. `npm install`
-2. Create a Supabase project, run `supabase/schema.sql` in its SQL editor.
+2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`. All are additive/idempotent, so re-running an already-applied file is safe.
 3. Create a Google Cloud service account, enable the Search Console API, and add the service-account email as a user on the `junkfree.ca` property. Put its email + private key in the env.
 4. Copy `.env.example` → `.env.local` and fill it in.
 5. `npm run dev`, open `/dashboard`, click **Run agents now** to watch a full cycle.
 6. Deploy to Vercel. The cron in `vercel.json` takes over automatically.
+7. `npm test` runs the unit test suite (currently `lib/crypto.test.ts`).
 
 ## Env
 
@@ -32,6 +33,14 @@ See `.env.example`. Key switches:
 - `MAX_TASKS_PER_RUN` — work produced per run (default 4).
 - `AUTO_PUBLISH` — `true` lets safe meta fixes go live without review.
 - `CRON_SECRET` — protects the cron endpoint from being triggered by anyone else.
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser Supabase client for login and every authenticated dashboard/portal API call (`lib/authedFetch.ts`).
+- `INTEGRATION_ENCRYPTION_KEY` — AES-256-GCM key for encrypting per-brand third-party integration credentials (`lib/crypto.ts`). Only required once a provider integration is wired up; generate with `openssl rand -base64 32`.
+
+## Multi-tenant auth (Sprint 6.1)
+
+Every `/api/*` route (except the `CRON_SECRET`-gated cron endpoints) now requires a valid Supabase session, validated server-side via `lib/auth.ts`'s `requireAuth()`. Any route scoped to a single brand additionally calls `requireBrandAccess()`: admins may access any brand, customers only their own (`profiles.brand_id`). The job queue and execution engine (`lib/queue.ts`, `lib/runner.ts`) are brand-scoped end to end — `/api/run` and `/api/step` take a `brand_id` and only ever seed/drain that brand's queue, so one tenant's browser session can never see or advance another tenant's jobs.
+
+`lib/integrations.ts` + `brand_integrations` (migration `006`) lay the foundation for per-brand third-party integrations (GA4, HighLevel, Stripe, QuickBooks, Jobber): credentials are AES-256-GCM encrypted at the application layer before they ever reach Postgres, and the table has RLS enabled with no policies (service-role only, unreachable from the browser). No provider is implemented yet — this is shared plumbing for a future sprint.
 
 ## What's not wired yet (next steps)
 

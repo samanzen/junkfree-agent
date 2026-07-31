@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { authedFetch } from "@/lib/authedFetch";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
@@ -35,9 +36,7 @@ export default function Dashboard() {
   const [token, setToken] = useState<string>("");
 
   async function load() {
-    const sess = await supabaseBrowser().auth.getSession();
-    const tok = sess.data.session?.access_token || token;
-    const d = await (await fetch("/api/platform", { headers: tok ? { authorization: `Bearer ${tok}` } : {} })).json();
+    const d = await (await authedFetch("/api/platform")).json();
     let bs = d.brands as Brand[];
     // Customers only see their own brand; admins see all.
     if (role === "customer" && myBrand) bs = bs.filter((b) => b.id === myBrand);
@@ -51,7 +50,7 @@ export default function Dashboard() {
       const token = data.session?.access_token;
       if (!token) { router.push("/login"); return; }
       setToken(token);
-      const me = await (await fetch("/api/me", { headers: { authorization: `Bearer ${token}` } })).json();
+      const me = await (await authedFetch("/api/me")).json();
       setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
     })();
     /* eslint-disable-next-line */
@@ -62,7 +61,7 @@ export default function Dashboard() {
 
   async function draftAct(id: string, path: string) {
     try {
-      const r = await (await fetch(`/api/drafts/${id}/${path}`, { method: "POST" })).json();
+      const r = await (await authedFetch(`/api/drafts/${id}/${path}`, { method: "POST" })).json();
       if (r.ok === false && r.error) alert(r.error);
     } catch (e) { alert("Action failed: " + String(e)); }
     load();
@@ -71,27 +70,45 @@ export default function Dashboard() {
     if (!feedbackText.trim()) return;
     setBusy(id);
     try {
-      const r = await (await fetch(`/api/drafts/${id}/revise`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: feedbackText }) })).json();
+      const r = await (await authedFetch(`/api/drafts/${id}/revise`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: feedbackText }) })).json();
       if (r.ok === false) alert(r.error || "Revision failed");
     } catch (e) { alert("Revision failed: " + String(e)); }
     setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
   }
   async function toggleAuto(id: string, current: boolean) {
-    await fetch(`/api/brand/${id}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
+    await authedFetch(`/api/brand/${id}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
     load();
   }
   async function rowAct(table: string, id: string, status: string) {
-    await fetch(`/api/platform/${table}/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    await authedFetch(`/api/platform/${table}/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
     load();
   }
   async function processImages() {
     for (let i = 0; i < 12; i++) {
-      try { const r = await (await fetch("/api/images/process", { method: "POST" })).json(); load(); if (r.done) break; } catch { break; }
+      try { const r = await (await authedFetch("/api/images/process", { method: "POST" })).json(); load(); if (r.done) break; } catch { break; }
     }
   }
   async function runNow() {
+    if (!brandId) return;
     setRunning(true); setRunStatus("waking the agents");
-    try { await fetch("/api/run", { method: "POST" }); } catch {}
+    try {
+      const res = await authedFetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId }) });
+      if (res.status === 409) {
+        setRunning(false); setRunStatus("");
+        alert("This brand already has a run starting elsewhere — try again shortly.");
+        return;
+      }
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        setRunning(false); setRunStatus("");
+        alert(errBody.error || errBody.message || `Failed to start run (${res.status}).`);
+        return;
+      }
+    } catch (e) {
+      setRunning(false); setRunStatus("");
+      alert("Failed to start run: " + String(e));
+      return;
+    }
     // Process the queue one step at a time. A slow step may time out at the
     // platform limit and return a non-JSON page — that's fine, the work
     // continues server-side, so we just keep going and refresh.
@@ -99,7 +116,7 @@ export default function Dashboard() {
     for (let i = 0; i < 80; i++) {
       let done = false;
       try {
-        const res = await fetch("/api/step", { method: "POST" });
+        const res = await authedFetch("/api/step", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId }) });
         const r = await res.json();
         if (r.kind) setRunStatus(`running · ${r.kind}${r.remaining ? ` · ${r.remaining} queued` : ""}`);
         done = !!r.done;
@@ -175,7 +192,7 @@ export default function Dashboard() {
         {loading && <p className="muted">Loading signal…</p>}
 
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
-        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} token={token} />}
+        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
 
         {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
           <article className="card" key={d.id}>

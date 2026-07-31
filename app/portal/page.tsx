@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
+import { authedFetch } from "@/lib/authedFetch";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer
@@ -71,7 +72,7 @@ export default function Portal() {
         const requestedBrand = new URLSearchParams(window.location.search).get("brand");
         resolvedBrandId = requestedBrand;
         if (!resolvedBrandId) {
-          const brands = await (await fetch("/api/platform")).json();
+          const brands = await (await authedFetch("/api/platform")).json();
           resolvedBrandId = brands.brands?.[0]?.id ?? null;
         }
       }
@@ -82,7 +83,7 @@ export default function Portal() {
       }
 
       setBrandId(resolvedBrandId);
-      const data2 = await (await fetch(
+      const data2 = await (await authedFetch(
         `/api/portal/summary?brand=${resolvedBrandId}`
       )).json();
       setSummary(data2);

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
 
 export const maxDuration = 30;
 
+// Diagnostic endpoint — dumps metric_snapshots across every brand, so it's
+// restricted to admins.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+  const adminErr = requireAdmin(auth);
+  if (adminErr) return adminErr;
+
   const brandId = new URL(req.url).searchParams.get("brand");
 
   const { data: filtered, error: fe } = await db.from("metric_snapshots")

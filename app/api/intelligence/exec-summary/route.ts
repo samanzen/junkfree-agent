@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callClaude } from "@/lib/anthropic";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 30;
 
 // Generates a 2-3 sentence executive summary for a dashboard section.
 // Called by ExecSummary component after recommendations are loaded.
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { brandId, section, brandName, recommendations, data } = await req.json().catch(() => ({}));
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const topRec = (recommendations || [])[0];
   const summary = await callClaude({

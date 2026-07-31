@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 
 type Props = {
   brandId: string;
@@ -24,14 +25,14 @@ export default function ExecSummary({ brandId, section, data, brandName }: Props
     if (local) { setText(local); setLoading(false); return; }
 
     // Fetch from server (may return cached or generate fresh)
-    fetch(`/api/intelligence/recommendations?brand=${brandId}&section=${section}`)
+    authedFetch(`/api/intelligence/recommendations?brand=${brandId}&section=${section}`)
       .then((r) => r.json())
       .then((d) => {
         // Generate a focused exec summary from the recommendations + data context
         const recs = d.recommendations || [];
         if (!recs.length && !data) { setLoading(false); return; }
 
-        return fetch("/api/intelligence/exec-summary", {
+        return authedFetch("/api/intelligence/exec-summary", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ brandId, section, brandName, recommendations: recs.slice(0, 3), data }),

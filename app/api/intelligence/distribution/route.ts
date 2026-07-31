@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 20;
 
 // Position distribution trend over time — feeds the distribution chart.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   const days = Math.min(365, parseInt(url.searchParams.get("days") || "30"));
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
   const { data } = await db

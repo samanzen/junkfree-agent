@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./ActionButton";
 import MetricExplainer from "./MetricExplainer";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
@@ -40,7 +41,7 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
 
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/intelligence/overview?brand=${brandId}`)
+    authedFetch(`/api/intelligence/overview?brand=${brandId}`)
       .then((r) => r.json())
       .then((ov) => setStatus(ov?.status || "ok"))
       .catch(() => {});
@@ -50,7 +51,7 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
     setLoading(true);
     const params = new URLSearchParams({ brand: brandId, sort, order, search, page: String(page), limit: String(limit) });
     if (statusFilter) params.set("status", statusFilter);
-    fetch(`/api/intelligence/keywords?${params}`)
+    authedFetch(`/api/intelligence/keywords?${params}`)
       .then((r) => r.json())
       .then((d) => { setKeywords(d.keywords || []); setTotal(d.total || 0); setLoading(false); })
       .catch(() => setLoading(false));
@@ -61,7 +62,7 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
   async function addKeyword() {
     if (!addKw.trim()) return;
     setAdding(true);
-    await fetch("/api/intelligence/keywords", {
+    await authedFetch("/api/intelligence/keywords", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ brand_id: brandId, keyword: addKw.trim() }),
@@ -192,7 +193,7 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/intelligence/keyword-history?brand=${brandId}&keyword=${encodeURIComponent(kw.keyword)}&range=${range}`)
+    authedFetch(`/api/intelligence/keyword-history?brand=${brandId}&keyword=${encodeURIComponent(kw.keyword)}&range=${range}`)
       .then((r) => r.json())
       .then((d) => { setHistory(d.history || []); setEvents(d.events || []); setLoading(false); })
       .catch(() => setLoading(false));

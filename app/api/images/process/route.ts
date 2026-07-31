@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { generatePostImages } from "@/lib/images";
+import { requireAuth, isAuthError } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 // Adds AI images to ONE image-less new_page/new_blog draft per call, so each
 // invocation stays well under the 60s Hobby limit. The dashboard calls this
 // repeatedly until { done: true }.
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   // Find the newest content draft that has no image yet.
   const { data: drafts } = await db
     .from("drafts")

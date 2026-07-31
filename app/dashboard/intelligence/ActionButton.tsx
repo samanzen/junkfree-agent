@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 
 export type ActionType =
   | "improve_content" | "fix_meta" | "rewrite_page"
@@ -21,7 +22,7 @@ export default function ActionButton({ action, brandId, payload = {}, label, var
   async function run() {
     setState("loading");
     try {
-      const res = await fetch("/api/intelligence/action", {
+      const res = await authedFetch("/api/intelligence/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, brand_id: brandId, payload }),

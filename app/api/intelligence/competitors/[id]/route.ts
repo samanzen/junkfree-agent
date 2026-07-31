@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { rankedKeywords } from "@/lib/dataforseo";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 // GET: keyword gap analysis for one competitor (uses DataForSEO).
 // DELETE: deactivate a competitor.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { id } = await params;
 
   const { data: competitor } = await db
@@ -21,6 +25,8 @@ export async function GET(
   if (!competitor) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const brandId = (competitor.brands as { id: string }).id;
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   // Brand's own keywords
   const { data: brandKws } = await db
@@ -68,10 +74,18 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { id } = await params;
+  const { data: competitor } = await db.from("competitors").select("brand_id").eq("id", id).single();
+  if (!competitor) return NextResponse.json({ error: "not found" }, { status: 404 });
+  const accessErr = requireBrandAccess(auth, competitor.brand_id);
+  if (accessErr) return accessErr;
+
   await db.from("competitors").update({ active: false }).eq("id", id);
   return NextResponse.json({ ok: true });
 }

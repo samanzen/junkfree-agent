@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 import CountUp from "@/app/dashboard/CountUp";
 import MetricExplainer from "./MetricExplainer";
 import ExecSummary from "./ExecSummary";
@@ -27,13 +28,13 @@ const CARDS = [
   { key: "not_ranked",      label: "Not Ranked",      suffix: "",  decimals: 0, invert: true,  color: "#B2BAC8", explainer: "top_10" as const },
 ];
 
-export default function IntelOverview({ brandId, brandName, token }: { brandId: string; brandName?: string; token?: string }) {
+export default function IntelOverview({ brandId, brandName }: { brandId: string; brandName?: string }) {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!brandId) return;
-    fetch(`/api/intelligence/overview?brand=${brandId}`)
+    authedFetch(`/api/intelligence/overview?brand=${brandId}`)
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));

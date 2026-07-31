@@ -2,17 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { reviseDraft } from "@/lib/agents";
 import type { Brand } from "@/lib/brands";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
 
 // Owner feedback -> the agent revises the draft in place and logs the exchange.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const { id } = await params;
   const { feedback } = await req.json().catch(() => ({ feedback: "" }));
   if (!feedback?.trim()) return NextResponse.json({ error: "feedback required" }, { status: 400 });
 
   const { data: draft } = await db.from("drafts").select("*").eq("id", id).single();
   if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  const accessErr = requireBrandAccess(auth, draft.brand_id);
+  if (accessErr) return accessErr;
 
   const { data: brand } = await db.from("brands").select("*").eq("id", draft.brand_id).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

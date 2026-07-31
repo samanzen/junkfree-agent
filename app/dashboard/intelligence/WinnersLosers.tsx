@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./ActionButton";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 
@@ -15,8 +16,8 @@ export default function WinnersLosers({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (!brandId) return;
     Promise.all([
-      fetch(`/api/intelligence/winners-losers?brand=${brandId}`).then((r) => r.json()),
-      fetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
+      authedFetch(`/api/intelligence/winners-losers?brand=${brandId}`).then((r) => r.json()),
+      authedFetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
     ])
       .then(([d, ov]) => { setData(d); setStatus(ov?.status || "ok"); setLoading(false); })
       .catch(() => setLoading(false));

@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 30;
 
 // Summary metrics for the Intelligence Center overview panel.
 // Reads from pre-computed tables — no expensive aggregations on read.
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const brandId = new URL(req.url).searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
+  const accessErr = requireBrandAccess(auth, brandId);
+  if (accessErr) return accessErr;
 
   // Latest two distribution snapshots (current + previous for deltas)
   const { data: snapshots } = await db

@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { enqueue } from "@/lib/queue";
+import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 30;
 
 // One-click action bridge: maps UI action types to existing queue jobs.
 // No new execution logic — purely routes to existing agent capabilities.
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
+  if (isAuthError(auth)) return auth;
+
   const body = await req.json().catch(() => null);
   if (!body?.action || !body?.brand_id) {
     return NextResponse.json({ error: "action and brand_id required" }, { status: 400 });
   }
+  const accessErr = requireBrandAccess(auth, body.brand_id);
+  if (accessErr) return accessErr;
 
   const { action, brand_id, payload = {} } = body;
 

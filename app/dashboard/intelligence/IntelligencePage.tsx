@@ -7,7 +7,7 @@ import PositionDistribution from "./PositionDistribution";
 import AIRecommendations from "./AIRecommendations";
 import CompetitorPanel from "./CompetitorPanel";
 
-type Props = { brandId: string; brandName?: string; token?: string };
+type Props = { brandId: string; brandName?: string };
 
 type Section = "overview" | "keywords" | "winners" | "distribution" | "recommendations" | "competitors";
 
@@ -20,7 +20,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: "competitors",     label: "Competitors" },
 ];
 
-export default function IntelligencePage({ brandId, brandName, token }: Props) {
+export default function IntelligencePage({ brandId, brandName }: Props) {
   const [section, setSection] = useState<Section>("overview");
 
   return (
@@ -37,7 +37,7 @@ export default function IntelligencePage({ brandId, brandName, token }: Props) {
 
       {/* Content */}
       <div className="ip-content">
-        {section === "overview"        && <IntelOverview brandId={brandId} brandName={brandName} token={token} />}
+        {section === "overview"        && <IntelOverview brandId={brandId} brandName={brandName} />}
         {section === "keywords"        && <KeywordTable brandId={brandId} />}
         {section === "winners"         && <WinnersLosers brandId={brandId} />}
         {section === "distribution"    && <PositionDistribution brandId={brandId} />}

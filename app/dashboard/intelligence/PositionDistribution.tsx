@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { authedFetch } from "@/lib/authedFetch";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Snap = { captured_date: string; top_3: number; top_10: number; top_20: number; top_50: number; top_100: number; not_ranked: number; total_clicks: number };
@@ -13,8 +14,8 @@ export default function PositionDistribution({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (!brandId) return;
     Promise.all([
-      fetch(`/api/intelligence/distribution?brand=${brandId}&days=30`).then((r) => r.json()),
-      fetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
+      authedFetch(`/api/intelligence/distribution?brand=${brandId}&days=30`).then((r) => r.json()),
+      authedFetch(`/api/intelligence/overview?brand=${brandId}`).then((r) => r.json()).catch(() => null),
     ])
       .then(([d, ov]) => { setData(d.distribution || []); setStatus(ov?.status || "ok"); setLoading(false); })
       .catch(() => setLoading(false));
