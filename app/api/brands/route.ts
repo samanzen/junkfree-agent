@@ -78,6 +78,13 @@ export async function POST(req: NextRequest) {
       site_url,
       business_model,
       gsc_property: gsc_property || null,
+      // Sprint 6.8: new brands start inactive (overrides the DB's
+      // default true) so bringing one online is a deliberate, separate
+      // admin action (PATCH /api/brands/[id]) rather than an automatic
+      // side effect of this form -- otherwise the brand is immediately
+      // eligible for the very next cron tick, spending real, shared
+      // API budget with zero confirmation step in between.
+      active: false,
     })
     .select()
     .single();
