@@ -15,25 +15,38 @@ export async function callClaude({ user, system, search, maxTokens = 2000 }: Cal
   if (system) body.system = system;
   if (search) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
 
-  const res = await fetch(API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY as string,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify(body),
-  });
+  console.log("[callClaude] provider=anthropic model=" + MODEL);
+  console.log("[callClaude] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY);
+  console.log("[callClaude] request body:", JSON.stringify(body));
 
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(data?.error?.message || `Anthropic ${res.status}`);
+  try {
+    const res = await fetch(API, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": process.env.ANTHROPIC_API_KEY as string,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    console.log("[callClaude] response status:", res.status);
+    console.log("[callClaude] response body:", JSON.stringify(data));
+
+    if (!res.ok || data.error) {
+      console.log("[callClaude] Anthropic error payload:", JSON.stringify(data?.error) || `Anthropic ${res.status}`);
+      throw new Error(data?.error?.message || `Anthropic ${res.status}`);
+    }
+    return (data.content || [])
+      .filter((b: { type: string }) => b.type === "text")
+      .map((b: { text: string }) => b.text)
+      .join("\n")
+      .trim();
+  } catch (e) {
+    console.error("[callClaude] caught exception:", e instanceof Error ? e.stack : String(e));
+    throw e;
   }
-  return (data.content || [])
-    .filter((b: { type: string }) => b.type === "text")
-    .map((b: { text: string }) => b.text)
-    .join("\n")
-    .trim();
 }
 
 // Pull the first JSON object/array out of a model response.
