@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerRankSync, drainBrand } from "@/lib/runner";
-import { orderByLastCompletedJob } from "@/lib/scheduling";
+import { orderByLastCompletedJob, PER_BRAND_BUDGET_MS, TICK_BUDGET_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -24,18 +24,19 @@ export async function GET(req: NextRequest) {
   // Sprint 6.4 Phase 1: most-overdue brand first (see lib/scheduling.ts).
   const ordered = await orderByLastCompletedJob(eligible, "rank_sync");
 
-  const deadline = Date.now() + 45_000;
+  // Sprint 6.4 Phase 2: fixed per-brand budget instead of a shared countdown
+  // (see lib/scheduling.ts).
+  const tickStart = Date.now();
   const results: Record<string, unknown>[] = [];
 
   for (const brand of ordered) {
-    const remainingBudget = deadline - Date.now();
-    if (remainingBudget <= 0) {
+    if (Date.now() - tickStart > TICK_BUDGET_MS) {
       results.push({ brand: brand.slug, skipped: "out of time this tick" });
       continue;
     }
     try {
       const seed = await triggerRankSync(brand);
-      const drain = await drainBrand(brand, remainingBudget);
+      const drain = await drainBrand(brand, PER_BRAND_BUDGET_MS);
       results.push({ brand: brand.slug, ...seed, ...drain });
     } catch (err) {
       results.push({ brand: brand.slug, error: String(err) });

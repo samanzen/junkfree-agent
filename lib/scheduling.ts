@@ -14,6 +14,31 @@ import { db } from "./supabase";
 import type { Brand } from "./brands";
 import type { JobKind } from "./queue";
 
+// Sprint 6.4 Phase 2: a fixed per-brand time allotment, replacing the old
+// shared countdown that let brand #1 consume however much of the tick it
+// wanted before brand #2 got whatever was left (down to zero). A brand that
+// needs more than this to fully drain simply leaves jobs queued for the next
+// tick (or a manual "Run agents now" click) -- lib/queue.ts/lib/runner.ts
+// were already designed for exactly this resumability, so this is not a
+// regression, just a fairer distribution of the same total budget.
+//
+// 15s comfortably covers a single job in the slowest kinds observed in this
+// codebase (a writeContent() call at maxTokens:4000, or an auditSite() pass
+// crawling up to 12 pages) without being so generous that a handful of slow
+// brands could still starve the rest. If real `jobs.duration_ms` data (added
+// by Sprint 5.2, queryable directly: `select kind, avg(duration_ms),
+// max(duration_ms) from jobs where status='done' group by kind`) shows this
+// is too tight or too generous once there's more usage history, this is the
+// one constant to retune -- nothing else needs to change.
+export const PER_BRAND_BUDGET_MS = 15_000;
+
+// Overall ceiling on how long a single cron tick attempts NEW brands, kept
+// well under the 60s function cap -- same total ceiling the old shared
+// countdown used. Once elapsed time exceeds this, remaining brands are
+// reported skipped for this tick and (per the ordering above) will be first
+// in line next tick instead of being skippable indefinitely.
+export const TICK_BUDGET_MS = 45_000;
+
 // Brands with no matching row at all (never run, or freshly onboarded via
 // Sprint 6.3) sort first -- treated as maximally overdue, not a special case
 // to work around.

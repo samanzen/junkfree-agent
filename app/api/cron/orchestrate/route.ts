@@ -3,7 +3,7 @@ import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerBrandRun, drainBrand } from "@/lib/runner";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
-import { orderByLastCompletedRun } from "@/lib/scheduling";
+import { orderByLastCompletedRun, PER_BRAND_BUDGET_MS, TICK_BUDGET_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -50,24 +50,24 @@ async function runQueue() {
   // of being skippable indefinitely (see lib/scheduling.ts).
   const ordered = await orderByLastCompletedRun(brands);
 
-  // Total time budget shared across every brand this tick, kept well under
-  // the 60s function cap. Each brand is seeded + drained independently
-  // inside its own try/catch, so one brand erroring (or a slow brand eating
-  // the whole budget) can never stop the rest from being attempted — a
-  // brand that runs out of budget or fails simply keeps its queued jobs for
-  // the next tick (daily) or a manual "Run agents now" click.
-  const deadline = Date.now() + 45_000;
+  // Sprint 6.4 Phase 2: each brand gets its own fixed budget rather than a
+  // shared countdown, so a slow brand can never reduce a later brand's share
+  // to zero. Each brand is seeded + drained independently inside its own
+  // try/catch, so one brand erroring (or using its full allotment) can never
+  // stop the rest from being attempted — a brand that runs out of budget or
+  // fails simply keeps its queued jobs for the next tick (daily) or a manual
+  // "Run agents now" click.
+  const tickStart = Date.now();
   const results: Record<string, unknown>[] = [];
 
   for (const brand of ordered) {
-    const remainingBudget = deadline - Date.now();
-    if (remainingBudget <= 0) {
+    if (Date.now() - tickStart > TICK_BUDGET_MS) {
       results.push({ brand: brand.slug, skipped: "out of time this tick" });
       continue;
     }
     try {
       const seed = await triggerBrandRun(brand);
-      const drain = await drainBrand(brand, remainingBudget);
+      const drain = await drainBrand(brand, PER_BRAND_BUDGET_MS);
       results.push({ brand: brand.slug, ...seed, ...drain });
     } catch (err) {
       results.push({ brand: brand.slug, error: String(err) });
