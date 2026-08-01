@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
   ).length;
 
   return NextResponse.json({
-    brand: { name: brand.name, site_url: brand.site_url, service_area: brand.service_area },
+    brand: { name: brand.name, site_url: brand.site_url, service_area: brand.service_area, business_model: brand.business_model },
     metrics: {
       organic_traffic: current?.organic_traffic ?? null,
       organic_keywords: current?.organic_keywords ?? null,

@@ -19,7 +19,7 @@ type Metrics = {
   backlinks_delta: number | null; position_delta: number | null;
 };
 type Summary = {
-  brand: { name: string; site_url: string; service_area: string };
+  brand: { name: string; site_url: string; service_area: string; business_model?: string };
   metrics: Metrics;
   chart: { date: string; traffic: number; keywords: number }[];
   activity: {
@@ -101,6 +101,10 @@ export default function Portal() {
   if (!summary) return null;
 
   const m = summary.metrics;
+  // Google posts / citations are local-SEO-only concepts (Sprint 6.2 Phase 3) —
+  // meaningless for a non-local brand, so those stats are hidden rather than
+  // always reading "0".
+  const isLocal = !summary.brand.business_model || summary.brand.business_model === "local_service";
 
   return (
     <Shell onSignOut={signOut} isAdmin={isAdmin} brandName={summary.brand.name}>
@@ -159,8 +163,8 @@ export default function Portal() {
           <h2 className="p-panel-title">This Month&apos;s Activity</h2>
           <div className="p-stats-row">
             <Stat n={summary.activity.published_this_month} label="Articles published" color="#6C5CE7" />
-            <Stat n={summary.activity.gbp_posts_drafted} label="Google posts drafted" color="#00B894" />
-            <Stat n={summary.activity.citations_live} label="Citations live" color="#E17055" />
+            {isLocal && <Stat n={summary.activity.gbp_posts_drafted} label="Google posts drafted" color="#00B894" />}
+            {isLocal && <Stat n={summary.activity.citations_live} label="Citations live" color="#E17055" />}
           </div>
           {summary.activity.recent_content.length > 0 && (
             <div className="p-content-list">

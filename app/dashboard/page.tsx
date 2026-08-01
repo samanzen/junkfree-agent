@@ -6,7 +6,7 @@ import { authedFetch } from "@/lib/authedFetch";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string };
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
@@ -56,6 +56,16 @@ export default function Dashboard() {
     /* eslint-disable-next-line */
   }, []);
   useEffect(() => { if (authed) load(); /* eslint-disable-next-line */ }, [authed, role, myBrand]);
+
+  // Google posts / Backlinks are local-SEO-only concepts (Sprint 6.2 Phase 3).
+  // If the selected brand isn't local_service, those tabs are hidden below —
+  // this guard bounces away from either one so a brand switch never leaves
+  // the view stuck on a tab whose button just disappeared.
+  const activeBrand = brands.find((b) => b.id === brandId);
+  const activeBrandIsLocal = !activeBrand?.business_model || activeBrand.business_model === "local_service";
+  useEffect(() => {
+    if (!activeBrandIsLocal && (tab === "gbp" || tab === "citations")) setTab("overview");
+  }, [activeBrandIsLocal, tab]);
 
   async function signOut() { await supabaseBrowser().auth.signOut(); router.push("/login"); }
 
@@ -185,8 +195,8 @@ export default function Dashboard() {
           <button className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
           <button className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>🧠 Intelligence</button>
           <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
-          <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>
-          <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>
+          {activeBrandIsLocal && <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>}
+          {activeBrandIsLocal && <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>}
         </nav>
 
         {loading && <p className="muted">Loading signal…</p>}

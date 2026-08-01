@@ -2,7 +2,7 @@
 // The queue processes these one at a time. Together they equal a full run.
 
 import { callClaude, extractJSON } from "./anthropic";
-import { brandBlock, getBrandById, type Brand } from "./brands";
+import { brandBlock, getBrandById, isLocalBusiness, type Brand } from "./brands";
 import { db, TaskType } from "./supabase";
 import { strikingDistance, lowCtrPages, pagesByIntentSignal, fullKeywordSync } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
@@ -147,8 +147,14 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
   for (const p of (intentPages as { page: string; queries: string[] }[] | null)?.slice(0, 2) || [])
     await enqueue(brand.id, "content", { task_type: "fix_meta", target_url: p.page, intent: true, queries: p.queries, runId });
   await enqueue(brand.id, "geo", { runId });
-  await enqueue(brand.id, "gbp", { runId });
-  await enqueue(brand.id, "citations", { runId });
+  // GBP posts + citation opportunities are local-SEO concepts (Google
+  // Business Profile map-pack signals, local directory outreach) — meaningless
+  // for a non-local brand, so skip them entirely rather than producing drafts
+  // nobody will use (Sprint 6.2 Phase 3).
+  if (isLocalBusiness(brand)) {
+    await enqueue(brand.id, "gbp", { runId });
+    await enqueue(brand.id, "citations", { runId });
+  }
   await enqueue(brand.id, "audit", { runId });
   await enqueue(brand.id, "performance", { runId });
 
