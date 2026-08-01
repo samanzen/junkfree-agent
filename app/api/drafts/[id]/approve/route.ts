@@ -44,13 +44,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         ? `Frequently Asked Questions — ${brand?.name || draft.title}`
         : title;
 
-    const { error: pubErr } = await db.from("content").upsert({
-      slug,
-      brand_id: draft.brand_id,
-      title: finalTitle,
-      body,
-      published_at: new Date().toISOString(),
-    });
+    const { error: pubErr } = await db.from("content").upsert(
+      {
+        slug,
+        brand_id: draft.brand_id,
+        title: finalTitle,
+        body,
+        published_at: new Date().toISOString(),
+      },
+      { onConflict: "brand_id,slug" }
+    );
     if (pubErr) {
       return NextResponse.json({ ok: false, error: "Publish failed: " + pubErr.message }, { status: 500 });
     }

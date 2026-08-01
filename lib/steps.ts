@@ -197,7 +197,10 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     const base = slugify(raw);
     const slug = type === "new_page" ? base : `blog/${base}`;
     const { title: cleanTitle, body: cleanBody } = splitFrontMatter(body, title);
-    await db.from("content").upsert({ slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() });
+    await db.from("content").upsert(
+      { slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() },
+      { onConflict: "brand_id,slug" }
+    );
     await db.from("drafts").update({ status: "published" }).eq("id", inserted.id);
   }
 }

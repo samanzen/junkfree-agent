@@ -19,13 +19,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (draft.status !== "approved") {
     return NextResponse.json({ error: "approve it first" }, { status: 409 });
   }
-  await db.from("content").upsert({
-    slug: draft.target_url || draft.target_keyword,
-    task_type: draft.task_type,
-    title: draft.title,
-    body: draft.body,
-    published_at: new Date().toISOString(),
-  });
+  await db.from("content").upsert(
+    {
+      slug: draft.target_url || draft.target_keyword,
+      brand_id: draft.brand_id,
+      title: draft.title,
+      body: draft.body,
+      published_at: new Date().toISOString(),
+    },
+    { onConflict: "brand_id,slug" }
+  );
   await db.from("drafts").update({ status: "published" }).eq("id", id);
   return NextResponse.json({ ok: true });
 }
