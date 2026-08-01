@@ -7,7 +7,8 @@ import { slugify } from "@/lib/utils";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null };
+type JobFailure = { kind: string; error: string; finished_at: string };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[] };
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
@@ -365,6 +366,11 @@ export default function Dashboard() {
                       <span className={`stat ${lr.stale ? "" : "approved"}`}>{lr.stale ? "⚠️ " : ""}{lr.label}</span>
                     </div>
                     <p className="why">{b.slug} · {b.site_url}</p>
+                    {!!b.recent_failures?.length && (
+                      <p className="why" style={{ color: "var(--coral)" }}>
+                        ⚠️ {b.recent_failures.length} recent failure{b.recent_failures.length > 1 ? "s" : ""} — latest: {b.recent_failures[0].kind}: {truncateError(b.recent_failures[0].error)}
+                      </p>
+                    )}
                   </div>
                   <BrandLinkForm brandId={b.id} onLink={linkUser} />
                 </article>
@@ -390,6 +396,13 @@ function lastRunBadge(lastRunAt: string | null | undefined): { label: string; st
   if (hours < 1) return { label: "last run: <1h ago", stale };
   if (hours < 48) return { label: `last run: ${Math.round(hours)}h ago`, stale };
   return { label: `last run: ${Math.round(hours / 24)}d ago`, stale };
+}
+
+// Sprint 6.6 Phase 3 — bounds a stored job error message before rendering it
+// in the Brands tab, so a verbose error string can't blow out the row layout
+// (and as a defensive cap on what internal error text ever reaches the UI).
+function truncateError(error: string, max = 150): string {
+  return error.length > max ? error.slice(0, max) + "…" : error;
 }
 
 // Sprint 6.3 Phase 3 — per-brand inline "link an existing user" form. Kept as
