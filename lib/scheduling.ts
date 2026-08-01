@@ -41,8 +41,10 @@ export const TICK_BUDGET_MS = 45_000;
 
 // Brands with no matching row at all (never run, or freshly onboarded via
 // Sprint 6.3) sort first -- treated as maximally overdue, not a special case
-// to work around.
-function sortByLastRun(brands: Brand[], lastRun: Map<string, string>): Brand[] {
+// to work around. Exported (Sprint 6.5 Phase 4) so this pure logic can be
+// tested directly instead of only indirectly through the DB-calling
+// functions below.
+export function sortByLastRun(brands: Brand[], lastRun: Map<string, string>): Brand[] {
   return [...brands].sort((a, b) => {
     const at = lastRun.get(a.id);
     const bt = lastRun.get(b.id);
@@ -53,7 +55,8 @@ function sortByLastRun(brands: Brand[], lastRun: Map<string, string>): Brand[] {
   });
 }
 
-function latestPerBrand(rows: { brand_id: string; finished_at: string }[]): Map<string, string> {
+// Exported (Sprint 6.5 Phase 4) for direct testing -- see sortByLastRun above.
+export function latestPerBrand(rows: { brand_id: string; finished_at: string }[]): Map<string, string> {
   const lastRun = new Map<string, string>();
   for (const row of rows) {
     const prev = lastRun.get(row.brand_id);
