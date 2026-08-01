@@ -4,8 +4,10 @@
 
 import { callClaude } from "../anthropic";
 import { brandBlock, type Brand } from "../brands";
+import { playbookFor } from "../playbooks";
 
 export async function writeContent(brand: Brand, keyword: string, pageType: string) {
+  const playbook = playbookFor(brand.business_model);
   return callClaude({
     maxTokens: 4000,
     user: `${brandBlock(brand)}
@@ -13,10 +15,7 @@ export async function writeContent(brand: Brand, keyword: string, pageType: stri
 TASK: Write a comprehensive, genuinely useful ${pageType} targeting the primary keyword "${keyword}".
 
 WRITE FOR E-E-A-T (this is how Google decides if it ranks):
-- EXPERIENCE: include specifics only a real local operator would know — local disposal/recycling rules, which materials cost extra, realistic price ranges in CAD, seasonal/local factors, real logistics.
-- EXPERTISE: accurate, detailed how-to and what-to-expect information.
-- AUTHORITY: reference the service area, credentials, and process confidently.
-- TRUST: honest about pricing/what's included; no hype, no empty filler.
+${playbook.eeatGuidance}
 
 SEO RULES (modern, not keyword-stuffing):
 - NEVER invent or state specific prices, dollar amounts, or numeric price ranges. Pricing is quoted per job. Explain what pricing depends on (volume, access, materials) and direct readers to request a free, no-obligation quote. Do not use example prices even to illustrate.
@@ -46,6 +45,7 @@ Return ONLY JSON: {"titles":["..."],"metas":["..."],"why":"one line on the angle
 }
 
 export async function auditPage(brand: Brand, keyword: string, content: string) {
+  const playbook = playbookFor(brand.business_model);
   return callClaude({
     maxTokens: 1600,
     user: `${brandBlock(brand)}
@@ -54,7 +54,7 @@ TASK: Audit this page for the primary keyword "${keyword}". Content:
 """${content || "(no content provided — flag what a page targeting this keyword must include to pass E-E-A-T and rank)"}"""
 Return ONLY JSON:
 {"score":0-100,"checks":[{"item":"...","status":"pass|warn|fail","fix":"..."}],"schema":"schema.org type + why"}
-Cover: title, meta, H1, headings, keyword usage, local specifics/E-E-A-T, internal links, FAQ/answer-content for AI assistants, CTA, readability, schema.`,
+Cover: title, meta, H1, headings, keyword usage, ${playbook.auditFocus}, internal links, FAQ/answer-content for AI assistants, CTA, readability, schema.`,
   });
 }
 
