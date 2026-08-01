@@ -39,6 +39,18 @@ export const PER_BRAND_BUDGET_MS = 15_000;
 // in line next tick instead of being skippable indefinitely.
 export const TICK_BUDGET_MS = 45_000;
 
+// Sprint 6.10: minimum time a customer must wait between manual "Run agents
+// now" triggers for the same brand. Without this, seedIfIdle()'s only gate
+// is "is anything currently queued/running" -- the instant a brand's queue
+// fully drains, the very next click re-seeds a brand-new full pipeline, with
+// no limit on how many times that can repeat in a day. Enforced one layer up
+// in app/api/run/route.ts (not here, and not in lib/runner.ts -- both stay
+// untouched); admins are exempt (see app/api/run/route.ts).
+//
+// Operator-adjustable via MANUAL_RUN_COOLDOWN_MINUTES so it can be retuned
+// without a code change, same convention as lib/steps.ts's MAX_TASKS_PER_RUN.
+export const MANUAL_RUN_COOLDOWN_MS = Number(process.env.MANUAL_RUN_COOLDOWN_MINUTES || 15) * 60_000;
+
 // Brands with no matching row at all (never run, or freshly onboarded via
 // Sprint 6.3) sort first -- treated as maximally overdue, not a special case
 // to work around. Exported (Sprint 6.5 Phase 4) so this pure logic can be

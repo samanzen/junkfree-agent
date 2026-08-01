@@ -3,6 +3,7 @@ import { getBrandById } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerBrandRun } from "@/lib/runner";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { lastCompletedRunMap, MANUAL_RUN_COOLDOWN_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -29,6 +30,30 @@ export async function POST(req: NextRequest) {
 
   const brand = await getBrandById(brand_id);
   if (!brand || !brand.active) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+
+  // Sprint 6.10: seedIfIdle() only guards against an in-flight duplicate --
+  // once a brand's queue fully drains, nothing stops a customer from
+  // immediately re-triggering another full, costly run, repeated
+  // indefinitely. Admins are exempt (may legitimately need to force a
+  // re-run while debugging); this never touches lib/runner.ts.
+  if (auth.role !== "admin") {
+    const lastRun = await lastCompletedRunMap([brand.id]);
+    const lastFinishedAt = lastRun.get(brand.id);
+    if (lastFinishedAt) {
+      const elapsedMs = Date.now() - new Date(lastFinishedAt).getTime();
+      const remainingMs = MANUAL_RUN_COOLDOWN_MS - elapsedMs;
+      if (remainingMs > 0) {
+        const remainingMinutes = Math.ceil(remainingMs / 60_000);
+        return NextResponse.json(
+          {
+            error: "cooldown",
+            message: `This brand ran recently. Please wait ${remainingMinutes} more minute${remainingMinutes === 1 ? "" : "s"} before running it again.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+  }
 
   await clearStale(brand.id);
   const result = await triggerBrandRun(brand);

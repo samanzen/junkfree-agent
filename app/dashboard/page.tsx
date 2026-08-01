@@ -197,7 +197,12 @@ export default function Dashboard() {
       const res = await authedFetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brand_id: brandId }) });
       if (res.status === 409) {
         setRunning(false); setRunStatus("");
-        alert("This brand already has a run starting elsewhere — try again shortly.");
+        // Sprint 6.10: covers both the existing "locked" (concurrent run in
+        // flight) and the new "cooldown" (too soon since the last completed
+        // run) cases — both now return a specific `message` from the API,
+        // so show that instead of a single hardcoded string.
+        const errBody = await res.json().catch(() => ({}));
+        alert(errBody.message || "This brand already has a run starting elsewhere — try again shortly.");
         return;
       }
       if (!res.ok) {
