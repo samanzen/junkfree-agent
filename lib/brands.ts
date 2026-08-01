@@ -4,6 +4,17 @@
 
 import { db } from "./supabase";
 
+// Vertical classification (Sprint 6.2). Free text at the DB layer (see
+// supabase/007_business_model.sql), same convention as IntegrationProvider
+// in lib/integrations.ts -- this union is the source of truth for which
+// values the application currently understands.
+export type BusinessModel =
+  | "local_service"
+  | "ecommerce"
+  | "saas"
+  | "national_brand"
+  | "content_publisher";
+
 export type Brand = {
   id: string;
   slug: string;
@@ -20,7 +31,18 @@ export type Brand = {
   auto_publish_meta: boolean;
   active: boolean;
   owner_email: string | null;
+  business_model: BusinessModel;
+  dataforseo_location_code: number | null;
+  dataforseo_language_code: string;
 };
+
+// Single source of truth for "does this brand get local-only pipeline work
+// (GBP posts, citations) and local-flavored prompts/discovery queries."
+// Everything added in Sprint 6.2 that needs to branch on vertical reads
+// this instead of comparing business_model directly.
+export function isLocalBusiness(brand: Brand): boolean {
+  return brand.business_model === "local_service";
+}
 
 export async function getActiveBrands(): Promise<Brand[]> {
   const { data, error } = await db.from("brands").select("*").eq("active", true);
