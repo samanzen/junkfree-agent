@@ -20,12 +20,20 @@ Auto-publishing unreviewed AI pages at volume is a real ranking risk (Google's s
 ## Setup
 
 1. `npm install`
-2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`. All are additive/idempotent, so re-running an already-applied file is safe.
+2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`. All are additive/idempotent, so re-running an already-applied file is safe. `platform.sql` seeds the two bootstrap brands (Junk Free, POMO BUILD) — this is the only brand-seeding done via SQL; see "Adding a new brand" below for every brand after those two.
 3. Create a Google Cloud service account, enable the Search Console API, and add the service-account email as a user on the `junkfree.ca` property. Put its email + private key in the env.
 4. Copy `.env.example` → `.env.local` and fill it in.
 5. `npm run dev`, open `/dashboard`, click **Run agents now** to watch a full cycle.
 6. Deploy to Vercel. The cron in `vercel.json` takes over automatically.
 7. `npm test` runs the unit test suite (currently `lib/crypto.test.ts`).
+
+## Adding a new brand (Sprint 6.3)
+
+Every brand after the two SQL-seeded bootstrap brands is added through the app, not the SQL editor:
+
+1. Create the customer's Supabase Auth user via the Supabase dashboard (Authentication → Users → Add user). This step is still manual by design — onboarding does not create auth accounts or send invite emails.
+2. Have that person sign in once at `/login`. This is what creates their `profiles` row (`lib/auth.ts`'s `requireAuth()` does this lazily on first sign-in) — there is no other way for a `profiles` row to be created.
+3. As an admin, open `/dashboard` → the **Brands** tab. Create the brand there (name, slug, site URL, business model, optional GSC property), then use that brand's **Link user** action to assign the email from step 1 to it and set their role.
 
 ## Env
 
