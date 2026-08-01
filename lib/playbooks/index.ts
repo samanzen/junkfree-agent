@@ -12,6 +12,13 @@ import type { BusinessModel } from "../brands";
 export type Playbook = {
   eeatGuidance: string; // interpolated into writeContent()'s E-E-A-T section
   auditFocus: string;   // interpolated into auditPage()'s "Cover: ..." line
+  // Sprint 6.7: interpolated into lib/images.ts's imagePrompt(). Together
+  // they reconstruct "for a {imageSubjectPrefix}{service} business blog post
+  // ... {imageContext}" -- local_service's values are a byte-for-byte
+  // extraction of the wording every brand's image prompt got before this
+  // sprint existed.
+  imageSubjectPrefix: string;
+  imageContext: string;
 };
 
 const LOCAL_SERVICE: Playbook = {
@@ -20,6 +27,8 @@ const LOCAL_SERVICE: Playbook = {
 - AUTHORITY: reference the service area, credentials, and process confidently.
 - TRUST: honest about pricing/what's included; no hype, no empty filler.`,
   auditFocus: "local specifics/E-E-A-T",
+  imageSubjectPrefix: "local ",
+  imageContext: "Canadian suburban/residential context.",
 };
 
 const ECOMMERCE: Playbook = {
@@ -28,6 +37,8 @@ const ECOMMERCE: Playbook = {
 - AUTHORITY: reference return/warranty policy, certifications, and sourcing/testing process confidently.
 - TRUST: honest about pricing, shipping, and limitations; no hype, no empty filler.`,
   auditFocus: "product/buyer E-E-A-T",
+  imageSubjectPrefix: "",
+  imageContext: "Clean, modern studio or lifestyle product-photography context.",
 };
 
 const SAAS: Playbook = {
@@ -36,6 +47,8 @@ const SAAS: Playbook = {
 - AUTHORITY: reference the product's track record, integrations, and security/compliance posture confidently.
 - TRUST: honest about pricing tiers and limitations; no hype, no empty filler.`,
   auditFocus: "technical/buyer E-E-A-T",
+  imageSubjectPrefix: "",
+  imageContext: "Modern software/workplace context, clean tech-forward setting.",
 };
 
 const NATIONAL_BRAND: Playbook = {
@@ -44,6 +57,8 @@ const NATIONAL_BRAND: Playbook = {
 - AUTHORITY: reference scale, credentials, and process confidently.
 - TRUST: honest about pricing/what's included; no hype, no empty filler.`,
   auditFocus: "brand/buyer E-E-A-T",
+  imageSubjectPrefix: "",
+  imageContext: "Professional, brand-consistent commercial context.",
 };
 
 const CONTENT_PUBLISHER: Playbook = {
@@ -52,6 +67,8 @@ const CONTENT_PUBLISHER: Playbook = {
 - AUTHORITY: reference sourcing, credentials, and editorial process confidently.
 - TRUST: honest, balanced, no hype, no empty filler, cite sources where relevant.`,
   auditFocus: "editorial E-E-A-T",
+  imageSubjectPrefix: "",
+  imageContext: "Editorial, magazine-style context.",
 };
 
 const PLAYBOOKS: Record<BusinessModel, Playbook> = {
