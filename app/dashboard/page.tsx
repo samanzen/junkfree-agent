@@ -7,7 +7,7 @@ import { slugify } from "@/lib/utils";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null };
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
@@ -354,15 +354,22 @@ export default function Dashboard() {
               {brandFormErr && <p className="why" style={{ color: "var(--coral)" }}>{brandFormErr}</p>}
             </article>
 
-            {allBrands.length ? allBrands.map((b) => (
-              <article className="card row" key={b.id}>
-                <div>
-                  <div className="meta"><strong>{b.name}</strong><span className="kind">{b.business_model || "local_service"}</span></div>
-                  <p className="why">{b.slug} · {b.site_url}</p>
-                </div>
-                <BrandLinkForm brandId={b.id} onLink={linkUser} />
-              </article>
-            )) : <Empty label="No brands yet." />}
+            {allBrands.length ? allBrands.map((b) => {
+              const lr = lastRunBadge(b.last_run_at);
+              return (
+                <article className="card row" key={b.id}>
+                  <div>
+                    <div className="meta">
+                      <strong>{b.name}</strong>
+                      <span className="kind">{b.business_model || "local_service"}</span>
+                      <span className={`stat ${lr.stale ? "" : "approved"}`}>{lr.stale ? "⚠️ " : ""}{lr.label}</span>
+                    </div>
+                    <p className="why">{b.slug} · {b.site_url}</p>
+                  </div>
+                  <BrandLinkForm brandId={b.id} onLink={linkUser} />
+                </article>
+              );
+            }) : <Empty label="No brands yet." />}
           </>
         )}
       </div>
@@ -371,6 +378,19 @@ export default function Dashboard() {
 }
 
 function Empty({ label }: { label: string }) { return <div className="empty">{label}</div>; }
+
+// Sprint 6.4 Phase 3 — "is this brand actually running" indicator for the
+// Brands tab, sourced from app/api/brands' last_run_at (lib/scheduling.ts's
+// lastCompletedRunMap). Stale threshold (36h) allows slack over the daily
+// cadence rather than flagging a brand the moment it crosses 24h.
+function lastRunBadge(lastRunAt: string | null | undefined): { label: string; stale: boolean } {
+  if (!lastRunAt) return { label: "never run", stale: true };
+  const hours = (Date.now() - new Date(lastRunAt).getTime()) / 3_600_000;
+  const stale = hours > 36;
+  if (hours < 1) return { label: "last run: <1h ago", stale };
+  if (hours < 48) return { label: `last run: ${Math.round(hours)}h ago`, stale };
+  return { label: `last run: ${Math.round(hours / 24)}d ago`, stale };
+}
 
 // Sprint 6.3 Phase 3 — per-brand inline "link an existing user" form. Kept as
 // its own component (rather than lifted state in Dashboard) so each brand

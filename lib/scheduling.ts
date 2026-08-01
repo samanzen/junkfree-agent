@@ -62,20 +62,30 @@ function latestPerBrand(rows: { brand_id: string; finished_at: string }[]): Map<
   return lastRun;
 }
 
-// Orchestrate's daily content pipeline: `runs` tracks whole-pipeline
-// completion natively (lib/runner.ts's finalizeOpenRuns, Sprint 5.2) -- the
-// most semantically correct signal for "did today's run actually finish."
-export async function orderByLastCompletedRun(brands: Brand[]): Promise<Brand[]> {
-  if (!brands.length) return brands;
+// Per-brand "when did their daily pipeline last actually finish" lookup.
+// `runs` tracks whole-pipeline completion natively (lib/runner.ts's
+// finalizeOpenRuns, Sprint 5.2) -- the most semantically correct signal for
+// "did today's run actually finish." Shared by orderByLastCompletedRun
+// (Phase 1/2, cron fairness) and the admin Brands tab's "last run" indicator
+// (Phase 3, app/api/brands/route.ts) so both read the exact same data
+// instead of two divergent queries. Returns an empty map on any DB error
+// (never throws) -- callers treat "no entry" as "unknown/never run".
+export async function lastCompletedRunMap(brandIds: string[]): Promise<Map<string, string>> {
+  if (!brandIds.length) return new Map();
   const { data, error } = await db
     .from("runs")
     .select("brand_id, finished_at")
     .eq("status", "done")
-    .in("brand_id", brands.map((b) => b.id))
+    .in("brand_id", brandIds)
     .not("finished_at", "is", null);
-  if (error) return brands; // degrade to unordered rather than fail the tick
+  if (error) return new Map();
+  return latestPerBrand((data || []) as { brand_id: string; finished_at: string }[]);
+}
 
-  return sortByLastRun(brands, latestPerBrand((data || []) as { brand_id: string; finished_at: string }[]));
+export async function orderByLastCompletedRun(brands: Brand[]): Promise<Brand[]> {
+  if (!brands.length) return brands;
+  const lastRun = await lastCompletedRunMap(brands.map((b) => b.id));
+  return sortByLastRun(brands, lastRun);
 }
 
 // rank_sync / rank_enrich never create a `runs` row (only stepPlan does) --

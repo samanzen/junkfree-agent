@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
 import type { BusinessModel } from "@/lib/brands";
+import { lastCompletedRunMap } from "@/lib/scheduling";
 
 export const maxDuration = 30;
 
@@ -23,7 +24,16 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db.from("brands").select("*").order("name", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ brands: data || [] });
+
+  // Sprint 6.4 Phase 3: surface each brand's last completed daily run so an
+  // admin can see at a glance whether a brand is actually running, instead
+  // of that being silently invisible. Same lookup the cron fairness ordering
+  // (lib/scheduling.ts) already uses -- one source of truth, not two queries.
+  const brands = data || [];
+  const lastRun = await lastCompletedRunMap(brands.map((b) => b.id));
+  const withLastRun = brands.map((b) => ({ ...b, last_run_at: lastRun.get(b.id) || null }));
+
+  return NextResponse.json({ brands: withLastRun });
 }
 
 // Create a new brand. Body: { name, slug, site_url, business_model, gsc_property? }
