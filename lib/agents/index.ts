@@ -39,7 +39,7 @@ export async function rewriteMeta(brand: Brand, url: string, currentContext: str
     user: `${brandBlock(brand)}
 
 TASK: This page underperforms on click-through: ${url}. Context: ${currentContext}
-Write 3 title tag options (<=60 chars, keyword-forward, locally relevant) and 3 meta descriptions (<=155 chars, benefit + CTA).
+Write 3 title tag options (<=60 chars, keyword-forward, relevant to the business context above) and 3 meta descriptions (<=155 chars, benefit + CTA).
 Return ONLY JSON: {"titles":["..."],"metas":["..."],"why":"one line on the angle"}`,
   });
 }
@@ -71,6 +71,6 @@ Here is a draft you produced:
 The owner gave this feedback:
 """${feedback}"""
 
-Revise the draft to fully address the feedback while keeping everything that already works. Keep the same format (if it starts with TITLE TAG:/META: lines, keep them). Apply all brand rules (deep E-E-A-T, no invented prices, no "free" in titles, local specifics). Return ONLY the revised content, nothing else.`,
+Revise the draft to fully address the feedback while keeping everything that already works. Keep the same format (if it starts with TITLE TAG:/META: lines, keep them). Apply all brand rules (deep E-E-A-T, no invented prices, and any wrong-intent terms flagged in the business context above). Return ONLY the revised content, nothing else.`,
   });
 }
