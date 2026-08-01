@@ -6,17 +6,21 @@
 
 import { db } from "./supabase";
 import type { Brand } from "./brands";
+import { playbookFor } from "./playbooks";
 
 const MODEL = "gemini-2.5-flash-image";
 const ENDPOINT = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;
 
 // Turn a post topic into a clean, realistic image prompt (no text-in-image,
-// no logos, photo-real, relevant to the local service).
+// no logos, photo-real, scene-setting driven by the brand's business_model
+// playbook -- Sprint 6.7 -- so a non-local brand doesn't get "local"/
+// "Canadian suburban" framing forced into its generated imagery.
 function imagePrompt(brand: Brand, topic: string) {
-  return `Photorealistic, high-quality horizontal header photo for a local ${
+  const playbook = playbookFor(brand.business_model);
+  return `Photorealistic, high-quality horizontal header photo for a ${playbook.imageSubjectPrefix}${
     brand.services?.split(",")[0] || "service"
-  } business blog post about "${topic}". Realistic lighting, professional, clean composition, no text, no watermarks, no logos, no readable signage. Canadian suburban/residential context.`;
+  } business blog post about "${topic}". Realistic lighting, professional, clean composition, no text, no watermarks, no logos, no readable signage. ${playbook.imageContext}`;
 }
 
 // Generate one image, return { base64, mime } or null.
