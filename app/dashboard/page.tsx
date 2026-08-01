@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { authedFetch } from "@/lib/authedFetch";
+import { slugify } from "@/lib/utils";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null };
+const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
@@ -22,7 +24,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations" | "intelligence">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations" | "intelligence" | "brands">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -34,6 +36,75 @@ export default function Dashboard() {
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
   const [token, setToken] = useState<string>("");
+
+  // Sprint 6.3 Phase 3 — admin-only brand onboarding (replaces the SQL editor
+  // as the way to add a tenant). allBrands is the admin management list
+  // (GET /api/brands, active + inactive), kept separate from `brands` above
+  // (from /api/platform, active-only, what the brand switcher uses).
+  const [allBrands, setAllBrands] = useState<Brand[]>([]);
+  const [newBrand, setNewBrand] = useState({ name: "", slug: "", site_url: "", business_model: "local_service", gsc_property: "" });
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [brandFormErr, setBrandFormErr] = useState("");
+
+  async function loadAllBrands() {
+    const d = await (await authedFetch("/api/brands")).json();
+    setAllBrands(d.brands || []);
+  }
+
+  async function createBrand() {
+    setBrandFormErr("");
+    if (!newBrand.name.trim() || !newBrand.slug.trim() || !newBrand.site_url.trim()) {
+      setBrandFormErr("Name, slug, and site URL are required.");
+      return;
+    }
+    setCreatingBrand(true);
+    try {
+      const res = await authedFetch("/api/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newBrand.name.trim(),
+          slug: newBrand.slug.trim(),
+          site_url: newBrand.site_url.trim(),
+          business_model: newBrand.business_model,
+          gsc_property: newBrand.gsc_property.trim() || undefined,
+        }),
+      });
+      const r = await res.json();
+      if (!res.ok) { setBrandFormErr(r.error || `Failed to create brand (${res.status}).`); return; }
+      setNewBrand({ name: "", slug: "", site_url: "", business_model: "local_service", gsc_property: "" });
+      setSlugTouched(false);
+      await loadAllBrands();
+      load(); // refresh the active-brand switcher too
+    } catch (e) {
+      setBrandFormErr("Failed to create brand: " + String(e));
+    } finally {
+      setCreatingBrand(false);
+    }
+  }
+
+  async function linkUser(brandId: string, email: string, role: string) {
+    const trimmed = email.trim();
+    if (!trimmed) { alert("Enter an email."); return; }
+    const brandName = allBrands.find((b) => b.id === brandId)?.name || "this brand";
+    // Explicit confirmation — this can silently move an EXISTING customer to a
+    // different brand, not just link a fresh one, so a careless click must
+    // never be able to do that unconfirmed.
+    if (!window.confirm(`Link ${trimmed} to ${brandName} as ${role}?\n\nIf they're already linked to a different brand, this moves them.`)) return;
+    try {
+      const res = await authedFetch(`/api/brands/${brandId}/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed, role }),
+      });
+      const r = await res.json();
+      if (!res.ok) { alert(r.error || `Failed to link user (${res.status}).`); return; }
+      alert(`Linked ${trimmed} to ${brandName}.`);
+    } catch (e) {
+      alert("Failed to link user: " + String(e));
+    }
+  }
 
   async function load() {
     const d = await (await authedFetch("/api/platform")).json();
@@ -56,6 +127,7 @@ export default function Dashboard() {
     /* eslint-disable-next-line */
   }, []);
   useEffect(() => { if (authed) load(); /* eslint-disable-next-line */ }, [authed, role, myBrand]);
+  useEffect(() => { if (authed && role === "admin") loadAllBrands(); /* eslint-disable-next-line */ }, [authed, role]);
 
   // Google posts / Backlinks are local-SEO-only concepts (Sprint 6.2 Phase 3).
   // If the selected brand isn't local_service, those tabs are hidden below —
@@ -197,6 +269,7 @@ export default function Dashboard() {
           <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
           {activeBrandIsLocal && <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>}
           {activeBrandIsLocal && <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>}
+          {role === "admin" && <button className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span>{allBrands.length}</span></button>}
         </nav>
 
         {loading && <p className="muted">Loading signal…</p>}
@@ -253,12 +326,69 @@ export default function Dashboard() {
             </div>
           </article>
         )) : <Empty label="No backlink opportunities yet. Hit Run agents." />)}
+
+        {tab === "brands" && role === "admin" && (
+          <>
+            <article className="card">
+              <h3>Add brand</h3>
+              <div className="brandform">
+                <input placeholder="Name" value={newBrand.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setNewBrand((b) => ({ ...b, name, slug: slugTouched ? b.slug : slugify(name) }));
+                  }} />
+                <input placeholder="slug" value={newBrand.slug}
+                  onChange={(e) => { setSlugTouched(true); setNewBrand((b) => ({ ...b, slug: e.target.value })); }} />
+                <input placeholder="https://example.com" value={newBrand.site_url}
+                  onChange={(e) => setNewBrand((b) => ({ ...b, site_url: e.target.value }))} />
+                <select value={newBrand.business_model}
+                  onChange={(e) => setNewBrand((b) => ({ ...b, business_model: e.target.value }))}>
+                  {BUSINESS_MODELS.map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
+                </select>
+                <input placeholder="GSC property (optional)" value={newBrand.gsc_property}
+                  onChange={(e) => setNewBrand((b) => ({ ...b, gsc_property: e.target.value }))} />
+                <button className="primary" onClick={createBrand} disabled={creatingBrand}>
+                  {creatingBrand ? "Creating…" : "Create brand"}
+                </button>
+              </div>
+              {brandFormErr && <p className="why" style={{ color: "var(--coral)" }}>{brandFormErr}</p>}
+            </article>
+
+            {allBrands.length ? allBrands.map((b) => (
+              <article className="card row" key={b.id}>
+                <div>
+                  <div className="meta"><strong>{b.name}</strong><span className="kind">{b.business_model || "local_service"}</span></div>
+                  <p className="why">{b.slug} · {b.site_url}</p>
+                </div>
+                <BrandLinkForm brandId={b.id} onLink={linkUser} />
+              </article>
+            )) : <Empty label="No brands yet." />}
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 function Empty({ label }: { label: string }) { return <div className="empty">{label}</div>; }
+
+// Sprint 6.3 Phase 3 — per-brand inline "link an existing user" form. Kept as
+// its own component (rather than lifted state in Dashboard) so each brand
+// row's email/role inputs are independent.
+function BrandLinkForm({ brandId, onLink }: { brandId: string; onLink: (brandId: string, email: string, role: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("customer");
+  return (
+    <div className="acts">
+      <input placeholder="user@email.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ minWidth: 180 }} />
+      <select value={role} onChange={(e) => setRole(e.target.value)}>
+        <option value="customer">Customer</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button className="primary" onClick={() => { onLink(brandId, email, role); setEmail(""); }}>Link user</button>
+    </div>
+  );
+}
 
 function DraftBody({ body }: { body: string }) {
   let parsed: Record<string, unknown> | null = null;
@@ -342,6 +472,11 @@ const CSS = `
 .sr .fb { display:flex; gap:9px; margin-top:12px; }
 .sr .fb input { flex:1; background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .fb input:focus { outline:none; border-color:var(--accent); }
+.sr .brandform { display:flex; gap:9px; flex-wrap:wrap; margin-top:10px; }
+.sr .brandform input, .sr .brandform select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
+.sr .brandform input:focus, .sr .brandform select:focus { outline:none; border-color:var(--accent); }
+.sr .acts select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 11px; border-radius:9px; font-family:inherit; font-size:13px; }
+.sr .acts input { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .link { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent); text-decoration:none; word-break:break-all; }
 .sr .muted, .sr .lmuted { color:var(--muted); font-size:13px; }
 .sr .empty, .sr .lempty { border:1px dashed var(--line); border-radius:16px; padding:44px; text-align:center; color:var(--muted); font-size:14px; background:var(--surface); }
