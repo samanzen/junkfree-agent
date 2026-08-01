@@ -8,7 +8,7 @@ import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
 type JobFailure = { kind: string; error: string; finished_at: string };
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[] };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[]; active?: boolean };
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
@@ -104,6 +104,25 @@ export default function Dashboard() {
       alert(`Linked ${trimmed} to ${brandName}.`);
     } catch (e) {
       alert("Failed to link user: " + String(e));
+    }
+  }
+
+  // Sprint 6.8 Phase 3 — new brands are created inactive (Phase 1); this is
+  // the deliberate, separate action (Phase 2's PATCH endpoint) that brings
+  // one online.
+  async function activateBrand(brandId: string) {
+    try {
+      const res = await authedFetch(`/api/brands/${brandId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: true }),
+      });
+      const r = await res.json();
+      if (!res.ok) { alert(r.error || `Failed to activate brand (${res.status}).`); return; }
+      await loadAllBrands();
+      load(); // refresh the active-brand switcher too
+    } catch (e) {
+      alert("Failed to activate brand: " + String(e));
     }
   }
 
@@ -332,6 +351,7 @@ export default function Dashboard() {
           <>
             <article className="card">
               <h3>Add brand</h3>
+              <p className="why">New brands are created inactive — activate them below when ready.</p>
               <div className="brandform">
                 <input placeholder="Name" value={newBrand.name}
                   onChange={(e) => {
@@ -363,7 +383,9 @@ export default function Dashboard() {
                     <div className="meta">
                       <strong>{b.name}</strong>
                       <span className="kind">{b.business_model || "local_service"}</span>
-                      <span className={`stat ${lr.stale ? "" : "approved"}`}>{lr.stale ? "⚠️ " : ""}{lr.label}</span>
+                      {b.active === false
+                        ? <span className="stat" style={{ color: "var(--coral)" }}>Inactive</span>
+                        : <span className={`stat ${lr.stale ? "" : "approved"}`}>{lr.stale ? "⚠️ " : ""}{lr.label}</span>}
                     </div>
                     <p className="why">{b.slug} · {b.site_url}</p>
                     {!!b.recent_failures?.length && (
@@ -372,7 +394,10 @@ export default function Dashboard() {
                       </p>
                     )}
                   </div>
-                  <BrandLinkForm brandId={b.id} onLink={linkUser} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                    {b.active === false && <button className="primary" onClick={() => activateBrand(b.id)}>Activate</button>}
+                    <BrandLinkForm brandId={b.id} onLink={linkUser} />
+                  </div>
                 </article>
               );
             }) : <Empty label="No brands yet." />}
