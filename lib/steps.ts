@@ -93,7 +93,7 @@ export async function stepPlan(brand: Brand) {
 
 You are the SEO operations lead. Use ALL intelligence below to choose the ${MAX_TASKS} highest-impact actions now. Favour quick wins but also build topical authority.
 
-RULES: Target paid/high-intent + long-tail keywords with real volume where known. NEVER target "free" keywords.
+RULES: Target paid/high-intent + long-tail keywords with real volume where known. Avoid any terms flagged as wrong-intent in the business context above.
 NEVER propose "new_page" or "new_blog" for a topic already listed in EXISTING TOPICS below — if that topic needs work, propose "improve_content" targeting its existing URL instead. Also do not propose two of your own tasks in this batch for the same or overlapping topic (keyword cannibalization) — group related keywords under one page rather than forking a near-duplicate.
 
 EXISTING TOPICS (already published or queued — do not duplicate):

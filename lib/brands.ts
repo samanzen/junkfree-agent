@@ -68,7 +68,7 @@ export function brandBlock(b: Brand): string {
 - Service area: ${b.service_area || "n/a"}
 - Services: ${b.services || "n/a"}
 - Edge: ${b.edge || "n/a"}
-- Voice: ${b.voice || "Direct, trustworthy, local. Canadian spelling."}
+- Voice: ${b.voice || "Direct, trustworthy, professional."}
 - Website: ${b.site_url}${
     b.competitors ? `\n- Competitors to beat: ${b.competitors}` : ""
   }${
