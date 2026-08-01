@@ -3,6 +3,7 @@ import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerBrandRun, drainBrand } from "@/lib/runner";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
+import { orderByLastCompletedRun } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -44,6 +45,11 @@ async function runQueue() {
     return NextResponse.json({ error: "No active brands." }, { status: 400 });
   }
 
+  // Sprint 6.4 Phase 1: process the most-overdue brand first, so a brand
+  // skipped by today's shared time budget is first in line tomorrow instead
+  // of being skippable indefinitely (see lib/scheduling.ts).
+  const ordered = await orderByLastCompletedRun(brands);
+
   // Total time budget shared across every brand this tick, kept well under
   // the 60s function cap. Each brand is seeded + drained independently
   // inside its own try/catch, so one brand erroring (or a slow brand eating
@@ -53,7 +59,7 @@ async function runQueue() {
   const deadline = Date.now() + 45_000;
   const results: Record<string, unknown>[] = [];
 
-  for (const brand of brands) {
+  for (const brand of ordered) {
     const remainingBudget = deadline - Date.now();
     if (remainingBudget <= 0) {
       results.push({ brand: brand.slug, skipped: "out of time this tick" });

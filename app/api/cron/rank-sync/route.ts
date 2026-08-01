@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerRankSync, drainBrand } from "@/lib/runner";
+import { orderByLastCompletedJob } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -20,10 +21,13 @@ export async function GET(req: NextRequest) {
   const brands = await getActiveBrands();
   const eligible = brands.filter((b) => !!b.gsc_property);
 
+  // Sprint 6.4 Phase 1: most-overdue brand first (see lib/scheduling.ts).
+  const ordered = await orderByLastCompletedJob(eligible, "rank_sync");
+
   const deadline = Date.now() + 45_000;
   const results: Record<string, unknown>[] = [];
 
-  for (const brand of eligible) {
+  for (const brand of ordered) {
     const remainingBudget = deadline - Date.now();
     if (remainingBudget <= 0) {
       results.push({ brand: brand.slug, skipped: "out of time this tick" });

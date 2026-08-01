@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerRankEnrich, drainBrand } from "@/lib/runner";
+import { orderByLastCompletedJob } from "@/lib/scheduling";
 
 export const maxDuration = 60;
 
@@ -19,10 +20,13 @@ export async function GET(req: NextRequest) {
   await clearStale();
   const brands = await getActiveBrands();
 
+  // Sprint 6.4 Phase 1: most-overdue brand first (see lib/scheduling.ts).
+  const ordered = await orderByLastCompletedJob(brands, "rank_enrich");
+
   const deadline = Date.now() + 45_000;
   const results: Record<string, unknown>[] = [];
 
-  for (const brand of brands) {
+  for (const brand of ordered) {
     const remainingBudget = deadline - Date.now();
     if (remainingBudget <= 0) {
       results.push({ brand: brand.slug, skipped: "out of time this tick" });
