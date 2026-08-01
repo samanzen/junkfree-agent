@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
 import type { BusinessModel } from "@/lib/brands";
 import { lastCompletedRunMap } from "@/lib/scheduling";
+import { recentJobFailures } from "@/lib/runHealth";
 
 export const maxDuration = 30;
 
@@ -31,9 +32,20 @@ export async function GET(req: NextRequest) {
   // (lib/scheduling.ts) already uses -- one source of truth, not two queries.
   const brands = data || [];
   const lastRun = await lastCompletedRunMap(brands.map((b) => b.id));
-  const withLastRun = brands.map((b) => ({ ...b, last_run_at: lastRun.get(b.id) || null }));
 
-  return NextResponse.json({ brands: withLastRun });
+  // Sprint 6.6 Phase 2: last_run_at says WHEN a brand last succeeded but not
+  // WHY it hasn't recently -- attach each brand's recent job failures too, so
+  // a real problem (bad credentials, an API outage) is diagnosable from this
+  // same admin view instead of requiring direct database access.
+  const withHealth = await Promise.all(
+    brands.map(async (b) => ({
+      ...b,
+      last_run_at: lastRun.get(b.id) || null,
+      recent_failures: await recentJobFailures(b.id),
+    }))
+  );
+
+  return NextResponse.json({ brands: withHealth });
 }
 
 // Create a new brand. Body: { name, slug, site_url, business_model, gsc_property? }
