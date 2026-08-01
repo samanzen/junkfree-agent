@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
-import { rankedKeywords } from "@/lib/dataforseo";
+import { rankedKeywords, geoOf } from "@/lib/dataforseo";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
@@ -18,13 +18,14 @@ export async function GET(
 
   const { data: competitor } = await db
     .from("competitors")
-    .select("*, brands!inner(id)")
+    .select("*, brands!inner(id, dataforseo_location_code, dataforseo_language_code)")
     .eq("id", id)
     .single();
 
   if (!competitor) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const brandId = (competitor.brands as { id: string }).id;
+  const competitorBrand = competitor.brands as { id: string; dataforseo_location_code: number | null; dataforseo_language_code: string };
+  const brandId = competitorBrand.id;
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
 
@@ -38,7 +39,7 @@ export async function GET(
   const brandKwMap = new Map((brandKws || []).map((k) => [k.keyword, k]));
 
   // Competitor's ranked keywords via DataForSEO (confirmed endpoint)
-  const competitorKws = await rankedKeywords(competitor.domain).catch(() => []);
+  const competitorKws = await rankedKeywords(competitor.domain, geoOf(competitorBrand)).catch(() => []);
 
   // Gap keywords: competitor ranks for these, brand does not
   const gaps = competitorKws

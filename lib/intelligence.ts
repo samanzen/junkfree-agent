@@ -10,6 +10,7 @@ import {
   rankedKeywords,
   serpTop,
   isConfigured,
+  geoOf,
   type KeywordData,
 } from "./dataforseo";
 
@@ -22,7 +23,7 @@ export async function keywordStrategy(brand: Brand) {
 
   let ideas: KeywordData[] = [];
   if (isConfigured()) {
-    const raw = await keywordIdeas(`${seed} ${area}`).catch(() => []);
+    const raw = await keywordIdeas(`${seed} ${area}`, geoOf(brand)).catch(() => []);
     // Keep keywords with real volume; drop zero-volume noise.
     ideas = raw.filter((k) => (k.volume ?? 0) > 0).slice(0, 40);
   }
@@ -55,7 +56,7 @@ Limit to the 12 best targets.`,
 // "blueprint to beat #1" the Content Engineer must exceed.
 export async function serpBlueprint(brand: Brand, keyword: string) {
   let serp: { position: number; title: string; url: string; description: string }[] = [];
-  if (isConfigured()) serp = await serpTop(keyword).catch(() => []);
+  if (isConfigured()) serp = await serpTop(keyword, geoOf(brand)).catch(() => []);
 
   const text = await callClaude({
     search: !serp.length, // if no SERP API data, let Claude search the web instead
@@ -97,7 +98,7 @@ export async function competitorGaps(brand: Brand) {
 
   const all: { keyword: string; position: number; volume: number | null; competitor: string }[] = [];
   for (const domain of competitors) {
-    const kws = await rankedKeywords(domain).catch(() => []);
+    const kws = await rankedKeywords(domain, geoOf(brand)).catch(() => []);
     kws
       .filter((k) => (k.volume ?? 0) > 0 && k.position <= 20)
       .slice(0, 40)

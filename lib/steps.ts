@@ -9,7 +9,7 @@ import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
 import { keywordStrategy, competitorGaps } from "./intelligence";
-import { keywordDifficulty, classifySearchIntent, keywordVolumes } from "./dataforseo";
+import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
 import { auditSite } from "./auditor";
@@ -473,15 +473,16 @@ export async function stepRankEnrich(brand: Brand) {
   const keywords = toEnrich.map((k) => k.keyword);
 
   // --- DataForSEO: volume + CPC (confirmed endpoint) ---
-  const volumeData = await keywordVolumes(keywords).catch(() => []);
+  const geo = geoOf(brand);
+  const volumeData = await keywordVolumes(keywords, geo).catch(() => []);
   const volumeMap = new Map(volumeData.map((v) => [v.keyword, v]));
 
   // --- DataForSEO: difficulty (unverified endpoint, fails gracefully) ---
-  const difficultyData = await keywordDifficulty(keywords).catch(() => []);
+  const difficultyData = await keywordDifficulty(keywords, geo).catch(() => []);
   const difficultyMap = new Map(difficultyData.map((d) => [d.keyword, d.difficulty]));
 
   // --- DataForSEO: intent (unverified endpoint, fails gracefully) ---
-  const intentData = await classifySearchIntent(keywords).catch(() => []);
+  const intentData = await classifySearchIntent(keywords, geo).catch(() => []);
   const intentMap = new Map(intentData.map((i) => [i.keyword, i.intent]));
 
   // --- AI opportunity scoring (Claude) ---

@@ -1,7 +1,7 @@
 import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance } from "./gsc";
-import { domainOverview, backlinksSummary, rankedKeywords, isConfigured } from "./dataforseo";
+import { domainOverview, backlinksSummary, rankedKeywords, isConfigured, geoOf } from "./dataforseo";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -23,11 +23,12 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
   const domain = domainOf(brand);
   const gsc = brand.gsc_property;
 
+  const geo = geoOf(brand);
   const [striking, overview, backlinks, ranked, healthRows] = await Promise.all([
     gsc ? strikingDistance(gsc).catch(() => []) : Promise.resolve([]),
-    isConfigured() ? domainOverview(domain).catch(() => null) : Promise.resolve(null),
+    isConfigured() ? domainOverview(domain, geo).catch(() => null) : Promise.resolve(null),
     isConfigured() ? backlinksSummary(domain).catch(() => null) : Promise.resolve(null),
-    isConfigured() ? rankedKeywords(domain).catch(() => []) : Promise.resolve([]),
+    isConfigured() ? rankedKeywords(domain, geo).catch(() => []) : Promise.resolve([]),
     // Site Health is computed by the daily audit job (lib/steps.ts stepAudit),
     // not here — this is a single fast DB read, not a re-crawl, so it stays
     // within the "lightweight snapshot" budget this function is named for.

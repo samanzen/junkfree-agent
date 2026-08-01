@@ -33,6 +33,25 @@ const LANG = "en";
 
 type Task<R> = { tasks?: { result?: R[] }[] };
 
+// Per-brand DataForSEO targeting (Sprint 6.2 Phase 2). Every location/
+// language-dependent function below takes this as an optional last param.
+// Omitting it (or leaving either field undefined) falls back to
+// LOCATION_CANADA/LANG, so a call site that hasn't been updated to pass a
+// brand's geo keeps behaving exactly as it did before this existed.
+export type Geo = { locationCode?: number; languageCode?: string };
+
+// Resolves a brand's DataForSEO targeting into a Geo. Brands created before
+// Sprint 6.2 (or before supabase/007_business_model.sql has been applied)
+// have dataforseo_location_code = null, which resolves to undefined here —
+// callers then fall back to LOCATION_CANADA/LANG, reproducing today's
+// hardcoded behavior exactly.
+export function geoOf(brand: { dataforseo_location_code?: number | null; dataforseo_language_code?: string | null }): Geo {
+  return {
+    locationCode: brand.dataforseo_location_code ?? undefined,
+    languageCode: brand.dataforseo_language_code ?? undefined,
+  };
+}
+
 // Real search volume + competition for a set of seed keywords.
 export type KeywordData = {
   keyword: string;
@@ -40,10 +59,10 @@ export type KeywordData = {
   competition: number | null;
   cpc: number | null;
 };
-export async function keywordVolumes(keywords: string[]): Promise<KeywordData[]> {
+export async function keywordVolumes(keywords: string[], geo: Geo = {}): Promise<KeywordData[]> {
   const data = await post<Task<{ keyword: string; search_volume: number; competition: number; cpc: number }>>(
     "/keywords_data/google_ads/search_volume/live",
-    { keywords: keywords.slice(0, 100), location_code: LOCATION_CANADA, language_code: LANG }
+    { keywords: keywords.slice(0, 100), location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
   const rows = data?.tasks?.[0]?.result || [];
   return rows.map((r) => ({
@@ -55,10 +74,10 @@ export async function keywordVolumes(keywords: string[]): Promise<KeywordData[]>
 }
 
 // Keyword ideas/expansions for a seed term (long-tail discovery).
-export async function keywordIdeas(seed: string): Promise<KeywordData[]> {
+export async function keywordIdeas(seed: string, geo: Geo = {}): Promise<KeywordData[]> {
   const data = await post<Task<{ keyword: string; keyword_info?: { search_volume: number; competition: number; cpc: number } }>>(
     "/dataforseo_labs/google/keyword_ideas/live",
-    { keywords: [seed], location_code: LOCATION_CANADA, language_code: LANG, limit: 50 }
+    { keywords: [seed], location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 50 }
   );
   const rows = data?.tasks?.[0]?.result?.[0] ? (data.tasks[0].result as unknown as { items?: { keyword: string; keyword_info?: { search_volume: number; competition: number; cpc: number } }[] }[])[0]?.items || [] : [];
   return rows.map((r) => ({
@@ -70,10 +89,10 @@ export async function keywordIdeas(seed: string): Promise<KeywordData[]> {
 }
 
 // Keywords a competitor domain ranks for that you may not — gap analysis.
-export async function rankedKeywords(domain: string): Promise<{ keyword: string; position: number; volume: number | null }[]> {
+export async function rankedKeywords(domain: string, geo: Geo = {}): Promise<{ keyword: string; position: number; volume: number | null }[]> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/ranked_keywords/live",
-    { target: domain, location_code: LOCATION_CANADA, language_code: LANG, limit: 100 }
+    { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 100 }
   );
   const items = (data?.tasks?.[0]?.result?.[0] as { items?: { keyword_data?: { keyword: string; keyword_info?: { search_volume: number } }; ranked_serp_element?: { serp_item?: { rank_absolute: number } } }[] })?.items || [];
   return items.map((it) => ({
@@ -84,10 +103,10 @@ export async function rankedKeywords(domain: string): Promise<{ keyword: string;
 }
 
 // The live top-10 organic results for a keyword — input to the SERP Analyst.
-export async function serpTop(keyword: string): Promise<{ position: number; title: string; url: string; description: string }[]> {
+export async function serpTop(keyword: string, geo: Geo = {}): Promise<{ position: number; title: string; url: string; description: string }[]> {
   const data = await post<Task<unknown>>(
     "/serp/google/organic/live/advanced",
-    { keyword, location_code: LOCATION_CANADA, language_code: LANG, depth: 10 }
+    { keyword, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, depth: 10 }
   );
   const items = (data?.tasks?.[0]?.result?.[0] as { items?: { type: string; rank_absolute: number; title: string; url: string; description: string }[] })?.items || [];
   return items
@@ -101,10 +120,10 @@ export function isConfigured() {
 }
 
 // Domain overview: organic traffic estimate, organic keyword count, rank.
-export async function domainOverview(domain: string): Promise<{ organic_traffic: number | null; organic_keywords: number | null } | null> {
+export async function domainOverview(domain: string, geo: Geo = {}): Promise<{ organic_traffic: number | null; organic_keywords: number | null } | null> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/domain_rank_overview/live",
-    { target: domain, location_code: LOCATION_CANADA, language_code: LANG }
+    { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
   const item = (data?.tasks?.[0]?.result?.[0] as { items?: { metrics?: { organic?: { etv?: number; count?: number } } }[] })?.items?.[0];
   const organic = item?.metrics?.organic;
@@ -131,12 +150,13 @@ export async function backlinksSummary(domain: string): Promise<{ backlinks: num
 // confirmed against live account. Returns null per keyword on failure.
 // The UI shows "–" when difficulty is null rather than crashing.
 export async function keywordDifficulty(
-  keywords: string[]
+  keywords: string[],
+  geo: Geo = {}
 ): Promise<{ keyword: string; difficulty: number | null }[]> {
   if (!keywords.length) return [];
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/bulk_keyword_difficulty/live",
-    { keywords: keywords.slice(0, 100), location_code: LOCATION_CANADA, language_code: LANG }
+    { keywords: keywords.slice(0, 100), location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
   // Response shape: tasks[0].result[] where each item has keyword + keyword_difficulty
   const items = (
@@ -155,12 +175,13 @@ export async function keywordDifficulty(
 // NOTE: Documented in DataForSEO Labs but not yet confirmed against live account.
 // Returns null intent on failure. UI shows "–" when null.
 export async function classifySearchIntent(
-  keywords: string[]
+  keywords: string[],
+  geo: Geo = {}
 ): Promise<{ keyword: string; intent: string | null }[]> {
   if (!keywords.length) return [];
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/search_intent/live",
-    { keywords: keywords.slice(0, 100), location_code: LOCATION_CANADA, language_code: LANG }
+    { keywords: keywords.slice(0, 100), location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
   // Response shape: tasks[0].result[] where each item has keyword + search_intent_info.main_intent
   const items = (
@@ -198,11 +219,12 @@ export async function referringDomainsList(domain: string): Promise<string[]> {
 // [] on failure so competitor auto-discovery degrades to "nothing found"
 // rather than breaking the caller.
 export async function discoverCompetitors(
-  domain: string
+  domain: string,
+  geo: Geo = {}
 ): Promise<{ domain: string; keywordOverlap: number | null }[]> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/competitors_domain/live",
-    { target: domain, location_code: LOCATION_CANADA, language_code: LANG, limit: 15 }
+    { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 15 }
   );
   const items = (
     data?.tasks?.[0]?.result?.[0] as
@@ -221,7 +243,7 @@ export async function discoverCompetitors(
 // Reuses the confirmed /dataforseo_labs/google/domain_rank_overview/live endpoint
 // but extracts additional fields (rank score, organic_traffic_value).
 // Falls back gracefully if fields are absent.
-export async function domainRankDetail(domain: string): Promise<{
+export async function domainRankDetail(domain: string, geo: Geo = {}): Promise<{
   organic_keywords: number | null;
   organic_traffic: number | null;
   organic_traffic_value: number | null;
@@ -229,7 +251,7 @@ export async function domainRankDetail(domain: string): Promise<{
 } | null> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/domain_rank_overview/live",
-    { target: domain, location_code: LOCATION_CANADA, language_code: LANG }
+    { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
   const item = (
     data?.tasks?.[0]?.result?.[0] as

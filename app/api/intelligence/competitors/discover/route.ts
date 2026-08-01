@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
-import { discoverCompetitors } from "@/lib/dataforseo";
+import { discoverCompetitors, geoOf } from "@/lib/dataforseo";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const brand = await getBrandById(brand_id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
-  const found = await discoverCompetitors(domainOf(brand)).catch(() => []);
+  const found = await discoverCompetitors(domainOf(brand), geoOf(brand)).catch(() => []);
   if (!found.length) return NextResponse.json({ discovered: [] });
 
   const { data: existing } = await db
