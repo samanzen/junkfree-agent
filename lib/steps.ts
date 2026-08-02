@@ -421,15 +421,23 @@ export async function stepRankSync(brand: Brand) {
   }
 
   // --- Fetch keyword IDs for the position insert ---
-  const { data: kwIds, error: kwIdsError } = await db
-    .from("tracked_keywords")
-    .select("id, keyword")
-    .eq("brand_id", brand.id)
-    .in("keyword", keywords);
-  if (kwIdsError) {
-    throw new Error(`stepRankSync: tracked_keywords id lookup failed: ${kwIdsError.message}`);
+  // Batched (≤200 per request) like the upsert loop above -- unlike the
+  // upsert (a POST with a JSON body), .in() on a .select() is a GET with
+  // the value list embedded in the URL, which hits PostgREST's gateway URL
+  // length limit well before 516+ keywords fit in one request.
+  const kwIds: { id: string; keyword: string }[] = [];
+  for (let i = 0; i < keywords.length; i += 200) {
+    const { data: kwIdsBatch, error: kwIdsError } = await db
+      .from("tracked_keywords")
+      .select("id, keyword")
+      .eq("brand_id", brand.id)
+      .in("keyword", keywords.slice(i, i + 200));
+    if (kwIdsError) {
+      throw new Error(`stepRankSync: tracked_keywords id lookup failed at offset ${i}: ${kwIdsError.message}`);
+    }
+    kwIds.push(...(kwIdsBatch || []));
   }
-  const kwIdMap = new Map((kwIds || []).map((k) => [k.keyword, k.id]));
+  const kwIdMap = new Map(kwIds.map((k) => [k.keyword, k.id]));
 
   // --- Upsert keyword_positions ---
   const positionRows = rows
@@ -449,7 +457,7 @@ export async function stepRankSync(brand: Brand) {
   // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
   console.log("[rank_sync timing] before keyword_positions upsert", {
     brand_id: brand.id, elapsed_ms: Date.now() - t0,
-    kwIds_error: kwIdsError, kwIds_returned: (kwIds || []).length, keywords_requested: keywords.length,
+    kwIds_returned: kwIds.length, keywords_requested: keywords.length,
     position_rows_to_write: positionRows.length,
   });
 
