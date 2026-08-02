@@ -370,8 +370,10 @@ export async function stepRankSync(brand: Brand) {
     (existing || []).map((e) => [e.keyword, e])
   );
 
-  // Upsert each keyword
-  for (const kw of keywords) {
+  // Upsert each keyword, batched (≤200 rows per request) instead of one
+  // request per keyword -- avoids up to 516 sequential unprotected round
+  // trips within a single job execution.
+  const trackedKeywordRows = keywords.map((kw) => {
     const row = byKeyword.get(kw)!;
     const prev = existingMap.get(kw);
     const pos = row.position;
@@ -380,7 +382,7 @@ export async function stepRankSync(brand: Brand) {
     const newBest = prev?.best_position == null || pos < prev.best_position ? pos : prev.best_position;
     const newWorst = prev?.worst_position == null || pos > prev.worst_position ? pos : prev.worst_position;
 
-    await db.from("tracked_keywords").upsert({
+    return {
       brand_id: brand.id,
       keyword: kw,
       best_position: newBest,
@@ -389,7 +391,17 @@ export async function stepRankSync(brand: Brand) {
       first_seen_date: prev ? undefined : today,
       last_seen_date: null, // currently ranking
       status: prev ? computeStatus(prev.best_position, pos) : "new",
-    }, { onConflict: "brand_id,keyword", ignoreDuplicates: false });
+    };
+  });
+
+  for (let i = 0; i < trackedKeywordRows.length; i += 200) {
+    const { error: tkError } = await db.from("tracked_keywords").upsert(
+      trackedKeywordRows.slice(i, i + 200),
+      { onConflict: "brand_id,keyword", ignoreDuplicates: false }
+    );
+    if (tkError) {
+      throw new Error(`stepRankSync: tracked_keywords batch upsert failed at offset ${i}: ${tkError.message}`);
+    }
   }
 
   // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
@@ -414,6 +426,9 @@ export async function stepRankSync(brand: Brand) {
     .select("id, keyword")
     .eq("brand_id", brand.id)
     .in("keyword", keywords);
+  if (kwIdsError) {
+    throw new Error(`stepRankSync: tracked_keywords id lookup failed: ${kwIdsError.message}`);
+  }
   const kwIdMap = new Map((kwIds || []).map((k) => [k.keyword, k.id]));
 
   // --- Upsert keyword_positions ---
@@ -439,19 +454,20 @@ export async function stepRankSync(brand: Brand) {
   });
 
   // Insert in batches of 200 to stay under payload limits
-  const keywordPositionErrors: unknown[] = [];
   for (let i = 0; i < positionRows.length; i += 200) {
     const { error: kpError } = await db.from("keyword_positions").upsert(
       positionRows.slice(i, i + 200),
       { onConflict: "brand_id,keyword,captured_date", ignoreDuplicates: false }
     );
-    if (kpError) keywordPositionErrors.push(kpError);
+    if (kpError) {
+      throw new Error(`stepRankSync: keyword_positions batch upsert failed at offset ${i}: ${kpError.message}`);
+    }
   }
 
   // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
   console.log("[rank_sync timing] after keyword_positions upsert", {
     brand_id: brand.id, elapsed_ms: Date.now() - t0,
-    batches_written: Math.ceil(positionRows.length / 200), errors: keywordPositionErrors,
+    batches_written: Math.ceil(positionRows.length / 200),
   });
 
   // --- Compute position distribution snapshot ---
@@ -487,6 +503,9 @@ export async function stepRankSync(brand: Brand) {
   const { error: distError } = await db.from("position_distribution_snapshots").upsert(dist, {
     onConflict: "brand_id,captured_date",
   });
+  if (distError) {
+    throw new Error(`stepRankSync: position_distribution_snapshots upsert failed: ${distError.message}`);
+  }
 
   // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
   console.log("[rank_sync timing] after position_distribution_snapshots upsert", {
