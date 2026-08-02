@@ -338,7 +338,16 @@ export async function stepRankSync(brand: Brand) {
   if (!brand.gsc_property) return { skipped: "no gsc_property" };
 
   const today = new Date().toISOString().slice(0, 10);
-  const rows = await fullKeywordSync(brand.gsc_property).catch(() => []);
+  const rows = await fullKeywordSync(brand.gsc_property).catch((e) => {
+    // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+    console.error("[rank_sync diagnostic] fullKeywordSync threw", {
+      gsc_client_email_set: !!process.env.GSC_CLIENT_EMAIL,
+      gsc_private_key_set: !!process.env.GSC_PRIVATE_KEY,
+      gsc_property: brand.gsc_property,
+      error_stack: e instanceof Error ? e.stack : String(e),
+    });
+    return [];
+  });
   if (!rows.length) return { skipped: "no GSC data" };
 
   // --- Upsert tracked_keywords ---
