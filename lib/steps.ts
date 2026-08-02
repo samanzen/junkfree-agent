@@ -350,6 +350,12 @@ export async function stepRankSync(brand: Brand) {
   });
   if (!rows.length) return { skipped: "no GSC data" };
 
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  const t0 = Date.now();
+  console.log("[rank_sync timing] before tracked_keywords upsert loop", {
+    brand_id: brand.id, elapsed_ms: 0, keyword_count: rows.length,
+  });
+
   // --- Upsert tracked_keywords ---
   // Build a map of keyword → row for fast lookup
   const byKeyword = new Map(rows.map((r) => [r.keyword, r]));
@@ -386,6 +392,11 @@ export async function stepRankSync(brand: Brand) {
     }, { onConflict: "brand_id,keyword", ignoreDuplicates: false });
   }
 
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  console.log("[rank_sync timing] after tracked_keywords upsert loop", {
+    brand_id: brand.id, elapsed_ms: Date.now() - t0, keywords_upserted: keywords.length,
+  });
+
   // Mark keywords that were tracked but not in today's GSC as "lost"
   const lostKeywords = (existing || []).filter(
     (e) => !byKeyword.has(e.keyword) && e.status !== "lost"
@@ -398,7 +409,7 @@ export async function stepRankSync(brand: Brand) {
   }
 
   // --- Fetch keyword IDs for the position insert ---
-  const { data: kwIds } = await db
+  const { data: kwIds, error: kwIdsError } = await db
     .from("tracked_keywords")
     .select("id, keyword")
     .eq("brand_id", brand.id)
@@ -420,13 +431,28 @@ export async function stepRankSync(brand: Brand) {
       captured_date: today,
     }));
 
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  console.log("[rank_sync timing] before keyword_positions upsert", {
+    brand_id: brand.id, elapsed_ms: Date.now() - t0,
+    kwIds_error: kwIdsError, kwIds_returned: (kwIds || []).length, keywords_requested: keywords.length,
+    position_rows_to_write: positionRows.length,
+  });
+
   // Insert in batches of 200 to stay under payload limits
+  const keywordPositionErrors: unknown[] = [];
   for (let i = 0; i < positionRows.length; i += 200) {
-    await db.from("keyword_positions").upsert(
+    const { error: kpError } = await db.from("keyword_positions").upsert(
       positionRows.slice(i, i + 200),
       { onConflict: "brand_id,keyword,captured_date", ignoreDuplicates: false }
     );
+    if (kpError) keywordPositionErrors.push(kpError);
   }
+
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  console.log("[rank_sync timing] after keyword_positions upsert", {
+    brand_id: brand.id, elapsed_ms: Date.now() - t0,
+    batches_written: Math.ceil(positionRows.length / 200), errors: keywordPositionErrors,
+  });
 
   // --- Compute position distribution snapshot ---
   const dist = {
@@ -453,8 +479,18 @@ export async function stepRankSync(brand: Brand) {
   dist.lost_this_week = lostKeywords.length;
   dist.avg_ctr = rows.length ? ctrSum / rows.length : 0;
 
-  await db.from("position_distribution_snapshots").upsert(dist, {
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  console.log("[rank_sync timing] before position_distribution_snapshots upsert", {
+    brand_id: brand.id, elapsed_ms: Date.now() - t0, captured_date: today,
+  });
+
+  const { error: distError } = await db.from("position_distribution_snapshots").upsert(dist, {
     onConflict: "brand_id,captured_date",
+  });
+
+  // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
+  console.log("[rank_sync timing] after position_distribution_snapshots upsert", {
+    brand_id: brand.id, elapsed_ms: Date.now() - t0, error: distError,
   });
 
   return {
