@@ -127,11 +127,13 @@ export default function Dashboard() {
   }
 
   async function load() {
-    const d = await (await authedFetch("/api/platform")).json();
-    let bs = d.brands as Brand[];
+    const res = await authedFetch("/api/platform");
+    if (!res.ok) { router.push("/login"); return; }
+    const d = await res.json();
+    let bs = (d.brands || []) as Brand[];
     // Customers only see their own brand; admins see all.
     if (role === "customer" && myBrand) bs = bs.filter((b) => b.id === myBrand);
-    setBrands(bs); setDrafts(d.drafts); setGbp(d.gbp); setCitations(d.citations);
+    setBrands(bs); setDrafts(d.drafts || []); setGbp(d.gbp || []); setCitations(d.citations || []);
     if (!brandId && bs[0]) setBrandId(bs[0].id);
     setLoading(false);
   }
@@ -141,7 +143,9 @@ export default function Dashboard() {
       const token = data.session?.access_token;
       if (!token) { router.push("/login"); return; }
       setToken(token);
-      const me = await (await authedFetch("/api/me")).json();
+      const res = await authedFetch("/api/me");
+      if (!res.ok) { router.push("/login"); return; }
+      const me = await res.json();
       setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
     })();
     /* eslint-disable-next-line */
