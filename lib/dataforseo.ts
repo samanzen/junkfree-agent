@@ -158,12 +158,14 @@ export async function keywordDifficulty(
     "/dataforseo_labs/google/bulk_keyword_difficulty/live",
     { keywords: keywords.slice(0, 100), location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
-  // Response shape: tasks[0].result[] where each item has keyword + keyword_difficulty
+  // Response shape: tasks[0].result[0].items[] where each item has keyword + keyword_difficulty
+  // (confirmed against live account response 2026-08-03 -- result[0] is a
+  // wrapper object, not itself the array of per-keyword items)
   const items = (
-    data?.tasks?.[0]?.result as
-      | { keyword?: string; keyword_difficulty?: number }[]
+    data?.tasks?.[0]?.result?.[0] as
+      | { items?: { keyword?: string; keyword_difficulty?: number }[] }
       | undefined
-  ) || [];
+  )?.items || [];
   return items.map((item) => ({
     keyword: item.keyword || "",
     difficulty: typeof item.keyword_difficulty === "number" ? item.keyword_difficulty : null,
@@ -183,15 +185,18 @@ export async function classifySearchIntent(
     "/dataforseo_labs/google/search_intent/live",
     { keywords: keywords.slice(0, 100), location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG }
   );
-  // Response shape: tasks[0].result[] where each item has keyword + search_intent_info.main_intent
+  // Response shape: tasks[0].result[0].items[] where each item has keyword + keyword_intent.label
+  // (confirmed against live account response 2026-08-03 -- result[0] is a
+  // wrapper object, not itself the array of per-keyword items, and the intent
+  // field is keyword_intent.label, not search_intent_info.main_intent)
   const items = (
-    data?.tasks?.[0]?.result as
-      | { keyword?: string; search_intent_info?: { main_intent?: string } }[]
+    data?.tasks?.[0]?.result?.[0] as
+      | { items?: { keyword?: string; keyword_intent?: { label?: string } }[] }
       | undefined
-  ) || [];
+  )?.items || [];
   return items.map((item) => ({
     keyword: item.keyword || "",
-    intent: item.search_intent_info?.main_intent || null,
+    intent: item.keyword_intent?.label || null,
   })).filter((x) => x.keyword);
 }
 
