@@ -30,6 +30,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
   const [data, setData] = useState<{
     current: Snap | null; previous: Snap | null;
     series: Snap[]; keywords: Kw[]; lowCtrPages: LowCtr[]; agent: Agent;
+    gscConnected: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeChart, setActiveChart] = useState<"traffic" | "keywords" | "position">("traffic");
@@ -65,7 +66,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
     </div>
   );
 
-  const { current: c, previous: p, series, keywords, lowCtrPages, agent } = data;
+  const { current: c, previous: p, series, keywords, lowCtrPages, agent, gscConnected } = data;
 
   const delta = (k: keyof Snap): number | null => {
     if (!p || c[k] == null || p[k] == null) return null;
@@ -215,7 +216,11 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
               </tbody>
             </table>
           ) : (
-            <p className="ov-empty-msg">Connect Search Console to see keyword data.</p>
+            <p className="ov-empty-msg">
+              {gscConnected
+                ? "Search Console is connected, but no keywords are currently in positions 5–20 with enough impressions to qualify."
+                : "Connect Search Console to see keyword data."}
+            </p>
           )}
         </div>
 

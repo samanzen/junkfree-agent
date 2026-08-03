@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
     })),
     keywords: (keywords || []).slice(0, 15),
     lowCtrPages: (lowCtr || []).slice(0, 10),
+    gscConnected: !!brand?.gsc_property,
     agent: {
       total_published: draftList.filter((d) => d.status === "published").length,
       pending_review: draftList.filter((d) => d.status === "pending_review").length,
