@@ -3,6 +3,24 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+// Where to send someone straight after they sign in. Role comes from the
+// existing /api/me endpoint (lib/auth.ts) -- this adds no new auth logic and
+// changes no permissions; it only picks the landing route.
+//
+// Falls back to /portal if the role lookup fails: that's the least-privileged
+// surface, and an admin who lands there still gets an explicit "back to admin"
+// link, whereas a customer sent to /dashboard would face admin tooling.
+async function destinationForSession(token?: string): Promise<string> {
+  try {
+    const res = await fetch("/api/me", token ? { headers: { authorization: `Bearer ${token}` } } : {});
+    if (!res.ok) return "/portal";
+    const me = await res.json();
+    return me.role === "admin" ? "/dashboard" : "/portal";
+  } catch {
+    return "/portal";
+  }
+}
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -14,14 +32,14 @@ export default function Login() {
     if (!email || !pw) { setErr("Please enter your email and password."); return; }
     setBusy(true); setErr("");
     try {
-      const { error } = await supabaseBrowser().auth.signInWithPassword({ email, password: pw });
+      const { data, error } = await supabaseBrowser().auth.signInWithPassword({ email, password: pw });
       if (error) {
         // Show the actual error message so we can debug
         setErr(error.message);
         setBusy(false);
         return;
       }
-      router.push("/dashboard");
+      router.push(await destinationForSession(data.session?.access_token));
     } catch (e) {
       setErr("Connection error: " + String(e));
       setBusy(false);
