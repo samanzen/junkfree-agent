@@ -270,6 +270,79 @@ export const PORTAL_CSS = `
 .p-move-delta.down { color:var(--red); background:var(--red-soft); }
 .p-move-delta.flat { color:var(--muted); background:var(--surface3); }
 
+/* ── Settings: definition list + connections ───────────────────────── */
+.p-deflist { margin:0; display:flex; flex-direction:column; gap:0; }
+.p-def { display:flex; gap:16px; padding:13px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.p-def:last-child { border-bottom:0; }
+.p-def dt { font-size:12.5px; color:var(--muted); font-weight:600; min-width:150px; }
+.p-def dd { margin:0; font-size:13.5px; flex:1; min-width:200px; word-break:break-word; }
+.p-conn-list { display:flex; flex-direction:column; gap:0; }
+.p-conn { display:flex; align-items:flex-start; gap:13px; padding:16px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.p-conn:last-child { border-bottom:0; }
+.p-conn-dot { width:28px; height:28px; border-radius:9px; display:flex; align-items:center; justify-content:center; background:var(--surface3); color:var(--muted2); flex-shrink:0; }
+.p-conn-dot.on { background:var(--green-soft); color:var(--green); }
+.p-conn-name { font-size:13.5px; font-weight:700; }
+.p-conn-desc { font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.55; }
+.p-conn-detail { display:inline-block; margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--surface2); border:1px solid var(--line); padding:2px 8px; border-radius:6px; color:var(--muted); }
+
+/* ── AI Assistant chat ─────────────────────────────────────────────── */
+.p-assistant-page { height:calc(100vh - 190px); min-height:520px; }
+.p-chat { flex:1; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; min-height:0; }
+.p-chat-scroll { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:16px; }
+.p-chat-welcome { margin:auto; text-align:center; max-width:520px; padding:20px 0; }
+.p-chat-welcome .p-exec-icon { margin:0 auto 14px; }
+.p-chat-welcome-title { font-size:20px; font-weight:700; margin:0 0 8px; }
+.p-chat-welcome-sub { font-size:13.5px; color:var(--muted); line-height:1.6; margin:0 0 20px; }
+.p-chat-suggestions { display:flex; flex-wrap:wrap; gap:9px; justify-content:center; }
+.p-chat-suggestion { background:var(--surface2); border:1px solid var(--line); color:var(--text); padding:9px 14px; border-radius:20px; font-family:inherit; font-size:12.5px; cursor:pointer; transition:.15s; text-align:left; }
+.p-chat-suggestion:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+.p-msg { display:flex; gap:10px; align-items:flex-start; animation:pRise .3s ease both; }
+.p-msg.user { justify-content:flex-end; }
+.p-msg-avatar { width:28px; height:28px; border-radius:9px; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; }
+.p-msg-bubble { max-width:min(680px,80%); padding:13px 16px; border-radius:14px; font-size:13.5px; line-height:1.68; white-space:pre-wrap; word-break:break-word; }
+.p-msg.assistant .p-msg-bubble { background:var(--surface2); border:1px solid var(--line); border-top-left-radius:5px; }
+.p-msg.user .p-msg-bubble { background:var(--accent); color:#fff; border-top-right-radius:5px; }
+.p-msg-typing { display:flex; gap:5px; align-items:center; }
+.p-msg-typing span { width:7px; height:7px; border-radius:50%; background:var(--muted2); animation:pPulse 1.1s infinite; }
+.p-msg-typing span:nth-child(2) { animation-delay:.18s; }
+.p-msg-typing span:nth-child(3) { animation-delay:.36s; }
+.p-chat-error { font-size:12.5px; color:var(--red); background:var(--red-soft); padding:11px 14px; border-radius:10px; }
+.p-chat-input-row { display:flex; gap:10px; padding:16px; border-top:1px solid var(--line); background:var(--surface); }
+@media (max-width:920px) { .p-assistant-page { height:calc(100vh - 150px); } .p-msg-bubble { max-width:88%; } }
+
+/* ── Report (print) ────────────────────────────────────────────────── */
+.p-report { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:34px; box-shadow:var(--shadow); }
+.p-report-head { display:flex; justify-content:space-between; align-items:flex-start; gap:20px; border-bottom:2px solid var(--line); padding-bottom:20px; margin-bottom:24px; flex-wrap:wrap; }
+.p-report-title { font-size:22px; font-weight:700; margin:0 0 4px; }
+.p-report-period { font-size:13px; color:var(--muted); }
+.p-report-section { margin-bottom:26px; }
+.p-report-section h3 { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin:0 0 12px; }
+@media print {
+  .p-side, .p-topbar, .p-scrim, .p-pagehead, .p-subnav, .p-no-print { display:none !important; }
+  .p-main { padding:0 !important; max-width:none !important; }
+  .portal { background:#fff !important; }
+  .p-report { border:0; box-shadow:none; padding:0; }
+  .p-report-section { break-inside:avoid; }
+}
+
+/* ── Approval cards (drafts / posts / review replies) ──────────────── */
+.p-approve { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); animation:pRise .4s ease both; }
+.p-approve-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.p-approve-title { font-size:15px; font-weight:700; margin:6px 0 0; line-height:1.4; }
+.p-approve-meta { font-size:12px; color:var(--muted); margin-top:5px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.p-approve-body { background:var(--surface2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:15px; font-size:13px; line-height:1.65; color:var(--text); white-space:pre-wrap; word-break:break-word; position:relative; }
+.p-approve-more { background:none; border:0; color:var(--accent); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:8px 0 0; }
+.p-approve-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; flex-wrap:wrap; }
+.p-approve-actions { display:flex; gap:9px; margin-left:auto; }
+.p-approve-done { display:flex; align-items:center; gap:10px; padding:14px 20px; }
+.p-approve-donetitle { font-size:13.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.p-cardlist { display:flex; flex-direction:column; gap:14px; }
+
+/* ── Review cards ──────────────────────────────────────────────────── */
+.p-stars { color:var(--amber); font-size:13px; letter-spacing:1px; }
+.p-review-quote { background:var(--surface2); border-left:3px solid var(--line); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:12px 15px; font-size:13px; line-height:1.6; color:var(--muted); font-style:italic; margin-bottom:12px; }
+.p-reply-label { font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--accent); margin-bottom:6px; }
+
 /* ── Recommendation cards ──────────────────────────────────────────── */
 .p-rec-list { display:flex; flex-direction:column; gap:12px; }
 .p-rec { background:var(--surface2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; }

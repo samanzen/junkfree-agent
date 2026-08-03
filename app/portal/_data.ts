@@ -98,6 +98,32 @@ export function usePortalSummary(brandId: string | undefined) {
   return { summary, loading };
 }
 
+// ── Mutations ───────────────────────────────────────────────────────────────
+// Thin wrappers over the EXISTING brand-scoped endpoints the admin dashboard
+// already uses. Every one of these enforces requireBrandAccess server-side,
+// so a customer can only ever act on their own brand's rows.
+
+export async function approveDraft(id: string): Promise<boolean> {
+  const res = await authedFetch(`/api/drafts/${id}/approve`, { method: "POST" });
+  return res.ok;
+}
+
+export async function dismissDraft(id: string): Promise<boolean> {
+  const res = await authedFetch(`/api/drafts/${id}/approve?action=dismiss`, { method: "POST" });
+  return res.ok;
+}
+
+export type PlatformTable = "gbp_posts" | "review_responses" | "citations";
+
+export async function setRowStatus(table: PlatformTable, id: string, status: string): Promise<boolean> {
+  const res = await authedFetch(`/api/platform/${table}/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  return res.ok;
+}
+
 // ── Derived scores ──────────────────────────────────────────────────────────
 // All composites below are computed from data we actually hold. Anything with
 // no real signal returns null so the UI can show "Connect to unlock" rather
