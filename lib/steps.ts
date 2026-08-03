@@ -440,19 +440,30 @@ export async function stepRankSync(brand: Brand) {
   const kwIdMap = new Map(kwIds.map((k) => [k.keyword, k.id]));
 
   // --- Upsert keyword_positions ---
-  const positionRows = rows
-    .filter((r) => kwIdMap.has(r.keyword))
-    .map((r) => ({
-      brand_id: brand.id,
-      keyword_id: kwIdMap.get(r.keyword)!,
-      keyword: r.keyword,
-      position: r.position,
-      clicks: r.clicks,
-      impressions: r.impressions,
-      ctr: r.ctr,
-      landing_page: r.page,
-      captured_date: today,
-    }));
+  // A keyword can rank on more than one landing page (GSC's ["query","page"]
+  // dimensions), but keyword_positions is unique on (brand_id, keyword,
+  // captured_date) -- landing_page isn't part of the key. Collapse to one
+  // row per keyword per day here, keeping the row with the best (lowest)
+  // position and its own landing_page/clicks/impressions/ctr together.
+  const bestByKeyword = new Map<string, (typeof rows)[number]>();
+  for (const r of rows) {
+    if (!kwIdMap.has(r.keyword)) continue;
+    const best = bestByKeyword.get(r.keyword);
+    if (!best || r.position < best.position) {
+      bestByKeyword.set(r.keyword, r);
+    }
+  }
+  const positionRows = [...bestByKeyword.values()].map((r) => ({
+    brand_id: brand.id,
+    keyword_id: kwIdMap.get(r.keyword)!,
+    keyword: r.keyword,
+    position: r.position,
+    clicks: r.clicks,
+    impressions: r.impressions,
+    ctr: r.ctr,
+    landing_page: r.page,
+    captured_date: today,
+  }));
 
   // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
   console.log("[rank_sync timing] before keyword_positions upsert", {
