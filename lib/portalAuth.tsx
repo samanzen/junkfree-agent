@@ -10,8 +10,12 @@ export type PortalBrand = {
   slug: string;
   site_url: string;
   service_area?: string;
+  services?: string;
   business_model?: string;
   gsc_property?: string | null;
+  gbp_location_id?: string | null;
+  owner_email?: string | null;
+  auto_publish_meta?: boolean;
 };
 
 type PortalAuthState = {
