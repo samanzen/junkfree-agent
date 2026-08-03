@@ -223,6 +223,63 @@ export const PORTAL_CSS = `
 @media (max-width:900px) { .p-2col { grid-template-columns:1fr; } }
 .p-stack { display:flex; flex-direction:column; gap:20px; min-width:0; }
 
+/* ── Sub navigation (pills) ────────────────────────────────────────── */
+.p-subnav { display:flex; gap:6px; overflow-x:auto; padding:4px; background:var(--surface2); border:1px solid var(--line); border-radius:14px; margin-bottom:20px; }
+.p-subnav::-webkit-scrollbar { height:0; }
+.p-subnav-btn { display:inline-flex; align-items:center; gap:7px; background:transparent; border:0; color:var(--muted); padding:9px 15px; border-radius:10px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:.15s; }
+.p-subnav-btn:hover { color:var(--text); }
+.p-subnav-btn.on { background:var(--surface); color:var(--text); box-shadow:var(--shadow); }
+.p-subnav-count { font-size:10.5px; font-weight:700; background:var(--surface3); color:var(--muted); padding:1px 7px; border-radius:20px; }
+.p-subnav-btn.on .p-subnav-count { background:var(--accent-soft); color:var(--accent); }
+
+/* ── Stat tiles ────────────────────────────────────────────────────── */
+.p-stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; }
+.p-stattile { background:var(--surface2); border-radius:var(--radius-sm); padding:15px 14px; }
+.p-stattile-val { font-size:23px; font-weight:700; letter-spacing:-.02em; line-height:1.15; }
+.p-stattile-label { font-size:11.5px; color:var(--muted); margin-top:4px; font-weight:500; }
+.p-stattile-sub { font-size:10.5px; color:var(--muted2); margin-top:2px; }
+
+/* ── Table helpers ─────────────────────────────────────────────────── */
+.p-table-wrap { overflow-x:auto; margin:0 -22px; padding:0 22px; }
+.p-table-sort { background:none; border:0; font:inherit; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); cursor:pointer; padding:0; display:inline-flex; align-items:center; gap:4px; }
+.p-table-sort:hover { color:var(--text); }
+.p-table-sort.on { color:var(--accent); }
+.p-kwcell { font-weight:600; color:var(--text); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.p-pos { display:inline-flex; min-width:30px; justify-content:center; font-size:12px; font-weight:700; padding:3px 9px; border-radius:20px; background:var(--surface3); color:var(--muted); }
+.p-pos.top3 { background:var(--green-soft); color:var(--green); }
+.p-pos.top10 { background:var(--accent-soft); color:var(--accent); }
+.p-pos.top20 { background:var(--amber-soft); color:var(--amber); }
+.p-chip { font-size:11px; font-weight:600; padding:2px 9px; border-radius:20px; background:var(--surface3); color:var(--muted); text-transform:capitalize; }
+.p-na { color:var(--muted2); }
+.p-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.p-input { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 13px; border-radius:10px; font-family:inherit; font-size:13px; min-width:200px; flex:1; }
+.p-input:focus { outline:none; border-color:var(--accent); }
+.p-select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 11px; border-radius:10px; font-family:inherit; font-size:13px; cursor:pointer; }
+.p-pager { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; font-size:12.5px; color:var(--muted); flex-wrap:wrap; }
+.p-pager-btns { display:flex; gap:8px; }
+.p-pager-btn { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:7px 14px; border-radius:9px; font-family:inherit; font-size:12.5px; cursor:pointer; }
+.p-pager-btn:disabled { opacity:.4; cursor:not-allowed; }
+.p-pager-btn:not(:disabled):hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── Movement lists (winners / losers) ─────────────────────────────── */
+.p-move-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); }
+.p-move-row:last-child { border-bottom:0; }
+.p-move-kw { font-size:13px; font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.p-move-delta { font-size:12px; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:20px; flex-shrink:0; }
+.p-move-delta.up { color:var(--green); background:var(--green-soft); }
+.p-move-delta.down { color:var(--red); background:var(--red-soft); }
+.p-move-delta.flat { color:var(--muted); background:var(--surface3); }
+
+/* ── Recommendation cards ──────────────────────────────────────────── */
+.p-rec-list { display:flex; flex-direction:column; gap:12px; }
+.p-rec { background:var(--surface2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; }
+.p-rec-top { display:flex; align-items:flex-start; gap:11px; margin-bottom:8px; }
+.p-rec-icon { width:30px; height:30px; border-radius:9px; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.p-rec-title { font-size:14px; font-weight:700; line-height:1.35; }
+.p-rec-text { font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 12px; }
+.p-rec-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.p-rec-impact { font-size:12px; font-weight:600; color:var(--green); }
+
 /* ── Home dashboard ────────────────────────────────────────────────── */
 .p-home { display:flex; flex-direction:column; gap:20px; }
 .p-hero-card {
