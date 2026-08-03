@@ -9,7 +9,7 @@ import { writeContent, rewriteMeta, auditPage } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
 import { keywordStrategy, competitorGaps } from "./intelligence";
-import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf } from "./dataforseo";
+import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
 import { auditSite } from "./auditor";
@@ -550,6 +550,16 @@ function computeStatus(bestPosition: number | null, currentPosition: number): st
 // Processes up to 50 keywords per run (batched to control cost).
 // Only processes keywords where enriched_at is null or > 7 days old.
 export async function stepRankEnrich(brand: Brand) {
+  // Without this, a missing DATAFORSEO_LOGIN/PASSWORD makes every DataForSEO
+  // call below silently return null/[] (lib/dataforseo.ts's post()), and the
+  // upsert loop still stamps enriched_at on every keyword regardless -- the
+  // job "succeeds" while writing nothing but the timestamp, which then hides
+  // those keywords from re-enrichment for another 7 days. Fail loudly instead
+  // so this surfaces as a real job error.
+  if (!isConfigured()) {
+    throw new Error("stepRankEnrich: DataForSEO is not configured (DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD missing)");
+  }
+
   const sevenDaysAgo = new Date(Date.now() - 7 * 864e5).toISOString();
 
   const { data: toEnrich } = await db
