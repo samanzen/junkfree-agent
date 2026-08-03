@@ -1,11 +1,24 @@
 "use client";
+import { m } from "framer-motion";
 import type { ReactNode } from "react";
+import { fadeUp } from "./motion";
 
-// Standard content panel used across every portal page.
+// Standard content panel used across every portal page. Reveals with a
+// fade-up; when rendered inside <Stagger> it inherits the parent's timing.
 export function Panel({ children, className = "", style }: {
   children: ReactNode; className?: string; style?: React.CSSProperties;
 }) {
-  return <section className={`p-panel ${className}`} style={style}>{children}</section>;
+  return (
+    <m.section
+      className={`p-panel ${className}`}
+      style={style}
+      variants={fadeUp}
+      initial="hidden"
+      animate="show"
+    >
+      {children}
+    </m.section>
+  );
 }
 
 export function PanelHead({ title, badge, badgeTone = "accent", action, sub }: {

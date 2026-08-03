@@ -5,6 +5,7 @@ import { Panel, PanelHead } from "../../_components/Panel";
 import StatTile from "../../_components/StatTile";
 import EmptyState from "../../_components/EmptyState";
 import MultiLineChart from "../../_components/MultiLineChart";
+import { Stagger } from "../../_components/motion";
 
 type Overview = {
   top_3: number | null; top_10: number | null; top_20: number | null;
@@ -82,14 +83,14 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
     <div className="p-stack">
       <Panel>
         <PanelHead title="Where you rank" sub="How many of your keywords sit in each position band today." />
-        <div className="p-stat-grid">
+        <Stagger className="p-stat-grid">
           <StatTile label="Top 3" value={fmt(ov.top_3)} tone="green" sub={deltaText(ov.deltas?.top_3)} />
           <StatTile label="Top 10" value={fmt(ov.top_10)} tone="accent" sub={deltaText(ov.deltas?.top_10)} />
           <StatTile label="Top 20" value={fmt(ov.top_20)} tone="amber" sub={deltaText(ov.deltas?.top_20)} />
           <StatTile label="Top 50" value={fmt(ov.top_50)} tone="blue" />
           <StatTile label="Total keywords" value={fmt(ov.total_keywords)} tone="muted" />
           <StatTile label="Avg. position" value={ov.avg_position != null ? ov.avg_position.toFixed(1) : "—"} tone="pink" />
-        </div>
+        </Stagger>
       </Panel>
 
       <div className="p-2col">
@@ -113,21 +114,21 @@ export default function OverviewTab({ brandId }: { brandId: string }) {
         <div className="p-stack">
           <Panel>
             <PanelHead title="Search performance" sub="From Google Search Console." />
-            <div className="p-stat-grid">
+            <Stagger className="p-stat-grid">
               <StatTile label="Clicks" value={fmt(ov.total_clicks)} tone="green" sub={deltaText(ov.deltas?.total_clicks)} />
               <StatTile label="Impressions" value={fmt(ov.total_impressions)} tone="accent" sub={deltaText(ov.deltas?.total_impressions)} />
               <StatTile label="Avg. CTR" value={ov.avg_ctr != null ? `${(ov.avg_ctr * 100).toFixed(1)}%` : "—"} tone="blue" />
-            </div>
+            </Stagger>
           </Panel>
 
           <Panel>
             <PanelHead title="This week" />
-            <div className="p-stat-grid">
+            <Stagger className="p-stat-grid">
               <StatTile label="New" value={fmt(ov.deltas?.new_this_week)} tone="green" />
               <StatTile label="Improved" value={fmt(ov.deltas?.improved_this_week)} tone="accent" />
               <StatTile label="Declined" value={fmt(ov.deltas?.declined_this_week)} tone="amber" />
               <StatTile label="Lost" value={fmt(ov.deltas?.lost_this_week)} tone="red" />
-            </div>
+            </Stagger>
           </Panel>
         </div>
       </div>

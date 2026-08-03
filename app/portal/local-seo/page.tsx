@@ -10,6 +10,7 @@ import StatTile from "../_components/StatTile";
 import EmptyState from "../_components/EmptyState";
 import ConnectCard from "../_components/ConnectCard";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger, StaggerItem } from "../_components/motion";
 import { IconLocalSeo, IconReviews, IconExternal } from "../icons";
 
 type Tab = "overview" | "gbp" | "citations" | "rankings" | "mappack";
@@ -59,30 +60,30 @@ export default function LocalSeoPage() {
         </div>
       ) : tab === "overview" ? (
         <div className="p-stack">
-          <div className="p-score-grid">
-            <div className="p-score-card">
-              <ScoreRing value={citationScore} size={64} strokeWidth={7} />
+          <Stagger className="p-score-grid">
+            <StaggerItem className="p-score-card">
+              <ScoreRing value={citationScore} size={68} strokeWidth={7} />
               <div className="p-score-label">Citation Score</div>
               {citationScore == null && <div className="p-score-locked">No listings tracked yet</div>}
-            </div>
-            <div className="p-score-card">
-              <ScoreRing value={null} size={64} strokeWidth={7} />
+            </StaggerItem>
+            <StaggerItem className="p-score-card">
+              <ScoreRing value={null} size={68} strokeWidth={7} />
               <div className="p-score-label">Google Business Profile</div>
               <div className="p-score-locked">{gbpConnected ? "Awaiting first sync" : "Not connected"}</div>
-            </div>
-            <div className="p-score-card">
-              <ScoreRing value={null} size={64} strokeWidth={7} />
+            </StaggerItem>
+            <StaggerItem className="p-score-card">
+              <ScoreRing value={null} size={68} strokeWidth={7} />
               <div className="p-score-label">NAP Consistency</div>
               <div className="p-score-locked">Not connected</div>
-            </div>
-            <div className="p-score-card">
-              <div style={{ fontSize: 26, fontWeight: 700, marginBottom: 8, marginTop: 14 }}>
+            </StaggerItem>
+            <StaggerItem className="p-score-card">
+              <div style={{ fontSize: 25, fontWeight: 640, letterSpacing: "-.03em", marginBottom: 10, marginTop: 12 }}>
                 {avgRating != null ? avgRating.toFixed(1) : <span style={{ color: "var(--muted2)" }}>—</span>}
               </div>
               <div className="p-score-label">Average Rating</div>
               {avgRating == null && <div className="p-score-locked">No reviews yet</div>}
-            </div>
-          </div>
+            </StaggerItem>
+          </Stagger>
 
           <div className="p-2col">
             <Panel>
@@ -97,11 +98,11 @@ export default function LocalSeoPage() {
 
             <Panel>
               <PanelHead title="Reviews at a glance" />
-              <div className="p-stat-grid">
+              <Stagger className="p-stat-grid">
                 <StatTile label="Total reviews" value={reviews.length || "—"} tone={reviews.length ? "pink" : "muted"} />
                 <StatTile label="Awaiting reply" value={reviews.filter((r) => r.status === "pending_review").length || "—"} tone="amber" />
                 <StatTile label="Avg. rating" value={avgRating != null ? avgRating.toFixed(1) : "—"} tone={avgRating != null ? "green" : "muted"} />
-              </div>
+              </Stagger>
               <Link href="/portal/reviews" className="p-btn ghost" style={{ marginTop: 14 }}>
                 Manage reviews <IconExternal size={13} />
               </Link>
@@ -120,7 +121,7 @@ export default function LocalSeoPage() {
               </p>
             </Panel>
           ) : (
-            <div className="p-subgrid">
+            <Stagger className="p-subgrid">
               <ConnectCard
                 icon={<IconLocalSeo size={17} />}
                 title="Connect your Google Business Profile"
@@ -135,7 +136,7 @@ export default function LocalSeoPage() {
                 title="Google Posts performance"
                 desc="See which of your published Google Posts drive the most views and clicks, and get new ones drafted automatically."
               />
-            </div>
+            </Stagger>
           )}
         </div>
       ) : tab === "citations" ? (
@@ -144,11 +145,11 @@ export default function LocalSeoPage() {
             <PanelHead title="Citation score" sub="The share of your tracked directory listings that are live." />
             <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
               <ScoreRing value={citationScore} size={96} strokeWidth={9} />
-              <div className="p-stat-grid" style={{ flex: 1, minWidth: 240 }}>
+              <Stagger className="p-stat-grid" style={{ flex: 1, minWidth: 240 }}>
                 <StatTile label="Live" value={live || "—"} tone="green" />
                 <StatTile label="Outstanding" value={actionable.length || "—"} tone="amber" />
                 <StatTile label="Total tracked" value={citations.length || "—"} tone="muted" />
-              </div>
+              </Stagger>
             </div>
           </Panel>
 
@@ -161,13 +162,13 @@ export default function LocalSeoPage() {
             )}
           </Panel>
 
-          <div className="p-subgrid">
+          <Stagger className="p-subgrid">
             <ConnectCard
               title="NAP consistency monitoring"
               desc="Automatically checks that your Name, Address and Phone number match exactly across every directory — mismatches are one of the most common reasons local rankings stall."
               note="Requires directory monitoring to be enabled."
             />
-          </div>
+          </Stagger>
         </div>
       ) : tab === "rankings" ? (
         <Panel>
@@ -180,7 +181,7 @@ export default function LocalSeoPage() {
           />
         </Panel>
       ) : (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconLocalSeo size={17} />}
             title="Map pack tracking"
@@ -196,7 +197,7 @@ export default function LocalSeoPage() {
             title="Competitor map comparison"
             desc="See which businesses outrank you in the map pack, along with their rating, review count and category setup."
           />
-        </div>
+        </Stagger>
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import StatTile from "../_components/StatTile";
 import EmptyState from "../_components/EmptyState";
 import ConnectCard from "../_components/ConnectCard";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger } from "../_components/motion";
 import { IconWebsite, IconArrowUp, IconArrowDown, IconExternal } from "../icons";
 
 type PageRow = {
@@ -72,13 +73,13 @@ export default function WebsitePage() {
         <div className="p-stack">
           <Panel>
             <PanelHead title="Page performance" sub="Every page of yours that Google sends traffic to, over the last 7 days." />
-            <div className="p-stat-grid">
+            <Stagger className="p-stat-grid">
               <StatTile label="Pages ranking" value={pages.length || "—"} tone={pages.length ? "accent" : "muted"} />
               <StatTile label="Total clicks" value={totalClicks ? totalClicks.toLocaleString() : "—"} tone="green" />
               <StatTile label="Total impressions" value={totalImpressions ? totalImpressions.toLocaleString() : "—"} tone="blue" />
               <StatTile label="Growing" value={growing || "—"} tone="green" />
               <StatTile label="Declining" value={declining || "—"} tone={declining ? "red" : "muted"} />
-            </div>
+            </Stagger>
           </Panel>
 
           <Panel>
@@ -146,7 +147,7 @@ export default function WebsitePage() {
             </div>
           </Panel>
 
-          <div className="p-subgrid">
+          <Stagger className="p-subgrid">
             <ConnectCard
               title="Issue breakdown"
               desc="A page-by-page list of every technical issue found — missing titles, thin content, duplicate meta descriptions, heading structure problems — each with a one-click fix."
@@ -160,12 +161,12 @@ export default function WebsitePage() {
               title="Indexing status"
               desc="Which of your pages Google has actually indexed, which are excluded, and why — pulled directly from Search Console's index coverage."
             />
-          </div>
+          </Stagger>
         </div>
       )}
 
       {tab === "vitals" && (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconWebsite size={17} />}
             title="Core Web Vitals"
@@ -180,11 +181,11 @@ export default function WebsitePage() {
             title="Mobile usability"
             desc="Flags tap targets that are too small, text that's too narrow to read, and content wider than the screen."
           />
-        </div>
+        </Stagger>
       )}
 
       {tab === "structure" && (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             title="Internal linking opportunities"
             desc="Finds pages that should link to each other based on topic overlap — one of the highest-leverage, lowest-effort SEO wins available."
@@ -198,7 +199,7 @@ export default function WebsitePage() {
             title="Sitemap & robots"
             desc="Validates that your sitemap is present, current, and not blocking anything you want indexed."
           />
-        </div>
+        </Stagger>
       )}
     </div>
   );

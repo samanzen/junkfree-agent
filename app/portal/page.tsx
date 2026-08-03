@@ -12,6 +12,7 @@ import TrendChart from "./_components/TrendChart";
 import AiSummary from "./_components/AiSummary";
 import EmptyState from "./_components/EmptyState";
 import { Panel, PanelHead } from "./_components/Panel";
+import { Stagger, StaggerItem, Reveal } from "./_components/motion";
 import { IconLock, IconExternal } from "./icons";
 
 type PriorityTone = "accent" | "green" | "amber" | "red" | "pink";
@@ -85,9 +86,9 @@ export default function PortalDashboard() {
   return (
     <div className="p-home">
       {/* Hero */}
-      <section className="p-hero-card">
+      <Reveal className="p-hero-card">
         <div>
-          <div className="p-eyebrow">{greeting()}</div>
+          <div className="p-hero-greet">{greeting()}</div>
           <h1 className="p-h1">{brand.name}</h1>
           <p className="p-sub">
             {summary.brand?.service_area
@@ -96,18 +97,18 @@ export default function PortalDashboard() {
           </p>
         </div>
         <div className="p-hero-ring">
-          <ScoreRing value={overall} size={116} strokeWidth={10} label="Business Health" big />
+          <ScoreRing value={overall} size={124} strokeWidth={10} label="Business Health" big />
         </div>
-      </section>
+      </Reveal>
 
       {/* Score cards */}
-      <div className="p-score-grid">
+      <Stagger className="p-score-grid">
         <ScoreCard label="SEO Score" value={seoScore} hint="Needs ranking data" />
         <ScoreCard label="Local SEO" value={localScore} hint="Needs citation data" />
         <ScoreCard label="Website Health" value={websiteHealth} hint="Runs with your next audit" />
         <ScoreCard label="AI Visibility" value={aiVisibility} hint="Coming soon" />
         <ScoreCard label="Google Business Profile" value={gbpScore} hint="Connect your profile" />
-      </div>
+      </Stagger>
 
       <div className="p-2col">
         <div className="p-stack">
@@ -143,7 +144,7 @@ export default function PortalDashboard() {
           {/* Business metrics */}
           <Panel>
             <PanelHead title="Business metrics" sub="Live numbers from Search Console and your ranking data." />
-            <div className="p-kpi-grid">
+            <Stagger className="p-kpi-grid" stagger={0.045}>
               <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} color="var(--accent)" hint="Est. monthly visitors" />
               <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} color="var(--green)" hint="Keywords you appear for" />
               <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} color="var(--amber)" decimals={1} invert hint="Lower is better" />
@@ -152,7 +153,7 @@ export default function PortalDashboard() {
               <MetricCard label="Calls" locked lockedHint="Connect call tracking" color="var(--blue)" />
               <MetricCard label="Conversions" locked lockedHint="Connect analytics" color="var(--blue)" />
               <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} color="var(--blue)" hint="Sites linking to you" />
-            </div>
+            </Stagger>
           </Panel>
 
           {/* Traffic trend */}
@@ -215,13 +216,13 @@ export default function PortalDashboard() {
 
 function ScoreCard({ label, value, hint }: { label: string; value: number | null; hint: string }) {
   return (
-    <div className="p-score-card">
-      <ScoreRing value={value} size={64} strokeWidth={7} />
+    <StaggerItem className="p-score-card">
+      <ScoreRing value={value} size={68} strokeWidth={7} />
       <div className="p-score-label">{label}</div>
       {value == null && (
         <div className="p-score-locked"><IconLock size={11} /> {hint}</div>
       )}
-    </div>
+    </StaggerItem>
   );
 }
 

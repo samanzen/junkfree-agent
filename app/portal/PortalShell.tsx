@@ -2,24 +2,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LazyMotion, MotionConfig, domMax, m, AnimatePresence } from "framer-motion";
 import { usePortalAuth } from "@/lib/portalAuth";
 import { PORTAL_CSS } from "./portalTheme";
+import { EASE } from "./_components/motion";
 import {
   IconDashboard, IconIntelligence, IconLocalSeo, IconWebsite, IconContent,
   IconReviews, IconReports, IconBilling, IconSettings, IconAssistant,
-  IconSun, IconMoon, IconMenu,
+  IconSun, IconMoon, IconMenu, IconClose,
 } from "./icons";
 
-const NAV = [
+const NAV_MAIN = [
   { href: "/portal", label: "Dashboard", Icon: IconDashboard, exact: true },
   { href: "/portal/intelligence", label: "Intelligence", Icon: IconIntelligence },
   { href: "/portal/local-seo", label: "Local SEO", Icon: IconLocalSeo },
   { href: "/portal/website", label: "Website", Icon: IconWebsite },
   { href: "/portal/content", label: "Content", Icon: IconContent },
   { href: "/portal/reviews", label: "Reviews", Icon: IconReviews },
+];
+const NAV_MANAGE = [
   { href: "/portal/reports", label: "Reports", Icon: IconReports },
   { href: "/portal/billing", label: "Billing", Icon: IconBilling },
   { href: "/portal/settings", label: "Settings", Icon: IconSettings },
+];
+const NAV_AI = [
   { href: "/portal/assistant", label: "AI Assistant", Icon: IconAssistant },
 ];
 
@@ -29,8 +35,7 @@ function usePortalTheme() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("portal-theme") as Theme | null;
-    setTheme(stored);
+    setTheme(localStorage.getItem("portal-theme") as Theme | null);
   }, []);
 
   function toggle() {
@@ -44,83 +49,137 @@ function usePortalTheme() {
   return { theme, toggle };
 }
 
+function initials(name?: string) {
+  if (!name) return "◆";
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+}
+
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const { loading, error, isAdmin, brand, signOut } = usePortalAuth();
   const { theme, toggle } = usePortalTheme();
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
 
-  return (
-    <div className="portal" data-theme={theme ?? undefined}>
-      <style>{PORTAL_CSS}</style>
-      <div className="p-shell">
-        <aside className={`p-side ${navOpen ? "open" : ""}`}>
-          <div className="p-side-brand">
-            <span className="p-side-dot" />
-            <span className="p-side-name">{brand?.name || "Your Business"}</span>
-          </div>
-          <nav className="p-side-nav">
-            {NAV.map((item) => {
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
+  const groups: { label?: string; items: typeof NAV_MAIN }[] = [
+    { items: NAV_MAIN },
+    { label: "Manage", items: NAV_MANAGE },
+    { label: "Assistant", items: NAV_AI },
+  ];
+
+  // `navId` scopes the sliding active-pill: the desktop and mobile sidebars can
+  // both be mounted at once, and a shared layoutId across the two would make
+  // the indicator fly between them.
+  const renderSidebar = (navId: string) => (
+    <>
+      <div className="p-side-brand">
+        <span className="p-side-mark">{initials(brand?.name)}</span>
+        <span className="p-side-names">
+          <span className="p-side-name">{brand?.name || "Your Business"}</span>
+          <span className="p-side-sub">SEO Platform</span>
+        </span>
+      </div>
+      <nav className="p-side-nav">
+        {groups.map((g, gi) => (
+          <div key={gi}>
+            {g.label && <div className="p-nav-label">{g.label}</div>}
+            {g.items.map((item) => {
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
               return (
-                <Link key={item.href} href={item.href} className={`p-nav-item ${active ? "on" : ""}`}
-                  onClick={() => setNavOpen(false)}>
-                  <item.Icon size={18} />
-                  {item.label}
+                <Link key={item.href} href={item.href} className={`p-nav-item ${active ? "on" : ""}`}>
+                  {active && (
+                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.26, ease: EASE }} />
+                  )}
+                  <item.Icon size={17} />
+                  <span className="p-nav-text">{item.label}</span>
                 </Link>
               );
             })}
-          </nav>
-          <div className="p-side-foot">
-            <button className="p-theme-btn" onClick={toggle} title="Toggle theme" aria-label="Toggle theme">
-              {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
-            </button>
-            <button className="p-signout-btn" onClick={signOut}>Sign out</button>
           </div>
-        </aside>
-
-        <div className={`p-scrim ${navOpen ? "open" : ""}`} onClick={() => setNavOpen(false)} />
-
-        <div className="p-main-col">
-          <div className="p-topbar">
-            <button className="p-topbar-menu" onClick={() => setNavOpen(true)} aria-label="Open menu">
-              <IconMenu size={22} />
-            </button>
-            <span className="p-side-name">{brand?.name || "Your Business"}</span>
-            <button className="p-theme-btn" onClick={toggle} aria-label="Toggle theme">
-              {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
-            </button>
-          </div>
-
-          <main className="p-main">
-            {isAdmin && (
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-                background: "var(--amber-soft)", border: "1px solid var(--line)", borderRadius: 12,
-                padding: "9px 16px", marginBottom: 22, fontSize: 12.5,
-              }}>
-                <span>👁 Previewing the customer experience{brand ? ` for ${brand.name}` : ""}.</span>
-                <Link href="/dashboard" className="p-btn ghost" style={{ padding: "5px 12px", fontSize: 12 }}>
-                  ← Back to admin
-                </Link>
-              </div>
-            )}
-            {loading ? <ShellSkeleton /> : error ? <ShellError msg={error} /> : children}
-          </main>
-        </div>
+        ))}
+      </nav>
+      <div className="p-side-foot">
+        <button className="p-icon-btn" onClick={toggle} aria-label="Toggle colour theme">
+          {theme === "dark" ? <IconSun size={15} /> : <IconMoon size={15} />}
+        </button>
+        <button className="p-signout-btn" onClick={signOut}>Sign out</button>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <LazyMotion features={domMax}>
+      <MotionConfig reducedMotion="user">
+        <div className="portal" data-theme={theme ?? undefined}>
+          <style>{PORTAL_CSS}</style>
+          <div className="p-shell">
+            {/* Desktop sidebar */}
+            <aside className="p-side p-side-desktop">{renderSidebar("p-nav-hl-desktop")}</aside>
+
+            {/* Mobile drawer */}
+            <AnimatePresence>
+              {navOpen && (
+                <>
+                  <m.div
+                    className="p-scrim open"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => setNavOpen(false)}
+                  />
+                  <m.aside
+                    className="p-side p-side-mobile"
+                    initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+                    transition={{ duration: 0.28, ease: EASE }}
+                  >
+                    {renderSidebar("p-nav-hl-mobile")}
+                  </m.aside>
+                </>
+              )}
+            </AnimatePresence>
+
+            <div className="p-main-col">
+              <div className="p-topbar">
+                <button className="p-icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="Open navigation">
+                  {navOpen ? <IconClose size={17} /> : <IconMenu size={17} />}
+                </button>
+                <span className="p-side-name">{brand?.name || "Your Business"}</span>
+                <button className="p-icon-btn" onClick={toggle} aria-label="Toggle colour theme">
+                  {theme === "dark" ? <IconSun size={15} /> : <IconMoon size={15} />}
+                </button>
+              </div>
+
+              <main className="p-main">
+                {isAdmin && (
+                  <div className="p-preview">
+                    <span>Previewing the customer experience{brand ? ` for ${brand.name}` : ""}.</span>
+                    <Link href="/dashboard" className="p-btn ghost" style={{ padding: "5px 12px", fontSize: 12 }}>
+                      Back to admin
+                    </Link>
+                  </div>
+                )}
+                {loading ? <ShellSkeleton /> : error ? <ShellError msg={error} /> : children}
+              </main>
+            </div>
+          </div>
+        </div>
+      </MotionConfig>
+    </LazyMotion>
   );
 }
 
 function ShellSkeleton() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="p-skel" style={{ height: 100, width: "60%" }} />
-      <div className="p-kpi-grid">
-        {[...Array(5)].map((_, i) => <div key={i} className="p-skel" style={{ height: 110 }} />)}
+    <div className="p-stack">
+      <div className="p-skel" style={{ height: 128, borderRadius: 24 }} />
+      <div className="p-score-grid">
+        {[...Array(5)].map((_, i) => <div key={i} className="p-skel" style={{ height: 144 }} />)}
       </div>
-      <div className="p-skel" style={{ height: 220 }} />
+      <div className="p-2col">
+        <div className="p-skel" style={{ height: 260 }} />
+        <div className="p-skel" style={{ height: 260 }} />
+      </div>
     </div>
   );
 }
@@ -128,7 +187,7 @@ function ShellSkeleton() {
 function ShellError({ msg }: { msg: string }) {
   return (
     <div className="p-empty">
-      <div className="p-empty-icon">⚠️</div>
+      <div className="p-empty-icon">!</div>
       <div className="p-empty-title">{msg}</div>
     </div>
   );

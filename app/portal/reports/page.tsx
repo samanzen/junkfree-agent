@@ -7,6 +7,7 @@ import SubNav from "../_components/SubNav";
 import StatTile from "../_components/StatTile";
 import EmptyState from "../_components/EmptyState";
 import ConnectCard from "../_components/ConnectCard";
+import { Stagger } from "../_components/motion";
 import { IconReports } from "../icons";
 
 type Tab = "current" | "scheduled";
@@ -63,24 +64,24 @@ export default function ReportsPage() {
 
             <div className="p-report-section">
               <h3>Headline numbers</h3>
-              <div className="p-stat-grid">
+              <Stagger className="p-stat-grid">
                 <StatTile label="Organic traffic" value={fmt(m.organic_traffic)} tone="accent" sub={delta(m.traffic_delta)} />
                 <StatTile label="Ranking keywords" value={fmt(m.organic_keywords)} tone="green" sub={delta(m.keywords_delta)} />
                 <StatTile label="Average position" value={m.avg_position != null ? m.avg_position.toFixed(1) : "—"} tone="amber" sub={delta(m.position_delta)} />
                 <StatTile label="Backlinks" value={fmt(m.backlinks)} tone="blue" sub={delta(m.backlinks_delta)} />
                 <StatTile label="Referring domains" value={fmt(m.referring_domains)} tone="blue" />
                 <StatTile label="Site health" value={m.site_health != null ? `${m.site_health}%` : "—"} tone="pink" />
-              </div>
+              </Stagger>
             </div>
 
             <div className="p-report-section">
               <h3>What we did this month</h3>
-              <div className="p-stat-grid">
+              <Stagger className="p-stat-grid">
                 <StatTile label="Content published" value={summary.activity.published_this_month} tone="accent" />
                 <StatTile label="Google posts drafted" value={summary.activity.gbp_posts_drafted} tone="green" />
                 <StatTile label="Citations live" value={summary.activity.citations_live} tone="amber" />
                 <StatTile label="Reviews handled" value={platform?.reviews.length ?? 0} tone="pink" />
-              </div>
+              </Stagger>
             </div>
 
             {summary.activity.recent_content.length > 0 && (
@@ -134,7 +135,7 @@ export default function ReportsPage() {
           </div>
         )
       ) : (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconReports size={17} />}
             title="Scheduled email reports"
@@ -149,7 +150,7 @@ export default function ReportsPage() {
             title="Period comparisons"
             desc="Compare any two date ranges side by side — this month vs last, this quarter vs the same quarter last year."
           />
-        </div>
+        </Stagger>
       )}
 
       {tab === "current" && !loading && !summary && (

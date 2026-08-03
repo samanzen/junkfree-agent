@@ -10,6 +10,7 @@ import ApprovalCard from "../_components/ApprovalCard";
 import StatTile from "../_components/StatTile";
 import ScoreRing from "../_components/ScoreRing";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger } from "../_components/motion";
 import { IconReviews } from "../icons";
 
 type Tab = "pending" | "all" | "insights";
@@ -52,21 +53,21 @@ export default function ReviewsPage() {
               {avg != null ? `${avg.toFixed(1)} average` : "No ratings yet"}
             </div>
           </div>
-          <div className="p-stat-grid" style={{ flex: 1, minWidth: 260 }}>
+          <Stagger className="p-stat-grid" style={{ flex: 1, minWidth: 260 }}>
             <StatTile label="Total reviews" value={reviews.length || "—"} tone={reviews.length ? "pink" : "muted"} />
             <StatTile label="Awaiting reply" value={pending.length || "—"} tone={pending.length ? "amber" : "muted"} />
             <StatTile label="Positive (4-5★)" value={positive || "—"} tone={positive ? "green" : "muted"} />
             <StatTile label="Negative (1-2★)" value={negative || "—"} tone={negative ? "red" : "muted"} />
-          </div>
+          </Stagger>
         </div>
       </Panel>
 
       <SubNav items={TABS} value={tab} onChange={setTab} />
 
       {loading ? (
-        <div className="p-cardlist">
+        <Stagger className="p-cardlist">
           {[...Array(3)].map((_, i) => <div key={i} className="p-skel" style={{ height: 180 }} />)}
-        </div>
+        </Stagger>
       ) : tab === "pending" ? (
         pending.length === 0 ? (
           <EmptyState
@@ -75,9 +76,9 @@ export default function ReviewsPage() {
             sub="When a new review comes in, we'll draft a reply and put it here for you to approve."
           />
         ) : (
-          <div className="p-cardlist">
+          <Stagger className="p-cardlist">
             {pending.map((r) => <ReviewCard key={r.id} review={r} />)}
-          </div>
+          </Stagger>
         )
       ) : tab === "all" ? (
         reviews.length === 0 ? (
@@ -116,7 +117,7 @@ export default function ReviewsPage() {
           </Panel>
         )
       ) : (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconReviews size={17} />}
             title="Live review monitoring"
@@ -135,7 +136,7 @@ export default function ReviewsPage() {
             title="Sentiment themes"
             desc="Groups what customers praise and complain about most, so you know what to fix and what to promote."
           />
-        </div>
+        </Stagger>
       )}
     </div>
   );

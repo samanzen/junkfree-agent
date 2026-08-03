@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { m } from "framer-motion";
 import { usePortalAuth } from "@/lib/portalAuth";
 import { authedFetch } from "@/lib/authedFetch";
 import PageHeader from "../_components/PageHeader";
+import { Reveal, Stagger, StaggerItem, EASE } from "../_components/motion";
 import { IconSparkle, IconSend } from "../icons";
 
 type Msg = { role: "user" | "assistant"; text: string };
@@ -70,37 +72,46 @@ export default function AssistantPage() {
       <div className="p-chat">
         <div className="p-chat-scroll">
           {messages.length === 0 && !busy && (
-            <div className="p-chat-welcome">
-              <span className="p-exec-icon" style={{ width: 44, height: 44 }}><IconSparkle size={20} /></span>
+            <Reveal className="p-chat-welcome">
+              <span className="p-chat-welcome-icon"><IconSparkle size={21} /></span>
               <h2 className="p-chat-welcome-title">How can I help?</h2>
               <p className="p-chat-welcome-sub">
                 I can see your current rankings, traffic, keywords and published content.
                 Pick a question below or ask your own.
               </p>
-              <div className="p-chat-suggestions">
+              <Stagger className="p-chat-suggestions" stagger={0.045}>
                 {SUGGESTIONS.map((s) => (
-                  <button key={s} className="p-chat-suggestion" onClick={() => ask(s)}>{s}</button>
+                  <StaggerItem key={s}>
+                    <button className="p-chat-suggestion" onClick={() => ask(s)}>{s}</button>
+                  </StaggerItem>
                 ))}
-              </div>
-            </div>
+              </Stagger>
+            </Reveal>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} className={`p-msg ${m.role}`}>
-              {m.role === "assistant" && (
+          {messages.map((msg, i) => (
+            <m.div
+              key={i}
+              className={`p-msg ${msg.role}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, ease: EASE }}
+            >
+              {msg.role === "assistant" && (
                 <span className="p-msg-avatar"><IconSparkle size={14} /></span>
               )}
-              <div className="p-msg-bubble">{m.text}</div>
-            </div>
+              <div className="p-msg-bubble">{msg.text}</div>
+            </m.div>
           ))}
 
           {busy && (
-            <div className="p-msg assistant">
+            <m.div className="p-msg assistant"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
               <span className="p-msg-avatar"><IconSparkle size={14} /></span>
               <div className="p-msg-bubble p-msg-typing">
                 <span /><span /><span />
               </div>
-            </div>
+            </m.div>
           )}
 
           {error && <div className="p-chat-error">{error}</div>}

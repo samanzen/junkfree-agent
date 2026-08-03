@@ -12,6 +12,7 @@ import ConnectCard from "../_components/ConnectCard";
 import ApprovalCard from "../_components/ApprovalCard";
 import StatTile from "../_components/StatTile";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger } from "../_components/motion";
 import { IconContent, IconSparkle } from "../icons";
 
 type Tab = "review" | "published" | "google" | "scheduled" | "writer";
@@ -54,27 +55,27 @@ export default function ContentPage() {
       />
 
       <Panel>
-        <div className="p-stat-grid">
+        <Stagger className="p-stat-grid">
           <StatTile label="Awaiting review" value={pending.length || "—"} tone={pending.length ? "amber" : "muted"} />
           <StatTile label="Published" value={published.length || "—"} tone={published.length ? "green" : "muted"} />
           <StatTile label="Google posts ready" value={pendingGbp.length || "—"} tone={pendingGbp.length ? "accent" : "muted"} />
           <StatTile label="Total drafted" value={drafts.length || "—"} tone="muted" />
-        </div>
+        </Stagger>
       </Panel>
 
       <SubNav items={TABS} value={tab} onChange={setTab} />
 
       {loading ? (
-        <div className="p-cardlist">
+        <Stagger className="p-cardlist">
           {[...Array(3)].map((_, i) => <div key={i} className="p-skel" style={{ height: 200 }} />)}
-        </div>
+        </Stagger>
       ) : tab === "review" ? (
         pending.length === 0 ? (
           <EmptyState icon="✓" title="Nothing waiting on you" sub="When your agents draft new content, it lands here for your approval before going live." />
         ) : (
-          <div className="p-cardlist">
+          <Stagger className="p-cardlist">
             {pending.map((d) => <DraftCard key={d.id} draft={d} />)}
-          </div>
+          </Stagger>
         )
       ) : tab === "published" ? (
         published.length === 0 ? (
@@ -105,12 +106,12 @@ export default function ContentPage() {
         pendingGbp.length === 0 ? (
           <EmptyState icon="📍" title="No Google posts waiting" sub="Google Business Profile posts drafted for you will appear here, ready to approve." />
         ) : (
-          <div className="p-cardlist">
+          <Stagger className="p-cardlist">
             {pendingGbp.map((g) => <GbpCard key={g.id} post={g} />)}
-          </div>
+          </Stagger>
         )
       ) : tab === "scheduled" ? (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconContent size={17} />}
             title="Content scheduling"
@@ -121,7 +122,7 @@ export default function ContentPage() {
             title="Publishing calendar"
             desc="A month-at-a-glance view of what's going live and when, across your website, Google Posts and social channels."
           />
-        </div>
+        </Stagger>
       ) : (
         <div className="p-stack">
           <Panel>
@@ -140,7 +141,7 @@ export default function ContentPage() {
               </div>
             </div>
           </Panel>
-          <div className="p-subgrid">
+          <Stagger className="p-subgrid">
             <ConnectCard
               title="Write on demand"
               desc="Type a topic or keyword and get a full draft back in your voice, without waiting for the weekly cycle."
@@ -149,7 +150,7 @@ export default function ContentPage() {
               title="Social posts"
               desc="Turn every published article into ready-to-post updates for Facebook, Instagram and LinkedIn, matched to your brand voice."
             />
-          </div>
+          </Stagger>
         </div>
       )}
     </div>

@@ -1,5 +1,7 @@
 "use client";
-import CountUp from "@/app/dashboard/CountUp";
+import { m } from "framer-motion";
+import AnimatedNumber from "./AnimatedNumber";
+import { fadeUp, EASE } from "./motion";
 import { IconArrowUp, IconArrowDown, IconLock } from "../icons";
 
 // A single KPI tile. Three distinct states, never blurred together:
@@ -25,9 +27,13 @@ export default function MetricCard({
   const good = invert ? !up : up;
 
   return (
-    <div className="p-kpi">
+    <m.div
+      className="p-kpi"
+      variants={fadeUp}
+      whileHover={{ y: -2, transition: { duration: 0.18, ease: EASE } }}
+    >
       <div className="p-kpi-top">
-        <span className="p-kpi-icon" style={{ background: color, opacity: 0.16 }} />
+        <span className="p-kpi-dot" style={{ background: locked ? "var(--muted2)" : color }} />
         <span className="p-kpi-label">{label}</span>
       </div>
 
@@ -35,15 +41,13 @@ export default function MetricCard({
         <>
           <div className="p-kpi-na">—</div>
           <div className="p-kpi-bottom">
-            <span className="p-kpi-hint" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <IconLock size={11} /> {lockedHint}
-            </span>
+            <span className="p-kpi-hint"><IconLock size={11} /> {lockedHint}</span>
           </div>
         </>
       ) : (
         <>
-          <div className="p-kpi-val" style={{ color }}>
-            <CountUp value={value ?? null} decimals={decimals} suffix={suffix} />
+          <div className="p-kpi-val" style={{ color: value == null ? "var(--muted2)" : "var(--text)" }}>
+            <AnimatedNumber value={value ?? null} decimals={decimals} suffix={suffix} />
           </div>
           <div className="p-kpi-bottom">
             {delta != null && delta !== 0 && (
@@ -56,6 +60,6 @@ export default function MetricCard({
           </div>
         </>
       )}
-    </div>
+    </m.div>
   );
 }

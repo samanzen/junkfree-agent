@@ -5,6 +5,7 @@ import PageHeader from "../_components/PageHeader";
 import SubNav from "../_components/SubNav";
 import ConnectCard from "../_components/ConnectCard";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger } from "../_components/motion";
 import { IconCheck, IconAlert, IconExternal } from "../icons";
 
 type Tab = "business" | "connections" | "notifications" | "security";
@@ -49,13 +50,13 @@ export default function SettingsPage() {
             </dl>
           </Panel>
 
-          <div className="p-subgrid">
+          <Stagger className="p-subgrid">
             <ConnectCard
               title="Multiple locations"
               desc="Track rankings, reviews and citations separately for each location you serve, with a combined roll-up view."
               note="Your account currently covers one location."
             />
-          </div>
+          </Stagger>
         </div>
       )}
 
@@ -98,7 +99,7 @@ export default function SettingsPage() {
       )}
 
       {tab === "notifications" && (
-        <div className="p-subgrid">
+        <Stagger className="p-subgrid">
           <ConnectCard
             title="Email alerts"
             desc="Get notified when a keyword breaks into the top 3, when rankings drop sharply, or when new content is ready for your review."
@@ -112,7 +113,7 @@ export default function SettingsPage() {
             title="Review alerts"
             desc="Be told the moment a new review lands — especially a negative one that needs a fast, considered reply."
           />
-        </div>
+        </Stagger>
       )}
 
       {tab === "security" && (
@@ -124,7 +125,7 @@ export default function SettingsPage() {
               this device — use the button in the sidebar.
             </p>
           </Panel>
-          <div className="p-subgrid">
+          <Stagger className="p-subgrid">
             <ConnectCard
               title="Two-factor authentication"
               desc="Add a second verification step when signing in, for stronger protection of your business data."
@@ -133,7 +134,7 @@ export default function SettingsPage() {
               title="Team access"
               desc="Invite colleagues with their own logins and control what each person can see and approve."
             />
-          </div>
+          </Stagger>
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import PageHeader from "../_components/PageHeader";
 import ConnectCard from "../_components/ConnectCard";
 import EmptyState from "../_components/EmptyState";
 import { Panel, PanelHead } from "../_components/Panel";
+import { Stagger } from "../_components/motion";
 import { IconBilling } from "../icons";
 
 export default function BillingPage() {
@@ -27,7 +28,7 @@ export default function BillingPage() {
         />
       </Panel>
 
-      <div className="p-subgrid">
+      <Stagger className="p-subgrid">
         <ConnectCard
           icon={<IconBilling size={17} />}
           title="Subscription management"
@@ -45,7 +46,7 @@ export default function BillingPage() {
           title="Usage"
           desc="See exactly what your plan covers this month — content pieces produced, keywords tracked, locations monitored and reports generated."
         />
-      </div>
+      </Stagger>
     </div>
   );
 }

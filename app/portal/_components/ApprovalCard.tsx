@@ -1,5 +1,8 @@
 "use client";
 import { useState, type ReactNode } from "react";
+import { m } from "framer-motion";
+import { fadeUp, EASE } from "./motion";
+import { IconCheck } from "../icons";
 
 // Card for anything awaiting the customer's yes/no: a content draft, a Google
 // post, a drafted review reply. Body is rendered as plain text (never HTML)
@@ -39,19 +42,26 @@ export default function ApprovalCard({
 
   if (done) {
     return (
-      <div className="p-approve p-approve-done">
-        <span className={`p-badge ${done === "approved" ? "green" : ""}`}>
-          {done === "approved" ? "✓ Approved" : "Dismissed"}
+      <m.div
+        className="p-approve p-approve-done"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3, ease: EASE }}
+      >
+        <span className={`p-badge ${done === "approved" ? "green" : ""}`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {done === "approved" && <IconCheck size={12} />}
+          {done === "approved" ? "Approved" : "Dismissed"}
         </span>
         <span className="p-approve-donetitle">{title}</span>
-      </div>
+      </m.div>
     );
   }
 
   const longBody = !!body && body.length > 400;
 
   return (
-    <article className="p-approve">
+    <m.article className="p-approve" variants={fadeUp}>
       <div className="p-approve-head">
         <div style={{ minWidth: 0 }}>
           {kind && <span className="p-chip">{kind.replace(/_/g, " ")}</span>}
@@ -65,12 +75,15 @@ export default function ApprovalCard({
       {body && (
         <>
           {bodyLabel && <div className="p-reply-label">{bodyLabel}</div>}
-          <div
+          <m.div
             className="p-approve-body"
-            style={{ maxHeight: expanded ? "none" : collapsedHeight, overflow: expanded ? "visible" : "hidden" }}
+            initial={false}
+            animate={{ height: expanded || !longBody ? "auto" : collapsedHeight }}
+            transition={{ duration: 0.35, ease: EASE }}
+            style={{ overflow: "hidden" }}
           >
             {body}
-          </div>
+          </m.div>
         </>
       )}
       {longBody && (
@@ -83,17 +96,19 @@ export default function ApprovalCard({
         {footer}
         <div className="p-approve-actions">
           {onDismiss && (
-            <button className="p-btn ghost" disabled={!!busy} onClick={() => run("dismiss")}>
+            <m.button className="p-btn ghost" disabled={!!busy} onClick={() => run("dismiss")}
+              whileTap={{ scale: 0.97 }}>
               {busy === "dismiss" ? "…" : dismissLabel}
-            </button>
+            </m.button>
           )}
           {onApprove && (
-            <button className="p-btn primary" disabled={!!busy} onClick={() => run("approve")}>
+            <m.button className="p-btn primary" disabled={!!busy} onClick={() => run("approve")}
+              whileTap={{ scale: 0.97 }}>
               {busy === "approve" ? "Publishing…" : approveLabel}
-            </button>
+            </m.button>
           )}
         </div>
       </div>
-    </article>
+    </m.article>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
+import { Stagger, StaggerItem } from "../../_components/motion";
 import { IconSparkle, IconCheck } from "../../icons";
 
 type Rec = {
@@ -78,9 +79,9 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
         {recs.length === 0 ? (
           <EmptyState icon="✦" title="No recommendations yet" sub="Recommendations are generated from your keyword data — they'll appear once enough ranking history exists." />
         ) : (
-          <div className="p-rec-list">
+          <Stagger className="p-rec-list">
             {recs.map((r, i) => (
-              <div key={i} className="p-rec">
+              <StaggerItem key={i} className="p-rec">
                 <div className="p-rec-top">
                   <span className="p-rec-icon"><IconSparkle size={15} /></span>
                   <div style={{ minWidth: 0, flex: 1 }}>
@@ -108,9 +109,9 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
                     )
                   )}
                 </div>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         )}
       </Panel>
 
