@@ -48,16 +48,7 @@ async function query(gscProperty: string, dimensions: string[], rowLimit = 250):
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    // TEMP DIAGNOSTIC (rank-sync silent-swallow investigation) -- remove once root cause confirmed.
-    let parsedError: unknown = errorText;
-    try { parsedError = JSON.parse(errorText); } catch { /* not JSON, keep raw text */ }
-    console.error("[gsc diagnostic] search console request failed", {
-      gsc_property: gscProperty,
-      status: res.status,
-      error: parsedError,
-    });
-    throw new Error(`GSC query failed: ${res.status} ${errorText}`);
+    throw new Error(`GSC query failed: ${res.status} ${await res.text()}`);
   }
   const data = (await res.json()) as { rows?: QueryRow[] };
   return data.rows || [];
