@@ -355,6 +355,25 @@ export const PORTAL_CSS = `
   .p-opp-body { grid-template-columns:1fr; gap:16px; }
 }
 
+/* ══ Timeline ═══════════════════════════════════════════════════════ */
+.p-timeline { display:flex; flex-direction:column; }
+.p-tl-item { display:flex; gap:14px; align-items:stretch; }
+.p-tl-rail { position:relative; width:11px; flex-shrink:0; display:flex; justify-content:center; }
+.p-tl-rail::before {
+  content:''; position:absolute; top:0; bottom:0; width:1px; background:var(--line);
+}
+.p-tl-item:first-child .p-tl-rail::before { top:9px; }
+.p-tl-item:last-child .p-tl-rail::before { bottom:calc(100% - 9px); }
+.p-tl-dot {
+  position:relative; z-index:1; width:9px; height:9px; border-radius:50%; margin-top:5px;
+  box-shadow:0 0 0 3px var(--surface);
+}
+.p-tl-body { flex:1; min-width:0; padding:0 0 18px; }
+.p-tl-head { display:flex; align-items:center; gap:8px; }
+.p-tl-icon { flex-shrink:0; display:flex; }
+.p-tl-title { font-size:13.5px; font-weight:540; letter-spacing:-.012em; line-height:1.4; }
+.p-tl-meta { font-size:11.5px; color:var(--muted); margin-top:3px; }
+
 /* ══ Technical SEO findings ═════════════════════════════════════════ */
 .p-tech-findings { display:flex; flex-direction:column; gap:9px; margin-bottom:4px; }
 .p-tech-finding {

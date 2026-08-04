@@ -8,14 +8,18 @@ import OverviewTab from "./_tabs/OverviewTab";
 import KeywordsTab from "./_tabs/KeywordsTab";
 import MovementTab from "./_tabs/MovementTab";
 import OpportunitiesTab from "./_tabs/OpportunitiesTab";
+import InsightsTab from "./_tabs/InsightsTab";
+import TimelineTab from "./_tabs/TimelineTab";
 
-type Tab = "overview" | "keywords" | "movement" | "opportunities";
+type Tab = "overview" | "keywords" | "movement" | "opportunities" | "insights" | "timeline";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "keywords", label: "Keywords" },
   { key: "movement", label: "Movement" },
   { key: "opportunities", label: "Opportunities" },
+  { key: "insights", label: "Insights" },
+  { key: "timeline", label: "Timeline" },
 ];
 
 export default function IntelligencePage() {
@@ -40,6 +44,8 @@ export default function IntelligencePage() {
       {tab === "keywords" && <KeywordsTab brandId={brand.id} />}
       {tab === "movement" && <MovementTab brandId={brand.id} />}
       {tab === "opportunities" && <OpportunitiesTab brandId={brand.id} />}
+      {tab === "insights" && <InsightsTab brandId={brand.id} />}
+      {tab === "timeline" && <TimelineTab brandId={brand.id} />}
     </div>
   );
 }
