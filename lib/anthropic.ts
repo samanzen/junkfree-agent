@@ -10,15 +10,30 @@ const API = "https://api.anthropic.com/v1/messages";
 // current models thinking is ON by default and is billed against the SAME
 // max_tokens as the response text, so a large reasoning task under a small
 // budget can consume the entire allowance and return no text at all.
+/** Response metadata a caller needs to tell a complete answer from a cut-off one. */
+export type CallMeta = {
+  stop_reason: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  thinking_tokens: number;
+};
+
 type CallOpts = {
   user: string;
   system?: string;
   search?: boolean;
   maxTokens?: number;
   thinking?: { type: "adaptive" | "disabled" };
+  /**
+   * Receives the response metadata. `stop_reason === "max_tokens"` means the
+   * answer was cut off mid-generation -- callers that parse structured output
+   * must treat that as a failure rather than trusting a partial result.
+   * Optional, so existing callers are unaffected.
+   */
+  onMeta?: (meta: CallMeta) => void;
 };
 
-export async function callClaude({ user, system, search, maxTokens = 2000, thinking }: CallOpts): Promise<string> {
+export async function callClaude({ user, system, search, maxTokens = 2000, thinking, onMeta }: CallOpts): Promise<string> {
   const body: Record<string, unknown> = {
     model: MODEL,
     max_tokens: maxTokens,
@@ -51,6 +66,13 @@ export async function callClaude({ user, system, search, maxTokens = 2000, think
       console.log("[callClaude] Anthropic error payload:", JSON.stringify(data?.error) || `Anthropic ${res.status}`);
       throw new Error(data?.error?.message || `Anthropic ${res.status}`);
     }
+    onMeta?.({
+      stop_reason: data.stop_reason ?? null,
+      input_tokens: data.usage?.input_tokens ?? 0,
+      output_tokens: data.usage?.output_tokens ?? 0,
+      thinking_tokens: data.usage?.output_tokens_details?.thinking_tokens ?? 0,
+    });
+
     const text = (data.content || [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)

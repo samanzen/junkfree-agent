@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
-import { callClaude, extractJSON } from "@/lib/anthropic";
+import { callClaude, extractJSON, type CallMeta } from "@/lib/anthropic";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
@@ -44,8 +44,18 @@ export async function GET(req: NextRequest) {
       .eq("brand_id", brandId).gte("ai_opportunity_score", 60).order("ai_opportunity_score", { ascending: false }).limit(10),
   ]);
 
+  // thinking is ON by default and is billed against the SAME max_tokens as the
+  // answer, so the old 2000 budget left too little room for the JSON array and
+  // the reply was cut off mid-object — extractJSON then returned null and an
+  // empty array got cached for 4 hours. Disable thinking and give the answer
+  // headroom; the prompt itself is unchanged.
+  let meta: CallMeta | null = null;
+  let failure: string | null = null;
+
   const aiText = await callClaude({
-    maxTokens: 2000,
+    maxTokens: 8000,
+    thinking: { type: "disabled" },
+    onMeta: (m) => { meta = m; },
     user: `You are a senior SEO strategist advising ${brand?.name} (${brand?.services} in ${brand?.service_area}).
 
 Based on this live data, generate 5-8 prioritized recommendations.
@@ -67,9 +77,41 @@ Return ONLY JSON array:
   "action_label": "button label e.g. Improve this page",
   "action_payload": {"target_keyword": "...", "target_url": "..."}
 }]`,
-  }).catch(() => null);
+  }).catch((err) => {
+    failure = `model call failed: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  });
 
-  const recommendations = extractJSON<unknown[]>(aiText || "") || [];
+  const parsed = extractJSON<unknown[]>(aiText || "");
+  const recommendations = Array.isArray(parsed) ? parsed : [];
+
+  // A cut-off reply can still parse into a shorter array, so treat max_tokens as
+  // a failure on its own rather than trusting whatever survived.
+  // `meta` is written from inside the onMeta callback, which control-flow
+  // analysis cannot see -- it would otherwise narrow to the initial null.
+  const m = meta as CallMeta | null;
+  if (!failure) {
+    if (m?.stop_reason === "max_tokens") {
+      failure = `response truncated at max_tokens (${m.output_tokens} output tokens, ${m.thinking_tokens} thinking)`;
+    } else if (!aiText) {
+      failure = "model returned no text (see [callClaude] EMPTY TEXT above for stop_reason and token split)";
+    } else if (!Array.isArray(parsed)) {
+      failure = `could not parse a recommendation array from ${aiText.length} chars of model output`;
+    }
+  }
+
+  console.log(
+    `[recommendations] ${brandId}: stop_reason=${m?.stop_reason ?? "n/a"} ` +
+    `input_tokens=${m?.input_tokens ?? 0} output_tokens=${m?.output_tokens ?? 0} ` +
+    `thinking_tokens=${m?.thinking_tokens ?? 0} parsed=${failure ? "INCOMPLETE" : `${recommendations.length} recommendations`}`
+  );
+
+  // Never cache a partial or failed result — a 4-hour cache would pin the
+  // empty state in the UI long after the underlying call would have succeeded.
+  if (failure) {
+    console.error(`[recommendations] ${brandId}: no recommendations generated — ${failure}`);
+    return NextResponse.json({ recommendations: [], cached: false, error: failure });
+  }
 
   // Store in cache (expires 4 hours from now)
   const expiresAt = new Date(Date.now() + 4 * 3600_000).toISOString();
