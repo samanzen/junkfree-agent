@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { m } from "framer-motion";
 import AnimatedNumber from "./AnimatedNumber";
+import Sparkline from "./Sparkline";
 import { fadeUp, EASE } from "./motion";
 import { IconArrowUp, IconArrowDown, IconLock } from "../icons";
 
@@ -10,7 +11,7 @@ import { IconArrowUp, IconArrowDown, IconLock } from "../icons";
 //  - "—" because the source is connected but has no value yet
 //  - locked, because that data source isn't wired up for this business yet
 export default function MetricCard({
-  label, value, delta, tone = "accent", icon, hint,
+  label, value, delta, tone = "accent", icon, hint, series,
   decimals = 0, suffix = "", invert = false, locked = false, lockedHint = "Connect to unlock",
 }: {
   label: string;
@@ -20,6 +21,8 @@ export default function MetricCard({
   tone?: "accent" | "green" | "amber" | "red" | "blue" | "pink";
   icon?: ReactNode;
   hint?: string;
+  /** Real historical series for this metric. Omit when none exists. */
+  series?: number[];
   decimals?: number;
   suffix?: string;
   invert?: boolean;
@@ -58,8 +61,13 @@ export default function MetricCard({
         </>
       ) : (
         <>
-          <div className="p-kpi-val" style={{ color: value == null ? "var(--muted2)" : "var(--text)" }}>
-            <AnimatedNumber value={value ?? null} decimals={decimals} suffix={suffix} />
+          <div className="p-kpi-mid">
+            <div className="p-kpi-val" style={{ color: value == null ? "var(--muted2)" : "var(--text)" }}>
+              <AnimatedNumber value={value ?? null} decimals={decimals} suffix={suffix} />
+            </div>
+            {series && series.length > 1 && (
+              <span className="p-kpi-spark"><Sparkline data={series} color={color} /></span>
+            )}
           </div>
           <div className="p-kpi-bottom">
             {delta != null && delta !== 0 && (
