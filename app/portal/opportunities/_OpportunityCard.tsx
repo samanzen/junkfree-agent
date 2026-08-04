@@ -1,11 +1,10 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { m } from "framer-motion";
-import { authedFetch } from "@/lib/authedFetch";
+import ExecutionPanel from "../_components/ExecutionPanel";
 import { fadeUp, EASE } from "../_components/motion";
-import { IconCheck, IconChevron, IconLock, IconSparkle } from "../icons";
-import type { Opportunity, OpportunityAction, Priority, Difficulty } from "./_engine";
+import { IconCheck, IconChevron } from "../icons";
+import type { Opportunity, Priority, Difficulty } from "./_engine";
 
 const PRIORITY_META: Record<Priority, { label: string; tone: string }> = {
   critical: { label: "Critical", tone: "red" },
@@ -24,31 +23,7 @@ export default function OpportunityCard({ opportunity, brandId }: {
 }) {
   const o = opportunity;
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [done, setDone] = useState<Record<string, boolean>>({});
   const p = PRIORITY_META[o.priority];
-
-  // Runs through the EXISTING /api/intelligence/action endpoint only.
-  async function run(a: OpportunityAction) {
-    if (!a.action || busy) return;
-    setBusy(a.label);
-    try {
-      const res = await authedFetch("/api/intelligence/action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: a.action, brand_id: brandId, payload: a.payload || {} }),
-      });
-      if (res.ok) setDone((d) => ({ ...d, [a.label]: true }));
-      else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Couldn't start that task. Please try again.");
-      }
-    } catch {
-      alert("Couldn't start that task. Please try again.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   return (
     <m.article className="p-opp" variants={fadeUp}>
@@ -91,44 +66,21 @@ export default function OpportunityCard({ opportunity, brandId }: {
             </ul>
           </div>
         </div>
+
+        <ExecutionPanel
+          brandId={brandId}
+          capabilities={o.capabilities}
+          queue={o.queue}
+          queueHref={o.queueHref}
+          queueTotal={o.queueTotal}
+        />
       </m.div>
 
-      <div className="p-opp-actions">
-        {o.actions.map((a) => {
-          if (a.comingSoon) {
-            return (
-              <button key={a.label} className="p-btn ghost" disabled title="Not available yet">
-                <IconLock size={12} /> {a.label} · Coming soon
-              </button>
-            );
-          }
-          if (a.href) {
-            return (
-              <Link key={a.label} href={a.href} className={`p-btn ${a.primary ? "primary" : "ghost"}`}>
-                {a.label} <IconChevron size={13} />
-              </Link>
-            );
-          }
-          if (done[a.label]) {
-            return (
-              <span key={a.label} className="p-badge green p-opp-queued">
-                <IconCheck size={12} /> Added to your queue
-              </span>
-            );
-          }
-          return (
-            <m.button
-              key={a.label}
-              className={`p-btn ${a.primary ? "primary" : "ghost"}`}
-              disabled={!!busy}
-              onClick={() => run(a)}
-              whileTap={{ scale: 0.97 }}
-            >
-              {busy === a.label ? "Starting…" : <><IconSparkle size={13} /> {a.label}</>}
-            </m.button>
-          );
-        })}
-      </div>
+      {!open && (
+        <button className="p-opp-expand" onClick={() => setOpen(true)}>
+          Show the plan and run it <IconChevron size={13} />
+        </button>
+      )}
     </m.article>
   );
 }

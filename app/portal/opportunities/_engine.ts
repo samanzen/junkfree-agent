@@ -10,25 +10,12 @@
 // for that KIND of task, identical for every customer, and is labelled in the
 // UI as "typical effort" — never presented as a measurement of their business.
 
+import type { Capability, QueueItem } from "../_components/ExecutionPanel";
+
+export type { Capability, QueueItem };
+
 export type Priority = "critical" | "high" | "medium" | "low";
 export type Difficulty = "easy" | "moderate" | "hard" | "unknown";
-
-/** Action types accepted by the existing /api/intelligence/action endpoint. */
-export type EngineAction =
-  | "improve_content" | "fix_meta" | "rewrite_page"
-  | "generate_faq" | "build_backlinks" | "boost_page1";
-
-export type OpportunityAction = {
-  label: string;
-  /** Runs via the existing action endpoint. */
-  action?: EngineAction;
-  payload?: Record<string, unknown>;
-  /** Navigates to an existing page instead of running a job. */
-  href?: string;
-  /** No API exists for this yet — rendered disabled. */
-  comingSoon?: boolean;
-  primary?: boolean;
-};
 
 export type Opportunity = {
   id: string;
@@ -43,7 +30,12 @@ export type Opportunity = {
   /** Real, source-attributed figures. Empty when we hold none. */
   impact: string[];
   steps: string[];
-  actions: OpportunityAction[];
+  /** The execution surface — every entry is a real endpoint or `soon`. */
+  capabilities: Capability[];
+  /** Concrete rows already waiting on a human decision. */
+  queue?: QueueItem[];
+  queueHref?: string;
+  queueTotal?: number;
   score: number;
 };
 
@@ -75,9 +67,12 @@ export type MoveRow = {
 };
 export type LowCtrRow = { page: string; impressions: number; ctr: number };
 export type StrikingRow = { keyword: string; page: string; impressions: number; position: number; ctr: number };
+/** Rows already waiting on a decision, passed straight through from /api/platform. */
+export type PendingRow = { id: string; title: string; meta?: string; status: string };
+
 export type CountsInput = {
-  pendingDrafts: number;
-  pendingReviews: number;
+  pendingDrafts: PendingRow[];
+  pendingReviews: PendingRow[];
   openCitations: number;
   gscConnected: boolean;
   gbpConnected: boolean;
@@ -118,10 +113,13 @@ function fromStrikingDistance(rows: StrikingRow[], meta: Map<string, KeywordRow>
           "Add internal links from your other pages",
           "Expand thin sections with specific local detail",
         ],
-        actions: [
-          { label: "Run page 1 push", action: "boost_page1", payload: { target_keyword: r.keyword, target_url: r.page }, primary: true },
-          { label: "Improve content", action: "improve_content", payload: { target_keyword: r.keyword, target_url: r.page } },
-          { label: "Generate FAQ", action: "generate_faq", payload: { target_keyword: r.keyword } },
+        capabilities: [
+          { id: `boost:${r.keyword}`, label: "Run the full page 1 push", produces: "Rewrites the content and the search listing together", exec: "agent", action: "boost_page1", payload: { target_keyword: r.keyword, target_url: r.page }, primary: true },
+          { id: `imp:${r.keyword}`, label: "Improve the page content", produces: "A stronger H1, deeper sections and better on-page targeting", exec: "agent", action: "improve_content", payload: { target_keyword: r.keyword, target_url: r.page } },
+          { id: `meta:${r.keyword}`, label: "Generate title & meta description", produces: "A rewritten search listing built to earn the click", exec: "agent", action: "fix_meta", payload: { target_keyword: r.keyword, target_url: r.page } },
+          { id: `faq:${r.keyword}`, label: "Generate an FAQ section", produces: "Questions and answers targeting related searches", exec: "agent", action: "generate_faq", payload: { target_keyword: r.keyword } },
+          { id: `outline:${r.keyword}`, label: "Generate an SEO outline", produces: "A section-by-section brief before anything is written", exec: "soon" },
+          { id: `links:${r.keyword}`, label: "Generate internal links", produces: "Links from your other pages to strengthen this one", exec: "soon" },
         ],
         score: PRIORITY_WEIGHT[priority] + Math.min(99, r.impressions / 10),
       };
@@ -152,8 +150,12 @@ function fromLowCtr(rows: LowCtrRow[]): Opportunity[] {
         "Write a description that answers the searcher's question",
         "Include the location where it reads naturally",
       ],
-      actions: [
-        { label: "Rewrite title & meta", action: "fix_meta", payload: { target_url: r.page }, primary: true },
+      capabilities: [
+        { id: `meta:${r.page}`, label: "Generate title & meta description", produces: "A rewritten search listing built to earn the click", exec: "agent", action: "fix_meta", payload: { target_url: r.page }, primary: true },
+        { id: `imp:${r.page}`, label: "Improve the page content", produces: "A stronger H1 and opening that matches what people searched for", exec: "agent", action: "improve_content", payload: { target_url: r.page } },
+        { id: `faq:${r.page}`, label: "Generate an FAQ section", produces: "Answers to the questions searchers are actually asking", exec: "agent", action: "generate_faq", payload: { target_url: r.page } },
+        { id: `brief:${r.page}`, label: "Generate a content brief", produces: "A writing brief covering angle, structure and intent", exec: "soon" },
+        { id: `schema:${r.page}`, label: "Generate schema markup", produces: "Structured data so you qualify for rich results", exec: "soon" },
       ],
       score: PRIORITY_WEIGHT[priority] + Math.min(99, r.impressions / 10),
     };
@@ -185,9 +187,11 @@ function fromDeclining(rows: MoveRow[], meta: Map<string, KeywordRow>): Opportun
         "Check whether a competitor published something stronger",
         "Add depth the current page is missing",
       ],
-      actions: [
-        { label: "Improve content", action: "improve_content", payload: { target_keyword: r.keyword, target_url: r.landing_page || undefined }, primary: true },
-        { label: "Rewrite the page", action: "rewrite_page", payload: { target_keyword: r.keyword, target_url: r.landing_page || undefined } },
+      capabilities: [
+        { id: `imp:${r.keyword}`, label: "Refresh the page content", produces: "Updated, expanded content targeting this keyword again", exec: "agent", action: "improve_content", payload: { target_keyword: r.keyword, target_url: r.landing_page || undefined }, primary: true },
+        { id: `meta:${r.keyword}`, label: "Generate title & meta description", produces: "A rewritten search listing for this page", exec: "agent", action: "fix_meta", payload: { target_keyword: r.keyword, target_url: r.landing_page || undefined } },
+        { id: `rw:${r.keyword}`, label: "Rebuild the page from scratch", produces: "A brand new page written around current search intent", exec: "agent", action: "rewrite_page", payload: { target_keyword: r.keyword, target_url: r.landing_page || undefined } },
+        { id: `links:${r.keyword}`, label: "Generate internal links", produces: "Links from your other pages to rebuild authority", exec: "soon" },
       ],
       score: PRIORITY_WEIGHT[priority] + Math.min(99, drop * 6),
     };
@@ -216,9 +220,11 @@ function fromLost(rows: MoveRow[], meta: Map<string, KeywordRow>): Opportunity[]
         "Cover the sub-topics competitors now answer",
         "Add internal links to rebuild authority",
       ],
-      actions: [
-        { label: "Rewrite the page", action: "rewrite_page", payload: { target_keyword: r.keyword }, primary: true },
-        { label: "Improve content", action: "improve_content", payload: { target_keyword: r.keyword } },
+      capabilities: [
+        { id: `rw:${r.keyword}`, label: "Generate a new landing page", produces: "A fresh page written around current search intent", exec: "agent", action: "rewrite_page", payload: { target_keyword: r.keyword }, primary: true },
+        { id: `imp:${r.keyword}`, label: "Improve the existing page", produces: "Expanded, re-targeted content on the current URL", exec: "agent", action: "improve_content", payload: { target_keyword: r.keyword } },
+        { id: `faq:${r.keyword}`, label: "Generate an FAQ section", produces: "Coverage of the sub-questions competitors now answer", exec: "agent", action: "generate_faq", payload: { target_keyword: r.keyword } },
+        { id: `bl:${r.keyword}`, label: "Find backlink opportunities", produces: "Directories and sites worth earning a link from", exec: "agent", action: "build_backlinks", payload: { target_keyword: r.keyword } },
       ],
       score: PRIORITY_WEIGHT.medium + (kw?.search_volume ? Math.min(99, kw.search_volume / 20) : 0),
     };
@@ -228,6 +234,7 @@ function fromLost(rows: MoveRow[], meta: Map<string, KeywordRow>): Opportunity[]
 /** Work already done by the agents that is blocked on a human decision. */
 function fromCounts(c: CountsInput): Opportunity[] {
   const out: Opportunity[] = [];
+  const QUEUE_PREVIEW = 5;
 
   if (!c.gscConnected) {
     out.push({
@@ -236,7 +243,9 @@ function fromCounts(c: CountsInput): Opportunity[] {
       priority: "critical", difficulty: "easy", effort: "10 min",
       why: "Search Console is where your ranking, click and impression data comes from. Without it connected, most of this platform has nothing to analyse.",
       impact: [], steps: ["Link your Search Console property", "Grant read access to the platform"],
-      actions: [{ label: "View connections", href: "/portal/settings", primary: true }],
+      capabilities: [
+        { id: "gsc:nav", label: "Review your connections", produces: "See exactly what is and isn't linked", exec: "navigate", href: "/portal/settings", primary: true },
+      ],
       score: PRIORITY_WEIGHT.critical + 99,
     });
   }
@@ -248,33 +257,53 @@ function fromCounts(c: CountsInput): Opportunity[] {
       priority: "high", difficulty: "easy", effort: "10 min",
       why: "Your Business Profile drives the local map pack — the three results Google shows above everything else. It's the single biggest lever for a local business, and it isn't connected yet.",
       impact: [], steps: ["Link your Business Profile location", "Confirm categories and service area"],
-      actions: [{ label: "View connections", href: "/portal/settings", primary: true }],
+      capabilities: [
+        { id: "gbp:nav", label: "Review your connections", produces: "See exactly what is and isn't linked", exec: "navigate", href: "/portal/settings", primary: true },
+        { id: "gbp:post", label: "Generate a Google post", produces: "A ready-to-publish update for your profile", exec: "soon" },
+      ],
       score: PRIORITY_WEIGHT.high + 90,
     });
   }
 
-  if (c.pendingDrafts > 0) {
+  if (c.pendingDrafts.length > 0) {
+    const count = c.pendingDrafts.length;
     out.push({
       id: "content:pending", kind: "Awaiting you", category: "content",
-      title: `Approve ${c.pendingDrafts} piece${c.pendingDrafts === 1 ? "" : "s"} of content`,
+      title: `Approve ${count} piece${count === 1 ? "" : "s"} of content`,
       priority: "high", difficulty: "easy", effort: "5 min each",
-      why: "Your agents have already written this content. It does nothing for your rankings until you approve it and it goes live.",
-      impact: [`${c.pendingDrafts} draft${c.pendingDrafts === 1 ? "" : "s"} ready to publish`],
-      steps: ["Read each draft", "Approve or send back for a revision"],
-      actions: [{ label: "Review content", href: "/portal/content", primary: true }],
+      why: "Your agents have already written this content. It does nothing for your rankings until you approve it and it goes live — this is finished work sitting idle.",
+      impact: [`${count} draft${count === 1 ? "" : "s"} ready to publish`],
+      steps: ["Read each draft", "Approve it, or dismiss it if it's off-target", "Publish approved pages to your site"],
+      capabilities: [
+        { id: "draft:open", label: "Open the full content queue", produces: "Read every draft in full before deciding", exec: "navigate", href: "/portal/content", primary: true },
+      ],
+      queue: c.pendingDrafts.slice(0, QUEUE_PREVIEW).map((d) => ({
+        id: d.id, kind: "draft" as const, title: d.title, meta: d.meta, status: d.status,
+      })),
+      queueHref: "/portal/content",
+      queueTotal: count,
       score: PRIORITY_WEIGHT.high + 80,
     });
   }
 
-  if (c.pendingReviews > 0) {
+  if (c.pendingReviews.length > 0) {
+    const count = c.pendingReviews.length;
     out.push({
       id: "reviews:pending", kind: "Awaiting you", category: "reputation",
-      title: `Publish ${c.pendingReviews} review repl${c.pendingReviews === 1 ? "y" : "ies"}`,
+      title: `Publish ${count} review repl${count === 1 ? "y" : "ies"}`,
       priority: "high", difficulty: "easy", effort: "2 min each",
       why: "Responding to every review is a genuine local ranking signal, and the replies are already drafted for you. This is among the fastest wins available.",
-      impact: [`${c.pendingReviews} repl${c.pendingReviews === 1 ? "y" : "ies"} drafted and waiting`],
-      steps: ["Read the review and the drafted reply", "Approve it or adjust the tone"],
-      actions: [{ label: "Review replies", href: "/portal/reviews", primary: true }],
+      impact: [`${count} repl${count === 1 ? "y" : "ies"} drafted and waiting`],
+      steps: ["Read the review and the drafted reply", "Approve it, or dismiss and reply yourself"],
+      capabilities: [
+        { id: "rev:open", label: "Open the review queue", produces: "Read each review alongside its drafted reply", exec: "navigate", href: "/portal/reviews", primary: true },
+        { id: "rev:regen", label: "Regenerate a reply", produces: "A fresh reply in a different tone", exec: "soon" },
+      ],
+      queue: c.pendingReviews.slice(0, QUEUE_PREVIEW).map((r) => ({
+        id: r.id, kind: "review" as const, title: r.title, meta: r.meta, status: r.status,
+      })),
+      queueHref: "/portal/reviews",
+      queueTotal: count,
       score: PRIORITY_WEIGHT.high + 70,
     });
   }
@@ -287,9 +316,10 @@ function fromCounts(c: CountsInput): Opportunity[] {
       why: "Consistent listings across the directories Google trusts are one of the strongest local ranking signals, and one of the few things competitors can't take from you.",
       impact: [`${c.openCitations} listing${c.openCitations === 1 ? "" : "s"} outstanding`],
       steps: ["Open each directory", "Submit or correct your details", "Keep name, address and phone identical everywhere"],
-      actions: [
-        { label: "View listings", href: "/portal/local-seo", primary: true },
-        { label: "Auto-submit listings", comingSoon: true },
+      capabilities: [
+        { id: "cit:open", label: "Open your listings", produces: "Every directory we track, with its current status", exec: "navigate", href: "/portal/local-seo", primary: true },
+        { id: "cit:find", label: "Find more listing opportunities", produces: "Additional directories worth being listed in", exec: "agent", action: "build_backlinks", payload: {} },
+        { id: "cit:auto", label: "Auto-submit your details", produces: "Submits and corrects listings without you visiting each site", exec: "soon" },
       ],
       score: PRIORITY_WEIGHT.medium + 40,
     });

@@ -69,8 +69,22 @@ export default function OpportunitiesPage() {
     return buildOpportunities({
       striking, lowCtr, declining, lost, keywords,
       counts: {
-        pendingDrafts: platform?.drafts.filter((d) => d.status === "pending_review").length ?? 0,
-        pendingReviews: platform?.reviews.filter((r) => r.status === "pending_review").length ?? 0,
+        pendingDrafts: (platform?.drafts ?? [])
+          .filter((d) => d.status === "pending_review")
+          .map((d) => ({
+            id: d.id,
+            title: d.title.replace(/^(Blog|Page|New blog|New page|Audit \+ rewrite|Meta rewrite|Intent fix):\s*/i, ""),
+            meta: d.target_keyword ? `Target: ${d.target_keyword}` : undefined,
+            status: d.status,
+          })),
+        pendingReviews: (platform?.reviews ?? [])
+          .filter((r) => r.status === "pending_review")
+          .map((r) => ({
+            id: r.id,
+            title: `${r.rating ?? "—"}★ from ${r.reviewer_name || "Anonymous"}`,
+            meta: r.review_text ? r.review_text.slice(0, 90) + (r.review_text.length > 90 ? "…" : "") : undefined,
+            status: r.status,
+          })),
         openCitations: platform?.citations.filter((c) => c.status !== "live" && c.status !== "skipped").length ?? 0,
         gscConnected: !!brand.gsc_property,
         gbpConnected: !!brand.gbp_location_id,
@@ -82,7 +96,7 @@ export default function OpportunitiesPage() {
     critical: opportunities.filter((o) => o.priority === "critical").length,
     high: opportunities.filter((o) => o.priority === "high").length,
     quickWins: opportunities.filter((o) => o.difficulty === "easy").length,
-    automatable: opportunities.filter((o) => o.actions.some((a) => a.action)).length,
+    automatable: opportunities.filter((o) => o.capabilities.some((c) => c.exec === "agent")).length,
   }), [opportunities]);
 
   const visible = filter === "all" ? opportunities : opportunities.filter((o) => o.category === filter);

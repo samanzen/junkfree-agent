@@ -292,8 +292,64 @@ export const PORTAL_CSS = `
 .p-opp-steps { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .p-opp-steps li { display:flex; align-items:flex-start; gap:9px; font-size:12.5px; line-height:1.5; color:var(--text2); }
 .p-opp-steps svg { color:var(--green); flex-shrink:0; margin-top:2px; }
-.p-opp-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; padding-top:15px; border-top:1px solid var(--line-soft); }
-.p-opp-queued { display:inline-flex; align-items:center; gap:5px; padding:8px 13px; }
+.p-opp-expand {
+  display:inline-flex; align-items:center; gap:6px; margin-top:14px; background:none; border:0;
+  color:var(--accent); font-family:inherit; font-size:12.5px; font-weight:580; cursor:pointer; padding:0;
+}
+.p-opp-expand:hover { text-decoration:underline; }
+
+/* ══ Execution panel ════════════════════════════════════════════════ */
+.p-exec-panel { display:flex; flex-direction:column; gap:20px; margin-top:18px; padding-top:17px; border-top:1px solid var(--line-soft); }
+.p-exec-group { display:flex; flex-direction:column; gap:10px; }
+.p-exec-grouphead {
+  display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:680; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); margin:0;
+}
+.p-exec-grouphead svg { color:var(--accent); }
+.p-exec-caps { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:9px; }
+.p-cap {
+  display:flex; align-items:center; gap:12px; text-align:left; width:100%;
+  padding:13px 14px; border-radius:var(--r-sm); border:1px solid var(--line-soft);
+  background:var(--surface2); font-family:inherit; color:inherit;
+  transition:border-color .18s, background .18s, transform .18s;
+}
+.p-cap-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+.p-cap-label { font-size:13px; font-weight:580; letter-spacing:-.012em; }
+.p-cap-produces { font-size:11.5px; color:var(--muted); line-height:1.45; }
+.p-cap-run { cursor:pointer; }
+.p-cap-run:hover:not(:disabled) { border-color:var(--accent-line); background:var(--surface); transform:translateY(-1px); }
+.p-cap-run:disabled { cursor:default; }
+.p-cap-link { text-decoration:none; cursor:pointer; }
+.p-cap-link:hover { border-color:var(--accent-line); background:var(--surface); transform:translateY(-1px); }
+.p-cap-go {
+  flex-shrink:0; font-size:11.5px; font-weight:640; color:var(--accent);
+  background:var(--accent-soft); border:1px solid var(--accent-line); padding:4px 11px; border-radius:20px;
+}
+.p-cap-done { flex-shrink:0; color:var(--green); display:flex; }
+.p-cap.is-done { border-color:transparent; background:var(--green-soft); }
+.p-cap-arrow { color:var(--muted2); flex-shrink:0; }
+.p-cap-soon { opacity:.62; }
+.p-cap-soontag {
+  flex-shrink:0; display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:640;
+  letter-spacing:.05em; text-transform:uppercase; color:var(--muted); background:var(--surface3);
+  border:1px solid var(--line); padding:3px 8px; border-radius:20px; white-space:nowrap;
+}
+.p-exec-queue { display:flex; flex-direction:column; gap:8px; }
+.p-qitem {
+  display:flex; align-items:center; gap:14px; padding:12px 14px; border-radius:var(--r-sm);
+  background:var(--surface2); border:1px solid var(--line-soft); flex-wrap:wrap;
+}
+.p-qitem-main { flex:1; min-width:180px; display:flex; flex-direction:column; gap:3px; }
+.p-qitem-title { font-size:13px; font-weight:560; letter-spacing:-.012em; }
+.p-qitem-meta { font-size:11.5px; color:var(--muted); line-height:1.45; }
+.p-qitem-actions { display:flex; align-items:center; gap:7px; flex-shrink:0; }
+.p-qitem-btn { padding:6.5px 13px; font-size:12px; }
+.p-qitem-state { display:inline-flex; align-items:center; gap:5px; }
+.p-exec-more {
+  display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:580;
+  color:var(--accent); text-decoration:none; margin-top:2px;
+}
+.p-exec-more:hover { text-decoration:underline; }
 @media (max-width:760px) {
   .p-opp-facts { display:none; }
   .p-opp-body { grid-template-columns:1fr; gap:16px; }
