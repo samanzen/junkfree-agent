@@ -373,6 +373,13 @@ export const PORTAL_CSS = `
 }
 .p-tech-finding-url:hover { text-decoration:underline; }
 .p-tech-finding-why { font-size:12.5px; color:var(--muted); line-height:1.6; margin-top:6px; }
+.p-tech-note {
+  display:flex; align-items:flex-start; gap:9px; margin:0 0 16px;
+  padding:12px 14px; border-radius:var(--r-sm);
+  background:var(--surface2); border:1px solid var(--line-soft);
+  font-size:12px; color:var(--muted); line-height:1.6;
+}
+.p-tech-note svg { color:var(--amber); flex-shrink:0; margin-top:2px; }
 
 /* ══ Competitor Intelligence ════════════════════════════════════════ */
 .p-comp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(256px,1fr)); gap:11px; }

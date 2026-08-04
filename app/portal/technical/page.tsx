@@ -258,6 +258,15 @@ export default function TechnicalPage() {
               badgeTone="plain"
               sub="Run against every page your last audit inspected. Duplicates are compared across that whole set."
             />
+            <p className="p-tech-note">
+              <IconAlert size={13} />
+              <span>
+                These checks read the HTML your server sends, before any JavaScript runs. If your site
+                renders its headings or text in the browser, pages can show here as missing an H1 or
+                thin while still looking complete to a visitor. What your server sends is still what
+                crawlers see first, so it&apos;s worth reviewing either way.
+              </span>
+            </p>
             {isLoading ? (
               <div className="p-skel" style={{ height: 150 }} />
             ) : !tech || !tech.available ? (
