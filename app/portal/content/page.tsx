@@ -114,13 +114,15 @@ export default function ContentPage() {
         <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconContent size={17} />}
-            title="Content scheduling"
-            desc="Queue approved content to publish on a set date and time, and build out a publishing calendar weeks in advance instead of publishing everything at once."
+            title="Publish on your schedule"
+            desc="Queue approved content for a set date and time and build a calendar weeks ahead, instead of everything going live the moment you approve it."
+            unlocks={["Choose exactly when each piece goes live", "Plan weeks of content in advance", "Keep a steady publishing rhythm"]}
             note="Approved content currently publishes immediately."
           />
           <ConnectCard
             title="Publishing calendar"
             desc="A month-at-a-glance view of what's going live and when, across your website, Google Posts and social channels."
+            unlocks={["A month-at-a-glance publishing view", "Website, Google Posts and social together"]}
           />
         </Stagger>
       ) : (
@@ -145,10 +147,12 @@ export default function ContentPage() {
             <ConnectCard
               title="Write on demand"
               desc="Type a topic or keyword and get a full draft back in your voice, without waiting for the weekly cycle."
+              unlocks={["Type a topic, get a full draft back", "Written in your established brand voice"]}
             />
             <ConnectCard
               title="Social posts"
               desc="Turn every published article into ready-to-post updates for Facebook, Instagram and LinkedIn, matched to your brand voice."
+              unlocks={["Every article becomes ready-to-post updates", "Facebook, Instagram and LinkedIn"]}
             />
           </Stagger>
         </div>

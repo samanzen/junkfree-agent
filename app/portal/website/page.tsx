@@ -152,14 +152,17 @@ export default function WebsitePage() {
               title="Issue breakdown"
               desc="A page-by-page list of every technical issue found — missing titles, thin content, duplicate meta descriptions, heading structure problems — each with a one-click fix."
               note="Surfaces here as the audit history builds up."
+              unlocks={["Every issue listed page by page", "One-click fixes queued for you", "Prioritised by real ranking impact"]}
             />
             <ConnectCard
               title="Broken links"
               desc="Continuously scans your site for links that return 404s or redirect chains, both internally and to external sites."
+              unlocks={["Continuous 404 and redirect-chain scanning", "Internal and outbound links both covered"]}
             />
             <ConnectCard
               title="Indexing status"
               desc="Which of your pages Google has actually indexed, which are excluded, and why — pulled directly from Search Console's index coverage."
+              unlocks={["See exactly which pages Google indexed", "Understand why anything was excluded"]}
             />
           </Stagger>
         </div>
@@ -169,17 +172,20 @@ export default function WebsitePage() {
         <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconWebsite size={17} />}
-            title="Core Web Vitals"
-            desc="Largest Contentful Paint, Interaction to Next Paint and Cumulative Layout Shift for both mobile and desktop, tracked over time against Google's thresholds."
+            title="Speed that Google rewards"
+            desc="Core Web Vitals are a confirmed ranking factor. We track loading, responsiveness and visual stability on mobile and desktop, over time."
+            unlocks={["Mobile and desktop scores tracked over time", "Measured against Google's pass thresholds", "Alerts when a release slows you down"]}
             note="Requires PageSpeed Insights to be connected."
           />
           <ConnectCard
             title="Page speed by template"
             desc="Identifies which page templates are slowest so fixes apply across many pages at once rather than one at a time."
+            unlocks={["Find the slowest templates first", "Fix once, improve many pages at once"]}
           />
           <ConnectCard
             title="Mobile usability"
             desc="Flags tap targets that are too small, text that's too narrow to read, and content wider than the screen."
+            unlocks={["Tap targets, font sizes and viewport issues", "Flagged before they cost you rankings"]}
           />
         </Stagger>
       )}
@@ -190,14 +196,17 @@ export default function WebsitePage() {
             title="Internal linking opportunities"
             desc="Finds pages that should link to each other based on topic overlap — one of the highest-leverage, lowest-effort SEO wins available."
             note="Planned: uses your existing content and keyword map."
+            unlocks={["Pages that should link to each other", "One of the fastest wins in SEO"]}
           />
           <ConnectCard
             title="Schema markup"
             desc="Checks your LocalBusiness, Service, FAQ and Review structured data, and generates whatever's missing so you're eligible for rich results."
+            unlocks={["LocalBusiness, Service, FAQ and Review coverage", "Become eligible for rich results"]}
           />
           <ConnectCard
             title="Sitemap & robots"
             desc="Validates that your sitemap is present, current, and not blocking anything you want indexed."
+            unlocks={["Validates your sitemap stays current", "Catches anything accidentally blocked"]}
           />
         </Stagger>
       )}

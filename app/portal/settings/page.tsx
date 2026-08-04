@@ -55,6 +55,7 @@ export default function SettingsPage() {
               title="Multiple locations"
               desc="Track rankings, reviews and citations separately for each location you serve, with a combined roll-up view."
               note="Your account currently covers one location."
+              unlocks={["Rankings and reviews tracked per location", "Plus a combined roll-up view"]}
             />
           </Stagger>
         </div>
@@ -104,14 +105,17 @@ export default function SettingsPage() {
             title="Email alerts"
             desc="Get notified when a keyword breaks into the top 3, when rankings drop sharply, or when new content is ready for your review."
             note="Notification preferences aren't configurable from the portal yet."
+            unlocks={["Know when a keyword hits the top 3", "And the moment rankings drop sharply"]}
           />
           <ConnectCard
             title="Weekly digest"
             desc="A short Monday morning summary of what changed last week and what's planned for this one."
+            unlocks={["A short Monday morning summary", "What changed, and what's planned next"]}
           />
           <ConnectCard
             title="Review alerts"
             desc="Be told the moment a new review lands — especially a negative one that needs a fast, considered reply."
+            unlocks={["Told the moment a review lands", "Especially the ones needing a fast reply"]}
           />
         </Stagger>
       )}
@@ -129,10 +133,12 @@ export default function SettingsPage() {
             <ConnectCard
               title="Two-factor authentication"
               desc="Add a second verification step when signing in, for stronger protection of your business data."
+              unlocks={["A second step when signing in", "Stronger protection for your business data"]}
             />
             <ConnectCard
               title="Team access"
               desc="Invite colleagues with their own logins and control what each person can see and approve."
+              unlocks={["Invite colleagues with their own logins", "Control what each person can see and approve"]}
             />
           </Stagger>
         </div>

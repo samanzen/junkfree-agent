@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
+import ChartTooltip from "./ChartTooltip";
 
 export type Series = { key: string; name: string; color: string };
 
@@ -31,13 +32,8 @@ export default function MultiLineChart({
           axisLine={false} allowDecimals={false} width={40}
         />
         <Tooltip
-          cursor={{ stroke: "var(--line-strong)", strokeWidth: 1 }}
-          contentStyle={{
-            background: "var(--surface)", border: "1px solid var(--line)",
-            borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-lg)", color: "var(--text)",
-            padding: "9px 12px",
-          }}
-          labelStyle={{ color: "var(--muted)", marginBottom: 4, fontSize: 11 }}
+          cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+          content={<ChartTooltip />}
         />
         <Legend
           wrapperStyle={{ fontSize: 11.5, color: "var(--muted)", paddingTop: 10 }}

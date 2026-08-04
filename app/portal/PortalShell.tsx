@@ -73,12 +73,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   // both be mounted at once, and a shared layoutId across the two would make
   // the indicator fly between them.
   const renderSidebar = (navId: string) => (
-    <>
+    <div className="p-side-inner">
       <div className="p-side-brand">
         <span className="p-side-mark">{initials(brand?.name)}</span>
         <span className="p-side-names">
           <span className="p-side-name">{brand?.name || "Your Business"}</span>
-          <span className="p-side-sub">SEO Platform</span>
+          <span className="p-side-sub">AI SEO Platform</span>
         </span>
       </div>
       <nav className="p-side-nav">
@@ -90,9 +90,9 @@ export default function PortalShell({ children }: { children: React.ReactNode })
               return (
                 <Link key={item.href} href={item.href} className={`p-nav-item ${active ? "on" : ""}`}>
                   {active && (
-                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.26, ease: EASE }} />
+                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.3, ease: EASE }} />
                   )}
-                  <item.Icon size={17} />
+                  <span className="p-nav-ico"><item.Icon size={16} /></span>
                   <span className="p-nav-text">{item.label}</span>
                 </Link>
               );
@@ -106,7 +106,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         </button>
         <button className="p-signout-btn" onClick={signOut}>Sign out</button>
       </div>
-    </>
+    </div>
   );
 
   return (
@@ -172,13 +172,13 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 function ShellSkeleton() {
   return (
     <div className="p-stack">
-      <div className="p-skel" style={{ height: 128, borderRadius: 24 }} />
+      <div className="p-skel" style={{ height: 268, borderRadius: 26 }} />
       <div className="p-score-grid">
-        {[...Array(5)].map((_, i) => <div key={i} className="p-skel" style={{ height: 144 }} />)}
+        {[...Array(5)].map((_, i) => <div key={i} className="p-skel" style={{ height: 152 }} />)}
       </div>
       <div className="p-2col">
-        <div className="p-skel" style={{ height: 260 }} />
-        <div className="p-skel" style={{ height: 260 }} />
+        <div className="p-skel" style={{ height: 280 }} />
+        <div className="p-skel" style={{ height: 280 }} />
       </div>
     </div>
   );

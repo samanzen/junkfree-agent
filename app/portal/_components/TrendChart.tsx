@@ -3,6 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
+import ChartTooltip from "./ChartTooltip";
 
 export type TrendPoint = { date: string } & Record<string, string | number>;
 
@@ -26,8 +27,14 @@ export default function TrendChart({
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.24} />
+            <stop offset="0%" stopColor={color} stopOpacity={0.30} />
+            <stop offset="60%" stopColor={color} stopOpacity={0.07} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id={`${gradientId}-line`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--accent3)" />
+            <stop offset="50%" stopColor={color} />
+            <stop offset="100%" stopColor="var(--accent2)" />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
@@ -39,21 +46,16 @@ export default function TrendChart({
           tick={{ fill: "var(--muted2)", fontSize: 11 }} tickLine={false} axisLine={false} width={44}
         />
         <Tooltip
-          cursor={{ stroke: "var(--line-strong)", strokeWidth: 1 }}
-          contentStyle={{
-            background: "var(--surface)", border: "1px solid var(--line)",
-            borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-lg)", color: "var(--text)",
-            padding: "9px 12px",
-          }}
-          labelStyle={{ color: "var(--muted)", marginBottom: 4, fontSize: 11 }}
-          itemStyle={{ color: "var(--text)", fontSize: 12.5, fontWeight: 550 }}
+          cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
+          content={<ChartTooltip />}
         />
         <Area
-          type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2}
+          type="monotone" dataKey={dataKey}
+          stroke={`url(#${gradientId}-line)`} strokeWidth={2.4}
           fill={`url(#${gradientId})`} name={name}
-          activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }}
+          activeDot={{ r: 5, strokeWidth: 2.5, stroke: "var(--surface)", fill: color }}
           isAnimationActive={!reduce}
-          animationDuration={1000}
+          animationDuration={1100}
           animationEasing="ease-out"
         />
       </AreaChart>

@@ -138,17 +138,20 @@ export default function ReportsPage() {
         <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconReports size={17} />}
-            title="Scheduled email reports"
-            desc="Have this report delivered automatically every week, month or quarter — to you, your business partner, or anyone else who should see it."
+            title="Reports that arrive on their own"
+            desc="Have this report delivered automatically every week, month or quarter — to you, your business partner, or anyone else who should see the numbers."
+            unlocks={["Delivered weekly, monthly or quarterly", "To any recipients you choose", "No login required to read it"]}
             note="Report emails aren't switched on for your account yet."
           />
           <ConnectCard
             title="White-label reports"
             desc="Put your own logo, colours and company details on every report, so it can be shared with clients as your own work."
+            unlocks={["Your logo, colours and company details", "Shareable as your own work"]}
           />
           <ConnectCard
             title="Period comparisons"
             desc="Compare any two date ranges side by side — this month vs last, this quarter vs the same quarter last year."
+            unlocks={["Any two date ranges side by side", "Quarter-over-quarter and year-over-year"]}
           />
         </Stagger>
       )}

@@ -120,21 +120,25 @@ export default function ReviewsPage() {
         <Stagger className="p-subgrid">
           <ConnectCard
             icon={<IconReviews size={17} />}
-            title="Live review monitoring"
-            desc="Automatically pull in new reviews from Google, Facebook and the directories that matter in your industry, the moment they're posted."
+            title="Never miss a review again"
+            desc="New reviews arrive the moment they're posted, from Google, Facebook and the directories that matter in your industry — with a reply already drafted."
+            unlocks={["Reviews pulled in automatically", "A reply drafted before you've even read it", "Negative reviews flagged first"]}
             note="Requires Google Business Profile to be connected."
           />
           <ConnectCard
             title="Review growth tracking"
             desc="Track how many new reviews you gain each month and how your average rating trends against local competitors."
+            unlocks={["New reviews per month at a glance", "Your rating trend vs local competitors"]}
           />
           <ConnectCard
             title="Review requests"
             desc="Send review invitations to happy customers by SMS or email, and see which campaigns actually convert."
+            unlocks={["Invite happy customers by SMS or email", "See which campaigns actually convert"]}
           />
           <ConnectCard
             title="Sentiment themes"
             desc="Groups what customers praise and complain about most, so you know what to fix and what to promote."
+            unlocks={["What customers praise most", "What to fix, ranked by how often it comes up"]}
           />
         </Stagger>
       )}

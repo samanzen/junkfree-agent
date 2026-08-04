@@ -33,18 +33,22 @@ export default function BillingPage() {
           icon={<IconBilling size={17} />}
           title="Subscription management"
           desc="View your current plan, change tier, or pause your subscription without needing to email anyone."
+          unlocks={["View or change your plan any time", "No email back-and-forth required"]}
         />
         <ConnectCard
           title="Invoices"
           desc="Download every past invoice as a PDF, with your business details already filled in for your accountant."
+          unlocks={["Download every invoice as a PDF", "Business details already filled in"]}
         />
         <ConnectCard
           title="Payment methods"
           desc="Add or update the card on file, and set a backup payment method so service is never interrupted."
+          unlocks={["Update the card on file", "Add a backup so service never lapses"]}
         />
         <ConnectCard
           title="Usage"
           desc="See exactly what your plan covers this month — content pieces produced, keywords tracked, locations monitored and reports generated."
+          unlocks={["Content produced and keywords tracked", "Exactly what your plan covers this month"]}
         />
       </Stagger>
     </div>

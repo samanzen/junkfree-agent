@@ -12,8 +12,12 @@ import TrendChart from "./_components/TrendChart";
 import AiSummary from "./_components/AiSummary";
 import EmptyState from "./_components/EmptyState";
 import { Panel, PanelHead } from "./_components/Panel";
-import { Stagger, StaggerItem, Reveal } from "./_components/motion";
-import { IconLock, IconExternal } from "./icons";
+import MissionHero from "./_components/MissionHero";
+import { Stagger, StaggerItem } from "./_components/motion";
+import {
+  IconLock, IconExternal, IconTraffic, IconKey, IconTarget,
+  IconLink, IconLeads, IconPhone, IconReviews,
+} from "./icons";
 
 type PriorityTone = "accent" | "green" | "amber" | "red" | "pink";
 type Priority = { text: string; sub?: string; tone: PriorityTone; href?: string };
@@ -85,21 +89,21 @@ export default function PortalDashboard() {
 
   return (
     <div className="p-home">
-      {/* Hero */}
-      <Reveal className="p-hero-card">
-        <div>
-          <div className="p-hero-greet">{greeting()}</div>
-          <h1 className="p-h1">{brand.name}</h1>
-          <p className="p-sub">
-            {summary.brand?.service_area
-              ? `Here's how your business is performing in ${summary.brand.service_area}.`
-              : "Here's how your business is performing right now."}
-          </p>
-        </div>
-        <div className="p-hero-ring">
-          <ScoreRing value={overall} size={124} strokeWidth={10} label="Business Health" big />
-        </div>
-      </Reveal>
+      {/* Mission Control */}
+      <MissionHero
+        greeting={greeting()}
+        title={brand.name}
+        subtitle={summary.brand?.service_area
+          ? `Your search performance across ${summary.brand.service_area}, updated continuously.`
+          : "Your search performance, updated continuously."}
+        score={overall}
+        stats={[
+          { label: "Organic traffic", value: m.organic_traffic, delta: m.traffic_delta },
+          { label: "Ranking keywords", value: m.organic_keywords, delta: m.keywords_delta },
+          { label: "Avg. position", value: m.avg_position, decimals: 1, delta: m.position_delta, invert: true },
+          { label: "Site health", value: m.site_health, suffix: "%" },
+        ]}
+      />
 
       {/* Score cards */}
       <Stagger className="p-score-grid">
@@ -145,14 +149,14 @@ export default function PortalDashboard() {
           <Panel>
             <PanelHead title="Business metrics" sub="Live numbers from Search Console and your ranking data." />
             <Stagger className="p-kpi-grid" stagger={0.045}>
-              <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} color="var(--accent)" hint="Est. monthly visitors" />
-              <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} color="var(--green)" hint="Keywords you appear for" />
-              <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} color="var(--amber)" decimals={1} invert hint="Lower is better" />
-              <MetricCard label="Reviews" value={reviewCount} color="var(--pink)" hint="Drafted replies" />
-              <MetricCard label="Leads" locked lockedHint="Connect lead tracking" color="var(--blue)" />
-              <MetricCard label="Calls" locked lockedHint="Connect call tracking" color="var(--blue)" />
-              <MetricCard label="Conversions" locked lockedHint="Connect analytics" color="var(--blue)" />
-              <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} color="var(--blue)" hint="Sites linking to you" />
+              <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} tone="accent" icon={<IconTraffic size={16} />} hint="Est. monthly visitors" />
+              <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} tone="green" icon={<IconKey size={16} />} hint="Keywords you appear for" />
+              <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} tone="amber" icon={<IconTarget size={16} />} decimals={1} invert hint="Lower is better" />
+              <MetricCard label="Reviews" value={reviewCount} tone="pink" icon={<IconReviews size={16} />} hint="Drafted replies" />
+              <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} tone="blue" icon={<IconLink size={16} />} hint="Sites linking to you" />
+              <MetricCard label="Leads" locked lockedHint="Connect lead tracking" icon={<IconLeads size={16} />} />
+              <MetricCard label="Calls" locked lockedHint="Connect call tracking" icon={<IconPhone size={16} />} />
+              <MetricCard label="Conversions" locked lockedHint="Connect analytics" icon={<IconTarget size={16} />} />
             </Stagger>
           </Panel>
 

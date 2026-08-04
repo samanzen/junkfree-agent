@@ -123,18 +123,22 @@ export default function LocalSeoPage() {
           ) : (
             <Stagger className="p-subgrid">
               <ConnectCard
-                icon={<IconLocalSeo size={17} />}
-                title="Connect your Google Business Profile"
-                desc="Your Business Profile drives the map pack — the three local results Google shows above everything else. Connecting it unlocks profile views, search terms, calls and direction requests."
+                icon={<IconLocalSeo size={19} />}
+                title="Own the map pack"
+                desc="Your Business Profile drives the three local results Google shows above everything else — where most local customers actually click."
+                unlocks={["Profile views, calls and direction requests", "The exact searches people used to find you", "Map pack position tracked week to week"]}
                 note="Ask your account manager to link your profile."
+                cta={{ label: "View connections", href: "/portal/settings" }}
               />
               <ConnectCard
-                title="Profile completeness"
-                desc="Once connected, we score your profile on hours, categories, services, photos and description — and tell you exactly what's missing."
+                title="A profile that converts"
+                desc="We score your profile on hours, categories, services, photos and description — then tell you precisely what's missing and why it matters."
+                unlocks={["A completeness score you can act on", "Prioritised fixes, biggest impact first"]}
               />
               <ConnectCard
-                title="Google Posts performance"
-                desc="See which of your published Google Posts drive the most views and clicks, and get new ones drafted automatically."
+                title="Posts that get seen"
+                desc="See which Google Posts actually drive views and clicks, and get fresh ones drafted for you automatically every week."
+                unlocks={["Per-post views and click-throughs", "New posts written in your voice"]}
               />
             </Stagger>
           )}
@@ -164,8 +168,9 @@ export default function LocalSeoPage() {
 
           <Stagger className="p-subgrid">
             <ConnectCard
-              title="NAP consistency monitoring"
-              desc="Automatically checks that your Name, Address and Phone number match exactly across every directory — mismatches are one of the most common reasons local rankings stall."
+              title="Never lose rankings to a typo"
+              desc="Mismatched contact details across directories are one of the most common reasons local rankings quietly stall. We watch every listing for you."
+              unlocks={["Name, address and phone checked across all directories", "Alerts the moment something drifts out of sync"]}
               note="Requires directory monitoring to be enabled."
             />
           </Stagger>
@@ -183,19 +188,23 @@ export default function LocalSeoPage() {
       ) : (
         <Stagger className="p-subgrid">
           <ConnectCard
-            icon={<IconLocalSeo size={17} />}
-            title="Map pack tracking"
-            desc="Track your position in Google's local 3-pack for each of your core services, and see how that changes week to week."
+            icon={<IconLocalSeo size={19} />}
+            title="Know your map pack position"
+            desc="Track exactly where you sit in Google's local 3-pack for every service you offer, and watch it move week to week."
+            unlocks={["Position tracked per service", "Week-over-week movement alerts"]}
             note="Requires Google Business Profile to be connected."
+            cta={{ label: "View connections", href: "/portal/settings" }}
           />
           <ConnectCard
-            title="Geo-grid rankings"
-            desc="Visualise how your rankings change across a grid of points around your service area — so you can see exactly where you're strong and where competitors beat you."
+            title="See your reach street by street"
+            desc="Rankings change block to block. A geo-grid shows exactly where you dominate and where a competitor quietly owns the neighbourhood."
+            unlocks={["Visual heatmap across your service area", "Pinpoint the suburbs worth targeting next"]}
           />
           <ConnectCard
-            icon={<IconReviews size={17} />}
-            title="Competitor map comparison"
-            desc="See which businesses outrank you in the map pack, along with their rating, review count and category setup."
+            icon={<IconReviews size={19} />}
+            title="Size up every local rival"
+            desc="See which businesses outrank you in the map pack — their rating, review count and how their profile is set up differently to yours."
+            unlocks={["Side-by-side competitor comparison", "The specific gaps you can close"]}
           />
         </Stagger>
       )}

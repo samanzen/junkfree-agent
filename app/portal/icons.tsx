@@ -76,3 +76,23 @@ export function IconSend({ size = 16, className }: IconProps) {
 export function IconLock({ size = 14, className }: IconProps) {
   return <svg {...base(size)} className={className}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
 }
+
+// ── Metric icons (KPI chips) ────────────────────────────────────────────────
+export function IconTraffic({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><path d="M3 16.5 9 10l4 4 7.5-7.5" /><path d="M15 6.5h5.5V12" /></svg>;
+}
+export function IconKey({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><circle cx="8" cy="12" r="4" /><path d="M12 12h9M18 12v3.5M15.5 12v2.5" /></svg>;
+}
+export function IconTarget({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r="1" /></svg>;
+}
+export function IconLink({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 1 0-5.7-5.7L11.9 6.4" /><path d="M13.5 10.5a4 4 0 0 0-5.7 0L5 13.3a4 4 0 1 0 5.7 5.7l1.4-1.4" /></svg>;
+}
+export function IconLeads({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" /><circle cx="9.5" cy="7.5" r="3.5" /><path d="M17.5 4.5v6M20.5 7.5h-6" /></svg>;
+}
+export function IconPhone({ size = 16, className }: IconProps) {
+  return <svg {...base(size)} className={className}><path d="M21 16.9v2.6a1.7 1.7 0 0 1-1.9 1.7 17 17 0 0 1-7.4-2.6 16.7 16.7 0 0 1-5.1-5.1A17 17 0 0 1 4 6.1 1.7 1.7 0 0 1 5.7 4.2h2.6a1.7 1.7 0 0 1 1.7 1.5c.1.9.3 1.7.6 2.5a1.7 1.7 0 0 1-.4 1.8l-1.1 1.1a13.7 13.7 0 0 0 5.1 5.1l1.1-1.1a1.7 1.7 0 0 1 1.8-.4c.8.3 1.6.5 2.5.6A1.7 1.7 0 0 1 21 16.9Z" /></svg>;
+}
