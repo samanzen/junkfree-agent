@@ -585,8 +585,18 @@ export async function stepRankEnrich(brand: Brand) {
     status: k.status,
   }));
 
+  // Scoring 50 keywords is a large reasoning task. On current models thinking
+  // is ON by default and is billed against the SAME max_tokens as the answer,
+  // so the previous {maxTokens: 2000, no thinking config} spent the entire
+  // budget on thinking and returned zero text blocks -- extractJSON then got
+  // "" and every ai_opportunity_score silently stayed null. Disabling thinking
+  // makes the whole budget available to the JSON and is measurably cheaper and
+  // faster here, with equivalent scores. The prompt and scoring rubric below
+  // are unchanged.
+  let scoringError: string | null = null;
   const aiText = await callClaude({
-    maxTokens: 2000,
+    maxTokens: 8000,
+    thinking: { type: "disabled" },
     user: `You are an SEO strategist for a local service business.
 
 BUSINESS: ${brand.name} — ${brand.services} in ${brand.service_area}.
@@ -600,9 +610,44 @@ ${JSON.stringify(kwContext, null, 2)}
 
 Return ONLY JSON array:
 [{"keyword":"...","score":0-100,"reason":"one sentence why"}]`,
-  }).catch(() => null);
+  }).catch((err) => {
+    // Previously `.catch(() => null)` -- the reason was thrown away and the
+    // job reported success while writing no scores at all.
+    scoringError = `model call failed: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  });
 
-  const aiScores = extractJSON<{ keyword: string; score: number; reason: string }[]>(aiText || "") || [];
+  let aiScores = extractJSON<{ keyword: string; score: number; reason: string }[]>(aiText || "") || [];
+
+  if (!scoringError) {
+    if (!aiText) scoringError = "model returned no text (see [callClaude] EMPTY TEXT above for stop_reason and token split)";
+    else if (!Array.isArray(aiScores) || aiScores.length === 0) {
+      scoringError = `could not parse a score array from ${aiText.length} chars of model output`;
+    }
+  }
+
+  // Only keep entries that carry a real, in-range score. Anything malformed is
+  // dropped rather than written, so a bad row leaves the column null instead of
+  // storing a junk value.
+  const usable = (Array.isArray(aiScores) ? aiScores : []).filter(
+    (s) => s && typeof s.keyword === "string" && typeof s.score === "number"
+      && Number.isFinite(s.score) && s.score >= 0 && s.score <= 100
+  );
+  if (!scoringError && usable.length < aiScores.length) {
+    console.warn(`[stepRankEnrich] ${brand.slug}: dropped ${aiScores.length - usable.length} malformed score row(s)`);
+  }
+  aiScores = usable;
+
+  if (scoringError) {
+    // Loud and specific. Enrichment still continues: volume, difficulty and
+    // intent are independent of scoring and are worth persisting either way.
+    console.error(
+      `[stepRankEnrich] ${brand.slug}: ai_opportunity_score NOT computed for ${toEnrich.length} keyword(s) — ${scoringError}`
+    );
+  } else {
+    console.log(`[stepRankEnrich] ${brand.slug}: scored ${aiScores.length}/${toEnrich.length} keyword(s)`);
+  }
+
   const aiMap = new Map(aiScores.map((s) => [s.keyword, s]));
 
   // --- Compute traffic + revenue opportunity ---
@@ -650,5 +695,5 @@ Return ONLY JSON array:
     }).eq("id", kw.id);
   }
 
-  return { enriched: toEnrich.length };
+  return { enriched: toEnrich.length, scored: aiScores.length, scoring_error: scoringError };
 }
