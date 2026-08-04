@@ -93,6 +93,9 @@ export function IconLink({ size = 16, className }: IconProps) {
 export function IconLeads({ size = 16, className }: IconProps) {
   return <svg {...base(size)} className={className}><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" /><circle cx="9.5" cy="7.5" r="3.5" /><path d="M17.5 4.5v6M20.5 7.5h-6" /></svg>;
 }
+export function IconCompetitors({ size = 18, className }: IconProps) {
+  return <svg {...base(size)} className={className}><path d="M4 21V10M12 21V4M20 21v-7" /><path d="M2 21h20" /><circle cx="12" cy="4" r="1.6" /></svg>;
+}
 export function IconPhone({ size = 16, className }: IconProps) {
   return <svg {...base(size)} className={className}><path d="M21 16.9v2.6a1.7 1.7 0 0 1-1.9 1.7 17 17 0 0 1-7.4-2.6 16.7 16.7 0 0 1-5.1-5.1A17 17 0 0 1 4 6.1 1.7 1.7 0 0 1 5.7 4.2h2.6a1.7 1.7 0 0 1 1.7 1.5c.1.9.3 1.7.6 2.5a1.7 1.7 0 0 1-.4 1.8l-1.1 1.1a13.7 13.7 0 0 0 5.1 5.1l1.1-1.1a1.7 1.7 0 0 1 1.8-.4c.8.3 1.6.5 2.5.6A1.7 1.7 0 0 1 21 16.9Z" /></svg>;
 }

@@ -355,6 +355,36 @@ export const PORTAL_CSS = `
   .p-opp-body { grid-template-columns:1fr; gap:16px; }
 }
 
+/* ══ Competitor Intelligence ════════════════════════════════════════ */
+.p-comp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(256px,1fr)); gap:11px; }
+.p-comp {
+  position:relative; display:flex; align-items:center; gap:4px;
+  background:var(--surface2); border:1px solid var(--line-soft); border-radius:var(--r);
+  transition:border-color .2s, background .2s, box-shadow .2s;
+}
+.p-comp:hover { border-color:var(--accent-line); background:var(--surface); box-shadow:var(--sh-1); }
+.p-comp.on { border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-soft); }
+.p-comp-main {
+  flex:1; min-width:0; display:flex; align-items:center; gap:12px; padding:14px 4px 14px 14px;
+  background:none; border:0; font:inherit; color:inherit; cursor:pointer; text-align:left;
+}
+.p-comp-avatar {
+  width:36px; height:36px; border-radius:11px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(145deg,var(--accent3),var(--accent) 48%,var(--accent2)); color:#fff;
+  font-size:12px; font-weight:700; letter-spacing:-.02em;
+  box-shadow:0 3px 10px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.26);
+}
+.p-comp-info { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.p-comp-domain { font-size:13.5px; font-weight:600; letter-spacing:-.016em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.p-comp-meta { font-size:11.5px; color:var(--muted); }
+.p-comp-remove {
+  flex-shrink:0; background:none; border:0; color:var(--muted2); cursor:pointer;
+  padding:8px 12px 8px 6px; display:flex; align-items:center; transition:color .18s;
+}
+.p-comp-remove:hover { color:var(--red); }
+.p-battle-none { font-size:11.5px; color:var(--muted2); font-style:italic; }
+.p-battle-btn { padding:6px 12px; font-size:12px; white-space:nowrap; }
+
 /* ══ Section label ══════════════════════════════════════════════════ */
 .p-sectionlabel { margin-bottom:14px; }
 .p-sectionlabel h2 { font-size:15px; font-weight:640; letter-spacing:-.024em; margin:0; }
