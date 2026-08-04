@@ -12,7 +12,7 @@ import { keywordStrategy, competitorGaps } from "./intelligence";
 import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
-import { auditSite } from "./auditor";
+import { auditSite, type AuditedPage } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
 
@@ -252,6 +252,36 @@ export async function stepAudit(brand: Brand, runId: string) {
   const result = await safe(() => auditSite(brand, 12));
   const audited = (result as { audited?: number } | null)?.audited || 0;
   const issues = (result as { issues?: { url: string; problem: string; severity: string; fix: string; task_type: string }[] } | null)?.issues || [];
+  const pages = (result as { pages?: AuditedPage[] } | null)?.pages || [];
+
+  // Sprint 7: persist the auditor's per-page output so the Technical SEO
+  // module reads a real dataset instead of a value that only ever existed at
+  // runtime. One row per page per run, so history accumulates.
+  //
+  // Best-effort by design: written inside safe() so a brand whose database
+  // hasn't had supabase/010_page_audits.sql applied yet still completes its
+  // audit exactly as before. Same convention lib/queue.ts uses for its
+  // optional observability columns.
+  if (pages.length) {
+    const runAt = new Date().toISOString();
+    await safe(async () =>
+      await db.from("page_audits").insert(
+        pages.map((p) => ({
+          brand_id: brand.id,
+          url: p.url,
+          http_status: p.status,
+          title: p.title || null,
+          meta_description: p.meta || null,
+          h1: p.h1 || null,
+          canonical: p.canonical || null,
+          robots_meta: p.robots || null,
+          word_count: p.words,
+          fetched_at: runAt,
+          audit_run_at: runAt,
+        }))
+      )
+    );
+  }
 
   // Site Health score — derived from this same audit pass, no extra crawl or
   // AI call. Cached in `reports` (section="site_health") so metrics.snapshot()

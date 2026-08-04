@@ -22,8 +22,22 @@ async function sitemapUrls(siteUrl: string): Promise<string[]> {
   return [];
 }
 
+// One page as observed during a crawl. `status`, `canonical` and `robots` are
+// read from the same response the auditor already downloads — they are extra
+// extractions, not extra requests.
+export type AuditedPage = {
+  url: string;
+  title: string;
+  meta: string;
+  h1: string;
+  words: number;
+  status: number | null;
+  canonical: string;
+  robots: string;
+};
+
 // Fetch a page and extract title, meta description, and visible text length.
-async function inspectPage(url: string) {
+async function inspectPage(url: string): Promise<AuditedPage | null> {
   try {
     const res = await fetch(url, { headers: { "User-Agent": "SEO-Platform-Auditor" } });
     if (!res.ok) return null;
@@ -32,6 +46,16 @@ async function inspectPage(url: string) {
     const meta =
       html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)?.[1]?.trim() || "";
     const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, "").trim() || "";
+    // Canonical + robots directives, taken from the HTML already in hand.
+    // Attribute order varies, so match rel/href and name/content either way.
+    const canonical =
+      html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i)?.[1]?.trim() ||
+      html.match(/<link[^>]+href=["']([^"']*)["'][^>]*rel=["']canonical["']/i)?.[1]?.trim() ||
+      "";
+    const robots =
+      html.match(/<meta[^>]+name=["']robots["'][^>]*content=["']([^"']*)["']/i)?.[1]?.trim() ||
+      html.match(/<meta[^>]+content=["']([^"']*)["'][^>]*name=["']robots["']/i)?.[1]?.trim() ||
+      "";
     // crude visible-text length (strip tags/scripts)
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -39,7 +63,7 @@ async function inspectPage(url: string) {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    return { url, title, meta, h1, words: text.split(" ").length };
+    return { url, title, meta, h1, words: text.split(" ").length, status: res.status, canonical, robots };
   } catch {
     return null;
   }
@@ -54,14 +78,24 @@ export async function auditSite(brand: Brand, sampleSize = 12) {
   const step = Math.max(1, Math.floor(urls.length / sampleSize));
   const sample = urls.filter((_, i) => i % step === 0).slice(0, sampleSize);
 
-  const pages = (await Promise.all(sample.map(inspectPage))).filter(Boolean);
+  const pages = (await Promise.all(sample.map(inspectPage))).filter(
+    (p): p is AuditedPage => p !== null
+  );
+
+  // The model sees exactly the same four fields it always has. The newly
+  // captured status/canonical/robots are persisted for the Technical SEO
+  // dataset but deliberately kept out of the prompt, so audit behaviour,
+  // token cost and issue output are unchanged by this addition.
+  const pagesForModel = pages.map((p) => ({
+    url: p.url, title: p.title, meta: p.meta, h1: p.h1, words: p.words,
+  }));
 
   const text = await callClaude({
     maxTokens: 1800,
     user: `${brandBlock(brand)}
 
 You are the Site Auditor. Here are real pages from the live site (title, meta, h1, word count):
-${JSON.stringify(pages, null, 2)}
+${JSON.stringify(pagesForModel, null, 2)}
 
 Flag the highest-impact problems: thin content (low words), missing/weak/duplicate titles or metas, missing H1, and pages whose title/meta don't match strong buyer intent. For each, give a specific fix.
 Return ONLY JSON:
@@ -71,5 +105,7 @@ Limit to the 10 most impactful.`,
   const parsed = extractJSON<{
     issues: { url: string; problem: string; severity: string; fix: string; task_type: string }[];
   }>(text);
-  return { audited: pages.length, issues: parsed?.issues || [] };
+  // `pages` is additive — existing callers that only read audited/issues are
+  // unaffected.
+  return { audited: pages.length, issues: parsed?.issues || [], pages };
 }

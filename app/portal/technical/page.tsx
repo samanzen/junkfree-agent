@@ -29,6 +29,60 @@ const TABS: { key: Tab; label: string }[] = [
 type LowCtrRow = { page: string; impressions: number; ctr: number };
 type SeriesRow = { d?: string; captured_at: string; site_health: number | null };
 
+// Persisted per-page audit dataset (supabase/010_page_audits.sql).
+type AuditPage = {
+  url: string;
+  http_status: number | null;
+  title: string | null;
+  meta_description: string | null;
+  h1: string | null;
+  canonical: string | null;
+  robots_meta: string | null;
+  word_count: number | null;
+  missing_title: boolean;
+  missing_meta_description: boolean;
+  missing_h1: boolean;
+  thin_content: boolean;
+  duplicate_title: boolean;
+  duplicate_meta_description: boolean;
+  duplicate_h1: boolean;
+};
+type TechnicalData = {
+  available: boolean;
+  reason: string | null;
+  audit_run_at?: string;
+  runs?: string[];
+  pages: AuditPage[];
+  summary: {
+    pages_audited: number;
+    missing_title: number;
+    missing_meta_description: number;
+    missing_h1: number;
+    thin_content: number;
+    duplicate_title: number;
+    duplicate_meta_description: number;
+    duplicate_h1: number;
+    missing_canonical: number;
+    noindex: number;
+    non_200: number;
+  } | null;
+};
+
+/** Human-readable flags for one audited page. Reads only stored values. */
+function pageFlags(p: AuditPage): string[] {
+  const f: string[] = [];
+  if (p.missing_title) f.push("No title");
+  if (p.missing_meta_description) f.push("No description");
+  if (p.missing_h1) f.push("No H1");
+  if (p.duplicate_title) f.push("Duplicate title");
+  if (p.duplicate_meta_description) f.push("Duplicate description");
+  if (p.duplicate_h1) f.push("Duplicate H1");
+  if (p.thin_content) f.push("Thin content");
+  if (!p.canonical) f.push("No canonical");
+  if ((p.robots_meta || "").toLowerCase().includes("noindex")) f.push("Noindex");
+  return f;
+}
+
 export default function TechnicalPage() {
   const { brand } = usePortalAuth();
   const { summary } = usePortalSummary(brand?.id);
@@ -36,6 +90,7 @@ export default function TechnicalPage() {
 
   const [lowCtr, setLowCtr] = useState<LowCtrRow[]>([]);
   const [series, setSeries] = useState<SeriesRow[]>([]);
+  const [tech, setTech] = useState<TechnicalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("health");
 
@@ -43,12 +98,15 @@ export default function TechnicalPage() {
     if (!brand?.id) return;
     let cancelled = false;
     setLoading(true);
-    authedFetch(`/api/analytics?brand=${brand.id}`)
-      .then((r) => r.json())
-      .then((d) => {
+    Promise.all([
+      authedFetch(`/api/analytics?brand=${brand.id}`).then((r) => r.json()).catch(() => ({})),
+      authedFetch(`/api/portal/technical?brand=${brand.id}`).then((r) => r.json()).catch(() => null),
+    ])
+      .then(([analytics, technical]) => {
         if (cancelled) return;
-        setLowCtr(Array.isArray(d?.lowCtrPages) ? d.lowCtrPages : []);
-        setSeries(Array.isArray(d?.series) ? d.series : []);
+        setLowCtr(Array.isArray(analytics?.lowCtrPages) ? analytics.lowCtrPages : []);
+        setSeries(Array.isArray(analytics?.series) ? analytics.series : []);
+        setTech(technical && typeof technical.available === "boolean" ? technical : null);
         setLoading(false);
       })
       .catch(() => { if (!cancelled) setLoading(false); });
@@ -192,6 +250,81 @@ export default function TechnicalPage() {
             )}
           </Panel>
 
+          {/* Per-page checks, now backed by the persisted audit dataset. */}
+          <Panel>
+            <PanelHead
+              title="Page-level checks"
+              badge={tech?.summary ? `${tech.summary.pages_audited} pages` : undefined}
+              badgeTone="plain"
+              sub="Run against every page your last audit inspected. Duplicates are compared across that whole set."
+            />
+            {isLoading ? (
+              <div className="p-skel" style={{ height: 150 }} />
+            ) : !tech || !tech.available ? (
+              <EmptyState
+                icon={<IconAlert size={22} />}
+                title="Technical dataset not enabled yet"
+                sub="These checks are built and ready. They start populating once supabase/010_page_audits.sql has been applied to the database and the next daily audit runs."
+              />
+            ) : !tech.summary || tech.summary.pages_audited === 0 ? (
+              <EmptyState
+                icon={<IconWebsite size={22} />}
+                title="No audit stored yet"
+                sub="Your next daily audit will record every page it inspects, and these checks will populate automatically from that point on."
+              />
+            ) : (
+              <>
+                <div className="p-stat-grid">
+                  <StatTile label="Missing title" value={tech.summary.missing_title || "—"} tone={tech.summary.missing_title ? "red" : "green"} />
+                  <StatTile label="Missing description" value={tech.summary.missing_meta_description || "—"} tone={tech.summary.missing_meta_description ? "red" : "green"} />
+                  <StatTile label="Missing H1" value={tech.summary.missing_h1 || "—"} tone={tech.summary.missing_h1 ? "amber" : "green"} />
+                  <StatTile label="Duplicate titles" value={tech.summary.duplicate_title || "—"} tone={tech.summary.duplicate_title ? "amber" : "green"} />
+                  <StatTile label="Duplicate descriptions" value={tech.summary.duplicate_meta_description || "—"} tone={tech.summary.duplicate_meta_description ? "amber" : "green"} />
+                  <StatTile label="Duplicate H1s" value={tech.summary.duplicate_h1 || "—"} tone={tech.summary.duplicate_h1 ? "amber" : "green"} />
+                  <StatTile label="Thin content" value={tech.summary.thin_content || "—"} tone={tech.summary.thin_content ? "amber" : "green"} />
+                  <StatTile label="No canonical" value={tech.summary.missing_canonical || "—"} tone={tech.summary.missing_canonical ? "amber" : "green"} />
+                  <StatTile label="Noindex" value={tech.summary.noindex || "—"} tone={tech.summary.noindex ? "red" : "green"} />
+                  <StatTile label="Non-200" value={tech.summary.non_200 || "—"} tone={tech.summary.non_200 ? "red" : "green"} />
+                </div>
+
+                <div className="p-table-wrap" style={{ marginTop: 18 }}>
+                  <table className="p-table">
+                    <thead>
+                      <tr><th>Page</th><th>Status</th><th>Words</th><th>Issues</th></tr>
+                    </thead>
+                    <tbody>
+                      {tech.pages.map((p) => {
+                        const flags = pageFlags(p);
+                        return (
+                          <tr key={p.url}>
+                            <td>
+                              <a href={p.url} target="_blank" rel="noreferrer" className="p-kwcell" style={{ color: "var(--accent)", textDecoration: "none" }}>
+                                {p.url.replace(/^https?:\/\/[^/]+/, "") || "/"}
+                              </a>
+                            </td>
+                            <td>
+                              <span className={`p-pos ${p.http_status === 200 ? "top3" : ""}`}>
+                                {p.http_status ?? "—"}
+                              </span>
+                            </td>
+                            <td>{p.word_count != null ? p.word_count.toLocaleString() : <span className="p-na">—</span>}</td>
+                            <td>
+                              {flags.length === 0
+                                ? <span className="p-badge green">Clean</span>
+                                : <span style={{ display: "inline-flex", gap: 5, flexWrap: "wrap" }}>
+                                    {flags.map((f) => <span key={f} className="p-badge amber">{f}</span>)}
+                                  </span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </Panel>
+
           <Panel>
             <PanelHead
               title="Titles and descriptions that aren't earning clicks"
@@ -276,10 +409,10 @@ export default function TechnicalPage() {
             />
             <ConnectCard
               icon={<IconTarget size={19} />}
-              title="robots.txt & canonical checks"
-              desc="Validation that nothing you want indexed is being blocked, and that canonical tags point where they should."
-              unlocks={["robots.txt parsed and validated", "Canonical conflicts surfaced"]}
-              note="Requires the auditor to fetch and store robots.txt and per-page canonical tags."
+              title="Site-wide robots.txt"
+              desc="Validation that your robots.txt isn't blocking anything you want indexed."
+              unlocks={["robots.txt fetched and parsed", "Blocked paths cross-checked against your sitemap"]}
+              note="Per-page robots directives and canonicals ARE now recorded — see On-page issues. This card covers the site-level robots.txt file, which the auditor doesn't fetch yet."
             />
           </Stagger>
         </div>
@@ -290,21 +423,15 @@ export default function TechnicalPage() {
           <Panel>
             <PanelHead title="Why some checks aren't here yet" />
             <p className="p-panel-sub" style={{ margin: 0 }}>
-              Your audit currently reads each sampled page&apos;s <b>title</b>, <b>meta description</b>,{" "}
-              <b>H1</b> and <b>word count</b>, then keeps a score and the issues worth fixing — it doesn&apos;t
-              retain the raw per-page data. The checks below each need a capability the platform doesn&apos;t
-              have yet, and we&apos;d rather name that plainly than show you an empty chart or a made-up number.
+              Your audit now records every page it inspects — the title, meta description, H1, canonical,
+              robots directive, HTTP status and word count — so the page-level checks under{" "}
+              <b>On-page issues</b> run against a real, growing dataset. The checks below still need a
+              capability the platform doesn&apos;t have yet, and we&apos;d rather name that plainly than show
+              you an empty chart or a made-up number.
             </p>
           </Panel>
 
           <Stagger className="p-subgrid">
-            <ConnectCard
-              icon={<IconContent size={19} />}
-              title="Duplicate titles & H1s"
-              desc="Find pages competing with each other because they share the same title or heading."
-              unlocks={["Every duplicate grouped together", "Which page should win each term"]}
-              note="Needs per-page titles and H1s stored for the whole site. The audit samples around a dozen pages and keeps only the issues, not the raw values."
-            />
             <ConnectCard
               icon={<IconContent size={19} />}
               title="Missing alt text & oversized pages"
