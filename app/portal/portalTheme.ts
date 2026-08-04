@@ -355,6 +355,25 @@ export const PORTAL_CSS = `
   .p-opp-body { grid-template-columns:1fr; gap:16px; }
 }
 
+/* ══ Technical SEO findings ═════════════════════════════════════════ */
+.p-tech-findings { display:flex; flex-direction:column; gap:9px; margin-bottom:4px; }
+.p-tech-finding {
+  display:flex; align-items:flex-start; gap:12px; padding:14px 15px; border-radius:var(--r-sm);
+  background:var(--surface2); border:1px solid var(--line-soft); transition:border-color .18s;
+}
+.p-tech-finding:hover { border-color:var(--line); }
+.p-tech-finding-ico {
+  width:28px; height:28px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:var(--amber-soft); color:var(--amber);
+}
+.p-tech-finding-title { font-size:13.5px; font-weight:580; letter-spacing:-.014em; line-height:1.4; }
+.p-tech-finding-url {
+  display:inline-block; margin-top:3px; font-size:11.5px; color:var(--accent);
+  text-decoration:none; font-family:'JetBrains Mono',monospace;
+}
+.p-tech-finding-url:hover { text-decoration:underline; }
+.p-tech-finding-why { font-size:12.5px; color:var(--muted); line-height:1.6; margin-top:6px; }
+
 /* ══ Competitor Intelligence ════════════════════════════════════════ */
 .p-comp-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(256px,1fr)); gap:11px; }
 .p-comp {

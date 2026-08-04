@@ -9,7 +9,7 @@ import { EASE } from "./_components/motion";
 import {
   IconDashboard, IconIntelligence, IconLocalSeo, IconWebsite, IconContent,
   IconReviews, IconReports, IconBilling, IconSettings, IconAssistant,
-  IconSun, IconMoon, IconMenu, IconClose, IconTarget, IconCompetitors,
+  IconSun, IconMoon, IconMenu, IconClose, IconTarget, IconCompetitors, IconTechnical,
 } from "./icons";
 
 const NAV_MAIN = [
@@ -19,6 +19,7 @@ const NAV_MAIN = [
   { href: "/portal/competitors", label: "Competitors", Icon: IconCompetitors },
   { href: "/portal/local-seo", label: "Local SEO", Icon: IconLocalSeo },
   { href: "/portal/website", label: "Website", Icon: IconWebsite },
+  { href: "/portal/technical", label: "Technical SEO", Icon: IconTechnical },
   { href: "/portal/content", label: "Content", Icon: IconContent },
   { href: "/portal/reviews", label: "Reviews", Icon: IconReviews },
 ];
