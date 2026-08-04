@@ -9,11 +9,12 @@ import { EASE } from "./_components/motion";
 import {
   IconDashboard, IconIntelligence, IconLocalSeo, IconWebsite, IconContent,
   IconReviews, IconReports, IconBilling, IconSettings, IconAssistant,
-  IconSun, IconMoon, IconMenu, IconClose,
+  IconSun, IconMoon, IconMenu, IconClose, IconTarget,
 } from "./icons";
 
 const NAV_MAIN = [
   { href: "/portal", label: "Dashboard", Icon: IconDashboard, exact: true },
+  { href: "/portal/opportunities", label: "Opportunities", Icon: IconTarget },
   { href: "/portal/intelligence", label: "Intelligence", Icon: IconIntelligence },
   { href: "/portal/local-seo", label: "Local SEO", Icon: IconLocalSeo },
   { href: "/portal/website", label: "Website", Icon: IconWebsite },
