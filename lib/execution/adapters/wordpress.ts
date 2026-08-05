@@ -26,6 +26,32 @@ type WpPost = {
   status?: string;
 };
 
+// ── Response-shape validation ───────────────────────────────────────────────
+// HTTP 200 is NOT sufficient evidence that we are talking to WordPress. Many
+// modern sites are single-page apps that serve their HTML shell with a 200 for
+// EVERY path, including /wp-json/... . Trusting res.ok against one of those
+// would make check() report "authenticated" against a site with no WordPress
+// at all, and make apply() report a successful publish that never happened.
+// Both are worse than a clean failure, so every response below must prove it
+// is the JSON resource it claims to be.
+
+/** A single WP resource: a JSON object carrying a numeric id. */
+export function parseWpResource(body: unknown): WpPost | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const id = (body as { id?: unknown }).id;
+  return typeof id === "number" ? (body as WpPost) : null;
+}
+
+/** A WP collection: a JSON array whose entries are WP resources. */
+export function parseWpCollection(body: unknown): WpPost[] | null {
+  if (!Array.isArray(body)) return null;
+  return body.every((e) => parseWpResource(e) !== null) ? (body as WpPost[]) : null;
+}
+
+const NOT_WORDPRESS =
+  "That URL responded, but not with a WordPress REST resource. " +
+  "Sites that serve a single-page app answer every path with 200, so confirm the site actually runs WordPress and that /wp-json is reachable.";
+
 function baseUrl(ctx: AdapterContext): string | null {
   const raw = (ctx.config.siteUrl as string) || ctx.brand.site_url;
   if (!raw) return null;
@@ -93,8 +119,11 @@ export const wordpressAdapter: PublishAdapter = {
   async check(ctx) {
     const r = await wpFetch(ctx, "/users/me?context=edit");
     if (r.ok) {
-      const me = r.body as { name?: string; slug?: string } | null;
-      return { ok: true, detail: `Authenticated to WordPress as ${me?.name || me?.slug || "an authorised user"}.` };
+      const me = parseWpResource(r.body);
+      // A 200 that is not a WP user resource means this is not WordPress.
+      if (!me) return { ok: false, detail: NOT_WORDPRESS };
+      const named = me as WpPost & { name?: string };
+      return { ok: true, detail: `Authenticated to WordPress as ${named.name || me.slug || `user ${me.id}`}.` };
     }
     if (r.status === 401 || r.status === 403) {
       return { ok: false, detail: "WordPress rejected the credentials. Check the username and application password." };
@@ -119,7 +148,11 @@ export const wordpressAdapter: PublishAdapter = {
       return { ok: false, error: wpError(found), retryable: found.status === 0 || found.status >= 500 };
     }
 
-    const existing = Array.isArray(found.body) ? (found.body[0] as WpPost | undefined) : undefined;
+    // A lookup that does not come back as a JSON collection means this endpoint
+    // is not the WordPress REST API, however friendly its status code was.
+    const collection = parseWpCollection(found.body);
+    if (!collection) return { ok: false, error: NOT_WORDPRESS, retryable: false };
+    const existing = collection[0];
 
     const payload = {
       title: change.title,
@@ -148,11 +181,15 @@ export const wordpressAdapter: PublishAdapter = {
       return { ok: false, error: wpError(written), retryable: written.status === 0 || written.status >= 500 || written.status === 429 };
     }
 
-    const post = written.body as WpPost | null;
+    // Only a real WP resource proves the write landed. Without this, an SPA
+    // catch-all returning 200 HTML would be reported as a successful publish.
+    const post = parseWpResource(written.body);
+    if (!post) return { ok: false, error: NOT_WORDPRESS, retryable: false };
+
     return {
       ok: true,
-      remoteId: post?.id != null ? String(post.id) : null,
-      url: post?.link || null,
+      remoteId: String(post.id),
+      url: post.link || null,
       previous,
     };
   },
