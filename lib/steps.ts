@@ -15,6 +15,8 @@ import { snapshot } from "./metrics";
 import { auditSite, type AuditedPage } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
+import { executeChange } from "./execution/engine";
+import { toSiteChange, type DraftLike } from "./execution/changes";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -336,7 +338,75 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
     case "performance": return void (await stepPerformance(b));
     case "rank_sync": return void (await stepRankSync(b));
     case "rank_enrich": return void (await stepRankEnrich(b));
+    case "publish": return void (await stepPublish(b, job.payload));
   }
+}
+
+// PUBLISH: apply one approved draft to the brand's live site.
+//
+// This is the only step that changes something outside this platform, so it is
+// deliberately strict: it re-reads the draft at execution time (never trusting
+// a payload snapshot), re-validates that the draft is publishable, and throws
+// on failure so the job is recorded as `failed` with a readable reason rather
+// than silently reporting success. All platform specifics live behind
+// lib/execution — this function names no platform.
+export async function stepPublish(brand: Brand, payload: Record<string, unknown>) {
+  const draftId = payload.draftId as string | undefined;
+  if (!draftId) throw new Error("stepPublish: draftId is required");
+
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id, brand_id, task_type, title, body, target_url, target_keyword, status")
+    .eq("id", draftId)
+    .single();
+
+  if (!draft) throw new Error(`stepPublish: draft ${draftId} not found`);
+  // Tenant guard at the point of action, not just at the API boundary: this
+  // job writes to a real website, so a mismatched brand must never proceed.
+  if (draft.brand_id !== brand.id) {
+    throw new Error(`stepPublish: draft ${draftId} does not belong to ${brand.slug}`);
+  }
+  if (draft.status === "dismissed") {
+    throw new Error(`stepPublish: draft ${draftId} was dismissed and must not be published`);
+  }
+
+  const metaChoice = typeof payload.metaChoice === "number" ? payload.metaChoice : undefined;
+  const translation = toSiteChange(draft as DraftLike, brand.name, metaChoice);
+  if (!translation.publishable) {
+    throw new Error(`stepPublish: ${translation.reason}`);
+  }
+
+  const outcome = await executeChange(brand, translation.change, { draftId, jobId: (payload.jobId as string) || null });
+
+  if (outcome.status === "failed") {
+    throw new Error(`stepPublish: ${outcome.error}`);
+  }
+
+  await db.from("drafts").update({ status: "published" }).eq("id", draftId);
+
+  // A verified, live site change is exactly what seo_action_events was built to
+  // mark on position-history charts. /api/intelligence/action logs an event when
+  // work is QUEUED; this logs one when a change actually reached the site, which
+  // is the event that can move a ranking.
+  await safe(async () => {
+    const { data: kw } = draft.target_keyword
+      ? await db.from("tracked_keywords").select("id")
+          .eq("brand_id", brand.id).eq("keyword", draft.target_keyword).maybeSingle()
+      : { data: null };
+
+    return await db.from("seo_action_events").insert({
+      brand_id: brand.id,
+      keyword_id: kw?.id || null,
+      page_url: outcome.url || draft.target_url || null,
+      event_type: translation.change.type === "upsert_page" ? "content_update" : "meta_update",
+      event_label: `Published to ${outcome.platform}`,
+      event_detail: draft.title,
+      occurred_at: new Date().toISOString(),
+    });
+  });
+
+  console.log(`[stepPublish] ${brand.slug}: ${translation.change.type} → ${outcome.platform} ${outcome.url || "(no url reported)"}`);
+  return { published: true, platform: outcome.platform, url: outcome.url };
 }
 
 

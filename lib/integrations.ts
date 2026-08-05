@@ -19,7 +19,12 @@ import { encryptCredentials, decryptCredentials } from "./crypto";
 // Known providers today. The `provider` column itself is plain text (see
 // migration comments) specifically so a future provider can be added with
 // just a new string value here -- no migration required.
-export type IntegrationProvider = "ga4" | "highlevel" | "stripe" | "quickbooks" | "jobber";
+// "wordpress" and "webhook" are the first providers that are actually
+// implemented (lib/execution/adapters/*). The rest remain declared-but-unbuilt.
+// The column is plain text by design, so adding these needs no migration.
+export type IntegrationProvider =
+  | "ga4" | "highlevel" | "stripe" | "quickbooks" | "jobber"
+  | "wordpress" | "webhook";
 
 export type IntegrationStatus = "disconnected" | "connected" | "error" | "expired";
 
@@ -69,6 +74,43 @@ export async function getIntegration(
     .eq("provider", provider)
     .maybeSingle();
   return (data as BrandIntegration) || null;
+}
+
+/**
+ * First connected integration among `providers`, or null. Tolerant by design:
+ * returns null on ANY database error (including the "permission denied" the
+ * brand_integrations grant bug produces) instead of throwing, so a brand with
+ * no publishing configured behaves identically to one whose table is
+ * unreachable -- neither should break an unrelated request. Callers that need
+ * to distinguish those two cases use integrationsReachable() below.
+ */
+export async function findConnectedIntegration(
+  brandId: string,
+  providers: IntegrationProvider[]
+): Promise<BrandIntegration | null> {
+  if (!providers.length) return null;
+  const { data, error } = await db
+    .from("brand_integrations")
+    .select(STATUS_COLUMNS)
+    .eq("brand_id", brandId)
+    .eq("status", "connected")
+    .in("provider", providers)
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (error) return null;
+  return ((data as BrandIntegration[]) || [])[0] || null;
+}
+
+/**
+ * Whether brand_integrations can actually be read. Exists because migration
+ * 006 created the table and enabled RLS but never granted service_role, so an
+ * unreachable table is a real, observed production state that must be
+ * reportable rather than silently indistinguishable from "not configured".
+ */
+export async function integrationsReachable(): Promise<{ ok: boolean; reason: string | null }> {
+  const { error } = await db.from("brand_integrations").select("id").limit(1);
+  if (!error) return { ok: true, reason: null };
+  return { ok: false, reason: `${error.code || "error"}: ${error.message}` };
 }
 
 // Encrypts and stores credentials for a brand+provider, marking it

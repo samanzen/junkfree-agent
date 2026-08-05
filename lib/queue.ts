@@ -23,7 +23,11 @@ export type JobKind =
   | "audit"
   | "performance"
   | "rank_sync"
-  | "rank_enrich";
+  | "rank_enrich"
+  // Applies an approved draft to the brand's LIVE site via lib/execution.
+  // Every other kind above produces a row for a human to read; this is the
+  // only kind that changes something outside this platform.
+  | "publish";
 
 export type Job = { id: string; brand_id: string; kind: JobKind; payload: Record<string, unknown> };
 
