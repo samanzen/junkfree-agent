@@ -5,8 +5,13 @@
 // Theme: CSS custom properties on .portal, overridden by [data-theme="dark"]
 // and, absent an explicit choice, by prefers-color-scheme. The toggle
 // (PortalShell) persists the explicit choice to localStorage.
+import { touchTargetCSS, down } from "@/lib/ui/tokens";
+
+// Fonts are no longer fetched here. The Google Fonts @import that used to sit
+// at the top of this string was inside a runtime-injected <style>, so it could
+// not be preloaded and blocked first paint. Inter is now self-hosted via
+// next/font in app/layout.tsx and reaches this file as --font-sans.
 export const PORTAL_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 .portal {
   /* ── Layered surfaces: page < sunken < base < raised < overlay ── */
@@ -47,7 +52,7 @@ export const PORTAL_CSS = `
 .portal * { box-sizing:border-box; }
 .portal {
   min-height:100vh; background:var(--bg); color:var(--text);
-  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  font-family:var(--font-sans);
   font-feature-settings:'cv02','cv03','cv04','ss01','tnum' 0;
   -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
   letter-spacing:-0.012em;
@@ -388,7 +393,7 @@ export const PORTAL_CSS = `
 .p-tech-finding-title { font-size:13.5px; font-weight:580; letter-spacing:-.014em; line-height:1.4; }
 .p-tech-finding-url {
   display:inline-block; margin-top:3px; font-size:11.5px; color:var(--accent);
-  text-decoration:none; font-family:'JetBrains Mono',monospace;
+  text-decoration:none; font-family:var(--font-mono);
 }
 .p-tech-finding-url:hover { text-decoration:underline; }
 .p-tech-finding-why { font-size:12.5px; color:var(--muted); line-height:1.6; margin-top:6px; }
@@ -731,7 +736,7 @@ export const PORTAL_CSS = `
 .p-conn-dot.on { background:var(--green-soft); color:var(--green); border-color:transparent; }
 .p-conn-name { font-size:13.5px; font-weight:620; letter-spacing:-.018em; }
 .p-conn-desc { font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.6; }
-.p-conn-detail { display:inline-block; margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:10.5px; background:var(--surface2); border:1px solid var(--line-soft); padding:2.5px 8px; border-radius:7px; color:var(--muted); }
+.p-conn-detail { display:inline-block; margin-top:8px; font-family:var(--font-mono); font-size:10.5px; background:var(--surface2); border:1px solid var(--line-soft); padding:2.5px 8px; border-radius:7px; color:var(--muted); }
 
 /* ══ Assistant ══════════════════════════════════════════════════════ */
 .p-assistant-page { height:calc(100vh - 190px); min-height:540px; }
@@ -777,6 +782,26 @@ export const PORTAL_CSS = `
   .portal *, .portal *::before, .portal *::after {
     animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;
   }
+}
+
+/* ══ Phase 1 foundation ═════════════════════════════════════════════ */
+${touchTargetCSS(".portal")}
+
+/* The sub-nav already scrolled horizontally but gave no sign that it did, so
+   offscreen tabs read as missing rather than scrollable. A right-edge fade
+   makes the overflow visible, and scroll-snap makes it land cleanly. */
+.p-subnav {
+  overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity; scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+          mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);
+}
+.p-subnav::-webkit-scrollbar { display:none; }
+.p-subnav-btn { scroll-snap-align:start; }
+${down.sm} {
+  /* Opportunity card bodies were the one two-column grid with no collapse
+     rule, so their detail pane was squeezed to an unreadable width on phones. */
+  .p-opp-body { grid-template-columns:1fr; gap:16px; }
 }
 `;
 

@@ -1,3 +1,26 @@
+import { Inter } from "next/font/google";
+import { GLOBAL_CSS } from "@/lib/ui/tokens";
+
+// Inter, self-hosted by next/font at build time. This replaces THREE separate
+// render-blocking Google Fonts requests that previously existed:
+//   app/dashboard/page.tsx     <link>  Space Grotesk + JetBrains Mono
+//   app/login/page.tsx         <link>  Space Grotesk + JetBrains Mono
+//   app/portal/portalTheme.ts  @import Inter + JetBrains Mono
+//
+// The portal's was the most costly: an @import inside a runtime-injected
+// <style> cannot be preloaded and serialises behind the stylesheet parse,
+// delaying first paint on the surface customers actually use.
+//
+// One family now serves both frontends, so the product stops presenting two
+// different display faces (Space Grotesk on admin/login, Inter on the portal).
+// Monospace is a system stack (--font-mono) rather than a fourth download.
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  weight: ["400", "500", "600", "700", "800"],
+});
+
 export const metadata = {
   title: "Junk Free — SEO Agent",
   description: "Autonomous SEO operations dashboard.",
@@ -5,8 +28,11 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, fontFamily: "system-ui, -apple-system, sans-serif", background: "#0b0f14", color: "#e6edf3" }}>
+    <html lang="en" className={inter.variable}>
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
+      </head>
+      <body style={{ margin: 0, fontFamily: "var(--font-sans)", background: "#0b0f14", color: "#e6edf3" }}>
         {children}
       </body>
     </html>

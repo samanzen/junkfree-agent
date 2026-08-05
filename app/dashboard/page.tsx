@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { authedFetch } from "@/lib/authedFetch";
 import { slugify } from "@/lib/utils";
+import { touchTargetCSS, down } from "@/lib/ui/tokens";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
@@ -253,13 +254,21 @@ export default function Dashboard() {
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
   const auto = !!brand?.auto_publish_meta;
 
-  if (!authed) return <div className="sr"><div className="wrap"><p className="muted">Authenticating…</p></div></div>;
+  // The <style> has to be inside this early return too. Without it the
+  // authenticating state rendered .sr markup with no stylesheet attached at
+  // all, so every session began with a flash of unstyled content before the
+  // real tree mounted.
+  if (!authed) return (
+    <div className="sr">
+      <style>{CSS}</style>
+      <div className="wrap"><p className="muted">Authenticating…</p></div>
+    </div>
+  );
 
   return (
     <div className="sr">
+      {/* Fonts come from next/font in app/layout.tsx now — no external request. */}
       <style>{CSS}</style>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
       <div className="wrap">
         <header className="cmd">
@@ -482,10 +491,10 @@ function DraftBody({ body }: { body: string }) {
 const CSS = `
 .sr { --bg:#F6F8FB; --surface:#FFFFFF; --surface2:#F2F5F9; --line:#E7EAF0; --text:#1A2030; --muted:#8A93A6;
   --accent:#6C5CE7; --accent-dim:rgba(108,92,231,.1); --amber:#E1A100; --coral:#E14B4B; --violet:#8B5CF6; --green:#00B894;
-  min-height:100vh; background:var(--bg); color:var(--text); font-family:'Space Grotesk',-apple-system,Segoe UI,Roboto,sans-serif; -webkit-font-smoothing:antialiased; }
+  min-height:100vh; background:var(--bg); color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
 .sr * { box-sizing:border-box; }
 .sr .wrap { max-width:1000px; margin:0 auto; padding:36px 22px 80px; }
-.sr .eyebrow { display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.sr .eyebrow { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
 .sr .pulse { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 rgba(0,184,148,.4); }
 .sr .pulse.live { animation:pulse 1.6s ease-out infinite; }
 @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(0,184,148,.4)} 70%{box-shadow:0 0 0 8px rgba(0,184,148,0)} 100%{box-shadow:0 0 0 0 rgba(0,184,148,0)} }
@@ -496,14 +505,14 @@ const CSS = `
 .sr .run.on { background:var(--surface2); color:var(--accent); box-shadow:none; cursor:default; overflow:hidden; position:relative; }
 .sr .run.on::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(108,92,231,.14),transparent); animation:scan 1.4s linear infinite; }
 @keyframes scan { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
-.sr .runstat { font-family:'JetBrains Mono',monospace; font-size:12px; position:relative; z-index:1; }
+.sr .runstat { font-family:var(--font-mono); font-size:12px; position:relative; z-index:1; }
 .sr .brandrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
 .sr .seg { display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:4px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
 .sr .seg button { display:flex; align-items:center; gap:7px; background:transparent; border:0; color:var(--muted); padding:8px 15px; border-radius:8px; font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; transition:.15s; }
 .sr .seg button.on { background:var(--accent); color:#fff; }
 .sr .dot { width:6px; height:6px; border-radius:50%; background:#fff; }
 .sr .dot.off { background:var(--line); }
-.sr .mode { background:var(--surface); border:1px solid var(--line); color:var(--muted); padding:9px 15px; border-radius:10px; font-family:'JetBrains Mono',monospace; font-size:12px; cursor:pointer; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+.sr .mode { background:var(--surface); border:1px solid var(--line); color:var(--muted); padding:9px 15px; border-radius:10px; font-family:var(--font-mono); font-size:12px; cursor:pointer; box-shadow:0 1px 2px rgba(16,24,40,.04); }
 .sr .mode:hover { color:var(--text); }
 .sr .mode.auto { background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.35); color:var(--violet); }
 .sr .brandrow .mode:first-of-type { margin-left:auto; }
@@ -511,25 +520,25 @@ const CSS = `
 .sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:12px 16px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; transition:.15s; }
 .sr .tabs button:hover { color:var(--text); }
 .sr .tabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
-.sr .tabs button span { font-family:'JetBrains Mono',monospace; font-size:11px; background:var(--surface2); color:var(--muted); padding:1px 7px; border-radius:20px; }
+.sr .tabs button span { font-family:var(--font-mono); font-size:11px; background:var(--surface2); color:var(--muted); padding:1px 7px; border-radius:20px; }
 .sr .tabs button.on span { background:var(--accent-dim); color:var(--accent); }
 .sr .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:22px; margin-bottom:14px; box-shadow:0 1px 3px rgba(16,24,40,.04); animation:rise .4s ease both; }
 @keyframes rise { from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
 .sr .card.row { display:flex; justify-content:space-between; align-items:center; gap:16px; }
 .sr .meta { display:flex; align-items:center; gap:10px; margin-bottom:9px; flex-wrap:wrap; }
-.sr .kind { font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; background:var(--surface2); color:var(--muted); padding:3px 9px; border-radius:6px; }
-.sr .stat { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--amber); }
+.sr .kind { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; background:var(--surface2); color:var(--muted); padding:3px 9px; border-radius:6px; }
+.sr .stat { font-family:var(--font-mono); font-size:11px; color:var(--amber); }
 .sr .stat.approved { color:var(--green); }
-.sr .prio { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--amber); }
+.sr .prio { font-family:var(--font-mono); font-size:11px; color:var(--amber); }
 .sr h3 { font-size:17px; font-weight:600; margin:0 0 5px; letter-spacing:-.01em; color:#12172A; }
 .sr .why { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 14px; }
 .sr .body { background:var(--surface2); border:1px solid var(--line); border-radius:11px; padding:14px; max-height:440px; overflow:auto; }
-.sr .prose { white-space:pre-wrap; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.65; color:#3A4256; margin:0; }
-.sr .fieldlabel { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px; }
+.sr .prose { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; line-height:1.65; color:#3A4256; margin:0; }
+.sr .fieldlabel { font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px; }
 .sr .fieldlabel:first-child { margin-top:0; }
 .sr .opt { font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--line); padding:9px 11px; border-radius:8px; margin-bottom:6px; cursor:pointer; transition:.15s; }
 .sr .opt:hover { border-color:var(--accent); background:var(--accent-dim); }
-.sr .hint { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); margin-top:8px; }
+.sr .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:8px; }
 .sr .acts { display:flex; gap:9px; margin-top:14px; flex-wrap:wrap; }
 .sr .primary { background:var(--accent); color:#fff; border:0; padding:9px 17px; border-radius:9px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:.15s; }
 .sr .primary:hover { background:#5b4bd6; }
@@ -544,7 +553,7 @@ const CSS = `
 .sr .brandform input:focus, .sr .brandform select:focus { outline:none; border-color:var(--accent); }
 .sr .acts select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 11px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .acts input { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
-.sr .link { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--accent); text-decoration:none; word-break:break-all; }
+.sr .link { font-family:var(--font-mono); font-size:12px; color:var(--accent); text-decoration:none; word-break:break-all; }
 .sr .muted, .sr .lmuted { color:var(--muted); font-size:13px; }
 .sr .empty, .sr .lempty { border:1px dashed var(--line); border-radius:16px; padding:44px; text-align:center; color:var(--muted); font-size:14px; background:var(--surface); }
 /* Overview CSS moved to Sprint 3 block */
@@ -591,7 +600,7 @@ const CSS = `
 .sr .ov-table tr:last-child td { border-bottom:0; }
 .sr .ov-table tr:hover td { background:var(--surface2); }
 .sr .ov-kw { font-weight:500; color:var(--text); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sr .ov-page-url { font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sr .ov-page-url { font-family:var(--font-mono); font-size:11.5px; color:var(--muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .sr .ov-pos { font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:20px; }
 .sr .ov-empty-msg { color:var(--muted); font-size:13px; padding:12px 0; }
 .sr .ov-empty { text-align:center; padding:60px 20px; }
@@ -602,7 +611,44 @@ const CSS = `
 .sr .ov-skel { height:110px; }
 .sr .ov-skel-lg { height:260px; margin-top:18px; border-radius:16px; }
 @keyframes shimmer { 0%{background-position:200%} 100%{background-position:-200%} }
-@media(max-width:900px){ .sr .ov-kpis{grid-template-columns:repeat(2,1fr)} .sr .ov-row2{grid-template-columns:1fr} }
-@media(max-width:540px){ .sr .ov-kpis{grid-template-columns:repeat(2,1fr)} .sr .ov-chart-tabs{flex-wrap:wrap} }
+/* ── Responsive (Phase 1: consolidated onto the shared breakpoints) ───────── */
+/* Previously two ad-hoc queries at 900px and 540px covering only this tab. */
+${down.md} { .sr .ov-kpis{grid-template-columns:repeat(2,1fr)} .sr .ov-row2{grid-template-columns:1fr} }
+${down.sm} { .sr .ov-kpis{grid-template-columns:1fr} .sr .ov-chart-tabs{flex-wrap:wrap} }
 
+/* ══ Phase 1 foundation ═══════════════════════════════════════════════════ */
+${touchTargetCSS(".sr")}
+
+/* The tab bar was a plain flex row of six tabs with neither wrap nor scroll,
+   so on a phone it pushed the whole page sideways and the last tabs could not
+   be reached at all. It now scrolls as its own region, with a right-edge fade
+   so the overflow is visible and scroll-snap so tabs land cleanly. */
+.sr .tabs {
+  overflow-x:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x proximity; scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+          mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+}
+.sr .tabs::-webkit-scrollbar { display:none; }
+.sr .tabs button { scroll-snap-align:start; white-space:nowrap; flex:0 0 auto; }
+
+${down.sm} {
+  .sr .wrap { padding:22px 16px 72px; }
+  /* The command bar put a 32px heading and the Run button on one unwrapping
+     row, squashing both. */
+  .sr .cmd { flex-direction:column; align-items:stretch; gap:14px; }
+  .sr h1 { font-size:25px; }
+  .sr .run { width:100%; }
+  /* margin-left:auto on the first mode button only works while the row is a
+     single line; once it wraps the buttons need to lay out normally. */
+  .sr .brandrow .mode:first-of-type { margin-left:0; }
+  .sr .seg { width:100%; }
+  .sr .seg button { flex:1; justify-content:center; }
+  /* Feedback and brand forms stack rather than fighting for one row. */
+  .sr .fb { flex-direction:column; }
+  .sr .brandform input, .sr .brandform select { flex:1 1 100%; }
+  .sr .card { padding:18px; border-radius:14px; }
+  .sr .body { max-height:min(52vh,340px); }
+  .sr .empty, .sr .lempty { padding:32px 20px; }
+}
 `;

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { down } from "@/lib/ui/tokens";
 import IntelOverview from "./IntelOverview";
 import KeywordTable from "./KeywordTable";
 import WinnersLosers from "./WinnersLosers";
@@ -200,6 +201,53 @@ const CSS = `
 .cp-pos { background:#FFF3CD; color:#D97706; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px; }
 .cp-track-btn { background:#EEF2FF; color:#6C5CE7; border:0; padding:5px 11px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; }
 
-@media(max-width:900px){ .io-grid{grid-template-columns:repeat(2,1fr)} }
-@media(max-width:540px){ .io-grid{grid-template-columns:repeat(2,1fr)} .kt-toolbar{flex-direction:column} .kt-search,.kt-add{width:100%} }
+/* ── Responsive (Phase 1: consolidated onto the shared breakpoints) ───────── */
+${down.md} { .io-grid{grid-template-columns:repeat(2,1fr)} }
+${down.sm} {
+  .io-grid{grid-template-columns:1fr}
+  .kt-toolbar{flex-direction:column} .kt-search,.kt-add{width:100%}
+  .ip-nav{overflow-x:auto;scrollbar-width:none}
+  .ip-nav::-webkit-scrollbar{display:none}
+  .ip-nav-btn{white-space:nowrap;flex:0 0 auto}
+}
+
+/* ══ Phase 1 foundation: the keyword drawer ═══════════════════════════════ */
+/* Below the sidebar breakpoint the right-side full-height drawer becomes a
+   bottom sheet — the reachable pattern on a phone, where the top of a
+   full-height panel is furthest from the thumb. Above it, the drawer is
+   unchanged. Dialog semantics (role, aria-modal, Escape, focus trap) are
+   Phase 3; this is the geometry only. */
+${down.md} {
+  .kd {
+    top:auto; right:0; left:0; bottom:0;
+    width:100%; max-height:88vh;
+    border-left:0; border-top:1px solid #E7EAF0;
+    border-radius:18px 18px 0 0;
+    box-shadow:0 -10px 44px rgba(16,24,40,.18);
+    animation:sheetUp .28s cubic-bezier(.32,.72,0,1);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  /* Grab handle, so it reads as a dismissible sheet rather than a stuck panel. */
+  .kd::before {
+    content:""; position:sticky; top:0; z-index:2;
+    display:block; width:38px; height:4px; margin:9px auto 2px;
+    background:#D8DCE4; border-radius:99px; flex:none;
+  }
+  .kd-head { padding-top:10px; }
+  .kd-mtabs { overflow-x:auto; flex-wrap:nowrap; scrollbar-width:none; }
+  .kd-mtabs::-webkit-scrollbar { display:none; }
+  .kd-mtab { white-space:nowrap; flex:0 0 auto; }
+  .kd-range { margin-left:8px; flex:0 0 auto; }
+  .kd-meta-grid { grid-template-columns:1fr; }
+}
+@keyframes sheetUp { from{transform:translateY(100%)} to{transform:none} }
+
+/* The close and range buttons were the two smallest controls in the product
+   (30px and 24px). touchTargetCSS raises them on touch devices; these keep
+   them visually balanced at the larger size. */
+/* No touchTargetCSS() call here: this component renders inside the dashboard's
+   .sr root, so app/dashboard/page.tsx's rules already cover every control on
+   this page. Emitting them again would duplicate the whole block. */
+.kd-close { display:grid; place-items:center; }
+.kd-rbtn { display:inline-flex; align-items:center; justify-content:center; }
 `;
