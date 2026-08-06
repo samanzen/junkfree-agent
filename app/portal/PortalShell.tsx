@@ -109,7 +109,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   aria-current={active ? "page" : undefined}
                 >
                   {active && (
-                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.3, ease: EASE }} />
+                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.28, ease: EASE }} />
                   )}
                   <span className="p-nav-ico"><item.Icon size={16} /></span>
                   <span className="p-nav-text">{item.label}</span>
@@ -144,7 +144,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                   <m.div
                     className="p-scrim open"
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.18 }}
                     onClick={() => setNavOpen(false)}
                   />
                   <m.aside

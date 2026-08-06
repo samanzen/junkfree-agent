@@ -269,7 +269,7 @@ const NOTIFY_CSS = `
 .nt-close {
   flex:none; background:none; border:0; cursor:pointer; color:#8A93A6;
   width:26px; height:26px; border-radius:7px; display:grid; place-items:center;
-  transition:color .15s, background .15s;
+  transition:color var(--dur-2), background var(--dur-2);
 }
 .nt-close:hover { color:#F2F4F7; background:rgba(255,255,255,.08); }
 .nt-close:focus-visible { outline:2px solid #7DD3FC; outline-offset:1px; }
@@ -293,7 +293,7 @@ const NOTIFY_CSS = `
 .nt-btn {
   font-family:inherit; font-size:13.5px; font-weight:560; cursor:pointer;
   padding:10px 17px; border-radius:10px; border:1px solid transparent;
-  min-height:42px; transition:background .15s, border-color .15s, color .15s;
+  min-height:42px; transition:background var(--dur-2), border-color var(--dur-2), color var(--dur-2);
 }
 @media (pointer:coarse) { .nt-btn { min-height:44px; flex:1; } }
 .nt-btn:focus-visible { outline:2px solid #6C5CE7; outline-offset:2px; }

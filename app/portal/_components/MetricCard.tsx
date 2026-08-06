@@ -43,7 +43,7 @@ export default function MetricCard({
         ["--kpi-tint" as string]: locked ? "transparent" : `var(--${tone}-soft)`,
       }}
       variants={fadeUp}
-      whileHover={{ y: -3, transition: { duration: 0.2, ease: EASE } }}
+      whileHover={{ y: -3, transition: { duration: 0.18, ease: EASE } }}
     >
       {locked && <span className="p-kpi-lock"><IconLock size={12} /></span>}
 

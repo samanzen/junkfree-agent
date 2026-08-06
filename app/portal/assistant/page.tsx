@@ -96,7 +96,7 @@ export default function AssistantPage() {
               className={`p-msg ${msg.role}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, ease: EASE }}
+              transition={{ duration: 0.28, ease: EASE }}
             >
               {msg.role === "assistant" && (
                 <span className="p-msg-avatar"><IconSparkle size={14} /></span>
@@ -107,7 +107,7 @@ export default function AssistantPage() {
 
           {busy && (
             <m.div className="p-msg assistant"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
               <span className="p-msg-avatar"><IconSparkle size={14} /></span>
               <div className="p-msg-bubble p-msg-typing">
                 <span /><span /><span />

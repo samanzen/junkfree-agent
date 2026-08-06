@@ -49,7 +49,13 @@ export default function MetricExplainer({ metric }: Props) {
           }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2030", marginBottom: 6 }}>{info.label}</div>
             <div style={{ fontSize: 12.5, color: "#4A5568", lineHeight: 1.55 }}>{info.explain}</div>
-            <div onClick={() => setOpen(false)} style={{ position: "absolute", top: 8, right: 10, cursor: "pointer", color: "#B2BAC8", fontSize: 14 }}>✕</div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close explanation"
+              data-touch="inline"
+              style={{ position: "absolute", top: 6, right: 8, cursor: "pointer", color: "#B2BAC8", fontSize: 14, background: "none", border: 0, padding: 4, lineHeight: 1 }}
+            >✕</button>
           </div>
         </>
       )}

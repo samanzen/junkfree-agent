@@ -35,7 +35,7 @@ export default function AiBriefing({
       className="p-ai"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay: 0.06 }}
+      transition={{ duration: 0.42, ease: EASE, delay: 0.06 }}
     >
       <div className="p-ai-head">
         <span className="p-ai-mark"><IconSparkle size={17} /></span>

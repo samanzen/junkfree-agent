@@ -50,7 +50,7 @@ export default function MissionHero({
       className="p-mission"
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.55, ease: EASE }}
+      transition={{ duration: 0.42, ease: EASE }}
     >
       <div className="p-mission-aurora" aria-hidden="true" />
 
@@ -70,7 +70,7 @@ export default function MissionHero({
                   key={a.href + a.label}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.38, ease: EASE, delay: 0.3 + i * 0.06 }}
+                  transition={{ duration: 0.42, ease: EASE, delay: 0.3 + i * 0.06 }}
                 >
                   <Link href={a.href} className="p-quick">
                     {a.count != null && (
@@ -91,7 +91,7 @@ export default function MissionHero({
           className="p-mission-ring"
           initial={{ opacity: 0, scale: 0.92 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
+          transition={{ duration: 0.42, ease: EASE, delay: 0.12 }}
         >
           <ScoreRing value={score} size={156} strokeWidth={12} label="Business Health" gradient big />
           <span className="p-mission-verdict" style={{ color: v.color, background: v.bg }}>{v.text}</span>
@@ -108,7 +108,7 @@ export default function MissionHero({
               className="p-mission-cell"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: EASE, delay: 0.34 + i * 0.06 }}
+              transition={{ duration: 0.42, ease: EASE, delay: 0.34 + i * 0.06 }}
             >
               <div className="p-mission-cell-label">{s.label}</div>
               <div className="p-mission-cell-val">

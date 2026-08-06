@@ -47,6 +47,25 @@ export const TOUCH_MIN = 44;
  */
 export const INPUT_FONT_MIN = 16;
 
+// ── Motion ──────────────────────────────────────────────────────────────────
+/**
+ * The same vocabulary as the CSS custom properties above, for Framer Motion.
+ *
+ * Kept in seconds because that is what Framer takes, and derived from the same
+ * four steps so a CSS transition and a JS animation on the same element move
+ * identically. `ease` is the cubic-bezier control points of --ease-out.
+ */
+export const MOTION = {
+  fast: 0.12,
+  base: 0.18,
+  surface: 0.28,
+  entrance: 0.42,
+  /** Matches --ease-out. */
+  ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
+  /** Matches --ease-inout. */
+  easeInOut: [0.32, 0.72, 0, 1] as [number, number, number, number],
+} as const;
+
 // ── Global CSS ──────────────────────────────────────────────────────────────
 // Injected once from app/layout.tsx. Deliberately minimal: font plumbing, a
 // spacing scale, and safety rules that should never have been per-surface.
@@ -67,6 +86,22 @@ export const GLOBAL_CSS = `
 
   /* The touch floor, referenced by both surfaces so it can never drift. */
   --touch:${TOUCH_MIN}px;
+
+  /* ── Motion vocabulary ──
+     Before this there were 19 distinct CSS transition durations, 16 more in
+     Framer Motion, and three competing easing curves (a bare ease keyword, one
+     cubic-bezier in CSS and a different one in JS). Four durations and two
+     curves cover everything this product does; anything outside them was
+     incidental rather than intentional.
+
+     ease-out is the same curve as MOTION.ease below, so a CSS transition and a
+     Framer animation on the same element cannot disagree. */
+  --dur-1:120ms;   /* micro: colour and border on hover */
+  --dur-2:180ms;   /* default: most state changes */
+  --dur-3:280ms;   /* surfaces: drawers, sheets, panels */
+  --dur-4:420ms;   /* entrances: hero and page-level reveals */
+  --ease-out:cubic-bezier(.16,1,.3,1);      /* decelerate — things arriving */
+  --ease-inout:cubic-bezier(.32,.72,0,1);   /* both ends — things moving */
 }
 
 /* Horizontal-overflow backstop. A single unwrapped table or an over-wide flex
@@ -133,7 +168,7 @@ ${scope} .fld-input {
   width:100%; background:${vars.surface}; color:${vars.text};
   border:1px solid ${vars.line}; border-radius:${vars.radius};
   padding:10px 13px; font-family:inherit;
-  transition:border-color .16s, box-shadow .16s, background .16s;
+  transition:border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
 ${scope} .fld-input::placeholder { color:${vars.muted}; opacity:.8; }
 ${scope} .fld-input:hover:not(:disabled) { border-color:${vars.lineStrong}; }
@@ -169,12 +204,12 @@ ${scope} .fld-check { width:17px; height:17px; }
 ${scope} .fld-switch {
   appearance:none; width:38px; height:22px; border-radius:99px;
   background:${vars.line}; border:1px solid ${vars.line}; position:relative;
-  transition:background .18s, border-color .18s;
+  transition:background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 ${scope} .fld-switch::after {
   content:""; position:absolute; top:2px; left:2px; width:16px; height:16px;
   border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.22);
-  transition:transform .18s cubic-bezier(.32,.72,0,1);
+  transition:transform var(--dur-2) var(--ease-inout);
 }
 ${scope} .fld-switch:checked { background:${vars.accent}; border-color:${vars.accent}; }
 ${scope} .fld-switch:checked::after { transform:translateX(16px); }
@@ -303,6 +338,26 @@ ${down.sm} {
  */
 export function touchTargetCSS(scope: string): string {
   return `
+/* A visible focus ring on every focusable thing in this surface.
+   Only the portal had one; the admin dashboard and login screen fell back to
+   whatever the browser draws, which on a coloured button is often invisible.
+   :focus-visible rather than :focus, so a mouse click does not leave a ring
+   behind but a Tab always does. currentColor keeps it legible on any
+   background without the surface having to declare a ring colour. */
+${scope} :focus-visible {
+  outline:2px solid currentColor;
+  outline-offset:2px;
+  border-radius:6px;
+}
+/* Skip link: present for keyboard users, out of the way for everyone else. */
+${scope} .skip-link {
+  position:absolute; left:12px; top:-60px; z-index:9500;
+  padding:10px 16px; border-radius:10px;
+  background:#16181D; color:#F2F4F7; font-size:13px; font-weight:560;
+  text-decoration:none; transition:top var(--dur-2) var(--ease-out);
+}
+${scope} .skip-link:focus { top:12px; }
+
 /* Every interactive control clears the ${TOUCH_MIN}px floor on touch devices.
    Scoped to (pointer:coarse) so mouse-driven desktop layouts keep their tighter,
    more information-dense sizing -- a 44px floor everywhere would make the

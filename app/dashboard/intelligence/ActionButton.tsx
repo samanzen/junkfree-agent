@@ -42,7 +42,7 @@ export default function ActionButton({ action, brandId, payload = {}, label, var
   const base: React.CSSProperties = {
     border: 0, borderRadius: 8, padding: "7px 14px", fontSize: 12.5,
     fontWeight: 600, cursor: state === "loading" ? "default" : "pointer",
-    fontFamily: "inherit", transition: "all .15s", display: "inline-flex",
+    fontFamily: "inherit", transition: "all var(--dur-2) var(--ease-out)", display: "inline-flex",
     alignItems: "center", gap: 5, whiteSpace: "nowrap" as const,
   };
   const styles: Record<string, React.CSSProperties> = {

@@ -80,11 +80,21 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
     setPage(1);
   }
 
-  const Th = ({ col, label }: { col: string; label: string }) => (
-    <th className="kt-th" onClick={() => sortBy(col)} style={{ cursor: "pointer", userSelect: "none" as const }}>
-      {label} {sort === col && <span style={{ color: "#6C5CE7" }}>{order === "desc" ? "↓" : "↑"}</span>}
-    </th>
-  );
+  // A sortable header is a control, so it is a button inside the cell rather
+  // than a click handler on the <th> — that gives it Tab, Enter and Space for
+  // free. aria-sort tells a screen reader the current direction, which the
+  // arrow glyph alone never did.
+  const Th = ({ col, label }: { col: string; label: string }) => {
+    const active = sort === col;
+    return (
+      <th className="kt-th" aria-sort={active ? (order === "desc" ? "descending" : "ascending") : "none"}>
+        <button type="button" className="kt-sort" onClick={() => sortBy(col)} data-touch="inline">
+          {label}
+          <span aria-hidden="true" className="kt-sort-arrow">{active ? (order === "desc" ? "↓" : "↑") : ""}</span>
+        </button>
+      </th>
+    );
+  };
 
   return (
     <div className="kt">
@@ -149,7 +159,14 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                   : "No keywords match this filter."}
               </td></tr>
             ) : keywords.map((kw) => (
-              <tr key={kw.id} className="kt-row" onClick={() => setSelected(kw)}>
+              <tr
+                key={kw.id}
+                className="kt-row"
+                tabIndex={0}
+                aria-label={`Open details for ${kw.keyword}`}
+                onClick={() => setSelected(kw)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(kw); } }}
+              >
                 <td className="kt-td kt-kw">{kw.keyword}</td>
                 <td className="kt-td kt-center">
                   {kw.position != null ? <span className="kt-pos-badge" style={{ background: (kw.position || 0) <= 3 ? "rgba(0,184,148,.12)" : (kw.position || 0) <= 10 ? "rgba(108,92,231,.1)" : "rgba(245,180,97,.12)", color: (kw.position || 0) <= 3 ? "#00B894" : (kw.position || 0) <= 10 ? "#6C5CE7" : "#E1A100" }}>{kw.position}</span> : <span className="kt-dash">–</span>}

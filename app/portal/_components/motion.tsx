@@ -1,6 +1,7 @@
 "use client";
 import { m, type Variants, type Transition } from "framer-motion";
 import type { ReactNode } from "react";
+import { MOTION } from "@/lib/ui/tokens";
 
 // Shared motion vocabulary for the portal. Everything here is presentational —
 // no component below changes data, props flow, or behaviour.
@@ -10,12 +11,27 @@ import type { ReactNode } from "react";
 // heavy `motion` factory never ships. Reduced motion is honoured globally by
 // <MotionConfig reducedMotion="user"> in PortalShell plus a CSS fallback.
 
-/** Standard easing — matches the "confident, quick, no bounce" feel of Linear/Vercel. */
-export const EASE: Transition["ease"] = [0.16, 1, 0.3, 1];
+/**
+ * Standard easing, re-exported from the shared vocabulary in lib/ui/tokens so
+ * a Framer animation and a CSS transition on the same element cannot disagree.
+ * --ease-out in the stylesheets is these same control points.
+ *
+ * Kept as a named export because 17 files already import EASE from here; this
+ * makes it one value with one definition rather than two that happen to match.
+ */
+export const EASE: Transition["ease"] = MOTION.ease;
+
+/** Duration steps, so pages reference a named step rather than a magic number. */
+export const DUR = {
+  fast: MOTION.fast,
+  base: MOTION.base,
+  surface: MOTION.surface,
+  entrance: MOTION.entrance,
+} as const;
 
 export const fadeUp: Variants = {
   hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.42, ease: EASE } },
 };
 
 /** Parent that reveals children one after another. */
@@ -65,7 +81,7 @@ export function Reveal({ children, className, delay = 0, style }: {
       style={style}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: EASE, delay }}
+      transition={{ duration: 0.42, ease: EASE, delay }}
     >
       {children}
     </m.div>

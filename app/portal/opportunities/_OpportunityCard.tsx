@@ -37,7 +37,7 @@ export default function OpportunityCard({ opportunity, brandId }: {
           <span className="p-opp-fact"><b>{DIFFICULTY_LABEL[o.difficulty]}</b>difficulty</span>
           <span className="p-opp-fact"><b>{o.effort}</b>typical effort</span>
         </span>
-        <m.span className="p-opp-chev" animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.22, ease: EASE }}>
+        <m.span className="p-opp-chev" animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.18, ease: EASE }}>
           <IconChevron size={15} />
         </m.span>
       </button>
@@ -51,7 +51,7 @@ export default function OpportunityCard({ opportunity, brandId }: {
       <m.div
         initial={false}
         animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.3, ease: EASE }}
+        transition={{ duration: 0.28, ease: EASE }}
         style={{ overflow: "hidden" }}
       >
         <div className="p-opp-body">

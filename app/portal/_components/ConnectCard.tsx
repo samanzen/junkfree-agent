@@ -27,7 +27,7 @@ export default function ConnectCard({
     <m.div
       className="p-onboard"
       variants={fadeUp}
-      whileHover={{ y: -3, transition: { duration: 0.2, ease: EASE } }}
+      whileHover={{ y: -3, transition: { duration: 0.18, ease: EASE } }}
     >
       <div className="p-onboard-top">
         <span className="p-onboard-ico">{icon ?? <IconSparkle size={19} />}</span>

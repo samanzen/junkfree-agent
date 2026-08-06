@@ -302,6 +302,10 @@ export default function Dashboard() {
       {/* Fonts come from next/font in app/layout.tsx now — no external request. */}
       <style>{CSS}</style>
 
+      {/* Lets a keyboard user jump past the brand switcher and tab strip
+          straight to the panel they came for. */}
+      <a href="#dash-main" className="skip-link">Skip to main content</a>
+
       <div className="wrap">
         <header className="cmd">
           <div>
@@ -346,7 +350,8 @@ export default function Dashboard() {
           {role === "admin" && <button role="tab" aria-selected={tab === "brands"} className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span aria-label={`${allBrands.length} total`}>{allBrands.length}</span></button>}
         </nav>
 
-        {loading && <p className="muted">Loading signal…</p>}
+        <main id="dash-main" tabIndex={-1}>
+        {loading && <p className="muted" role="status" aria-live="polite">Loading signal…</p>}
 
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
         {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
@@ -508,6 +513,7 @@ export default function Dashboard() {
             />}
           </>
         )}
+        </main>
       </div>
     </div>
   );
@@ -585,9 +591,9 @@ function DraftBody({ body }: { body: string }) {
       const copy = (t: string) => navigator.clipboard?.writeText(t);
       return (
         <div className="body">
-          {titles.length > 0 && <><div className="fieldlabel">title tag</div>{titles.map((t, i) => <div key={i} className="opt" onClick={() => copy(t)}>{t}</div>)}</>}
-          {metas.length > 0 && <><div className="fieldlabel">meta description</div>{metas.map((m, i) => <div key={i} className="opt" onClick={() => copy(m)}>{m}</div>)}</>}
-          {opening && <><div className="fieldlabel">new opening</div><div className="opt" onClick={() => copy(opening)}>{opening}</div></>}
+          {titles.length > 0 && <><div className="fieldlabel">title tag</div>{titles.map((t, i) => <button key={i} type="button" className="opt" onClick={() => copy(t)} aria-label={`Copy title tag: ${t}`}>{t}</button>)}</>}
+          {metas.length > 0 && <><div className="fieldlabel">meta description</div>{metas.map((m, i) => <button key={i} type="button" className="opt" onClick={() => copy(m)} aria-label={`Copy meta description: ${m}`}>{m}</button>)}</>}
+          {opening && <><div className="fieldlabel">new opening</div><button type="button" className="opt" onClick={() => copy(opening)} aria-label="Copy new opening paragraph">{opening}</button></>}
           <div className="hint">click any option to copy</div>
         </div>
       );
@@ -597,8 +603,8 @@ function DraftBody({ body }: { body: string }) {
 }
 
 const CSS = `
-.sr { --bg:#F6F8FB; --surface:#FFFFFF; --surface2:#F2F5F9; --line:#E7EAF0; --text:#1A2030; --muted:#8A93A6;
-  --accent:#6C5CE7; --accent-dim:rgba(108,92,231,.1); --amber:#E1A100; --coral:#E14B4B; --violet:#8B5CF6; --green:#00B894;
+.sr { --bg:#F6F8FB; --surface:#FFFFFF; --surface2:#F2F5F9; --line:#E7EAF0; --text:#1A2030; --muted:#6B768D;
+  --accent:#6C5CE7; --accent-dim:rgba(108,92,231,.1); --amber:#9A6E00; --coral:#DD3535; --violet:#8655F6; --green:#00856B;
   min-height:100vh; background:var(--bg); color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
 .sr * { box-sizing:border-box; }
 .sr .wrap { max-width:1000px; margin:0 auto; padding:36px 22px 80px; }
@@ -608,7 +614,7 @@ const CSS = `
 @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(0,184,148,.4)} 70%{box-shadow:0 0 0 8px rgba(0,184,148,0)} 100%{box-shadow:0 0 0 0 rgba(0,184,148,0)} }
 .sr .cmd { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:26px; }
 .sr h1 { font-size:32px; font-weight:700; letter-spacing:-.02em; margin:0; color:#12172A; }
-.sr .run { background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:13px 24px; border-radius:11px; font-family:inherit; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap; transition:transform .12s, box-shadow .2s; box-shadow:0 6px 18px rgba(108,92,231,.3); }
+.sr .run { background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:13px 24px; border-radius:11px; font-family:inherit; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap; transition:transform var(--dur-1), box-shadow var(--dur-2); box-shadow:0 6px 18px rgba(108,92,231,.3); }
 .sr .run:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 10px 26px rgba(108,92,231,.42); }
 .sr .run.on { background:var(--surface2); color:var(--accent); box-shadow:none; cursor:default; overflow:hidden; position:relative; }
 .sr .run.on::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(108,92,231,.14),transparent); animation:scan 1.4s linear infinite; }
@@ -616,7 +622,7 @@ const CSS = `
 .sr .runstat { font-family:var(--font-mono); font-size:12px; position:relative; z-index:1; }
 .sr .brandrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
 .sr .seg { display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:4px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
-.sr .seg button { display:flex; align-items:center; gap:7px; background:transparent; border:0; color:var(--muted); padding:8px 15px; border-radius:8px; font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; transition:.15s; }
+.sr .seg button { display:flex; align-items:center; gap:7px; background:transparent; border:0; color:var(--muted); padding:8px 15px; border-radius:8px; font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
 .sr .seg button.on { background:var(--accent); color:#fff; }
 .sr .dot { width:6px; height:6px; border-radius:50%; background:#fff; }
 .sr .dot.off { background:var(--line); }
@@ -625,7 +631,7 @@ const CSS = `
 .sr .mode.auto { background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.35); color:var(--violet); }
 .sr .brandrow .mode:first-of-type { margin-left:auto; }
 .sr .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:24px; }
-.sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:12px 16px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; transition:.15s; }
+.sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:12px 16px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; transition:all var(--dur-2) var(--ease-out); }
 .sr .tabs button:hover { color:var(--text); }
 .sr .tabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
 .sr .tabs button span { font-family:var(--font-mono); font-size:11px; background:var(--surface2); color:var(--muted); padding:1px 7px; border-radius:20px; }
@@ -644,11 +650,11 @@ const CSS = `
 .sr .prose { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; line-height:1.65; color:#3A4256; margin:0; }
 .sr .fieldlabel { font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px; }
 .sr .fieldlabel:first-child { margin-top:0; }
-.sr .opt { font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--line); padding:9px 11px; border-radius:8px; margin-bottom:6px; cursor:pointer; transition:.15s; }
+.sr .opt { display:block; width:100%; text-align:left; font-family:inherit; font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--line); padding:9px 11px; border-radius:8px; margin-bottom:6px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
 .sr .opt:hover { border-color:var(--accent); background:var(--accent-dim); }
 .sr .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:8px; }
 .sr .acts { display:flex; gap:9px; margin-top:14px; flex-wrap:wrap; }
-.sr .primary { background:var(--accent); color:#fff; border:0; padding:9px 17px; border-radius:9px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:.15s; }
+.sr .primary { background:var(--accent); color:#fff; border:0; padding:9px 17px; border-radius:9px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
 .sr .primary:hover { background:#5b4bd6; }
 .sr .primary:disabled { opacity:.6; cursor:default; }
 .sr .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:9px 16px; border-radius:9px; font-family:inherit; font-size:13px; cursor:pointer; }
@@ -705,7 +711,7 @@ const CSS = `
 .sr .ov-type-row { display:flex; align-items:center; gap:10px; }
 .sr .ov-type-label { font-size:12px; color:var(--muted); width:110px; flex-shrink:0; }
 .sr .ov-type-bar-wrap { flex:1; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
-.sr .ov-type-bar { height:100%; border-radius:3px; transition:width .6s ease; }
+.sr .ov-type-bar { height:100%; border-radius:3px; transition:width var(--dur-4) var(--ease-out); }
 .sr .ov-type-count { font-size:12px; font-weight:600; color:var(--text); width:24px; text-align:right; }
 .sr .ov-table { width:100%; border-collapse:collapse; }
 .sr .ov-table th { text-align:left; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--line); }

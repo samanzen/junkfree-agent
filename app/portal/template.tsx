@@ -10,7 +10,7 @@ export default function PortalTemplate({ children }: { children: React.ReactNode
     <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.34, ease: EASE }}
+      transition={{ duration: 0.28, ease: EASE }}
     >
       {children}
     </m.div>

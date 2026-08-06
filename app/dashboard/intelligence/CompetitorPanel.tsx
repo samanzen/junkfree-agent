@@ -81,7 +81,15 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
         {competitors.length === 0 ? (
           <div className="cp-empty">No competitors added yet. Add a competitor domain above to see keyword gap analysis.</div>
         ) : competitors.map((c) => (
-          <div key={c.id} className={`cp-row ${selected?.id === c.id ? "active" : ""}`} onClick={() => loadGaps(c)}>
+          <div
+            key={c.id}
+            role="button"
+            tabIndex={0}
+            aria-pressed={selected?.id === c.id}
+            className={`cp-row ${selected?.id === c.id ? "active" : ""}`}
+            onClick={() => loadGaps(c)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); loadGaps(c); } }}
+          >
             <div>
               <div className="cp-domain">{c.name || c.domain}</div>
               <div className="cp-meta">

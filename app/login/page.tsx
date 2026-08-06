@@ -52,7 +52,7 @@ export default function Login() {
     <div className="lg">
       {/* Fonts come from next/font in app/layout.tsx now — no external request. */}
       <style>{CSS}</style>
-      <div className="card">
+      <main className="card">
         <div className="brand"><span className="dot" /> Autonomous SEO Platform</div>
         <h1>Sign in</h1>
         <p className="sub">Access your site&apos;s SEO command center.</p>
@@ -88,7 +88,7 @@ export default function Login() {
         {!process.env.NEXT_PUBLIC_SUPABASE_URL && (
           <div className="err">Missing NEXT_PUBLIC_SUPABASE_URL — check Vercel env vars.</div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

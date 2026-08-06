@@ -48,7 +48,7 @@ export default function ApprovalCard({
         className="p-approve p-approve-done"
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3, ease: EASE }}
+        transition={{ duration: 0.28, ease: EASE }}
       >
         <span className={`p-badge ${done === "approved" ? "green" : ""}`}
           style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -81,7 +81,7 @@ export default function ApprovalCard({
             className="p-approve-body"
             initial={false}
             animate={{ height: expanded || !longBody ? "auto" : collapsedHeight }}
-            transition={{ duration: 0.35, ease: EASE }}
+            transition={{ duration: 0.28, ease: EASE }}
             style={{ overflow: "hidden" }}
           >
             {body}

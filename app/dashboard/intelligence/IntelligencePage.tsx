@@ -106,7 +106,7 @@ const CSS = `
 .pd-bar-row { display:flex; align-items:center; gap:12px; }
 .pd-bar-label { width:80px; font-size:12px; font-weight:600; color:#6A7280; flex-shrink:0; }
 .pd-bar-track { flex:1; height:8px; background:#F0F2F5; border-radius:4px; overflow:hidden; }
-.pd-bar-fill { height:100%; border-radius:4px; transition:width .6s ease; }
+.pd-bar-fill { height:100%; border-radius:4px; transition:width var(--dur-4) var(--ease-out); }
 .pd-bar-count { width:36px; text-align:right; font-size:12px; font-weight:700; }
 .pd-chart-label { font-size:11px; color:#9AA3B2; margin-bottom:8px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
 .pd-loading,.pd-empty { padding:40px; text-align:center; color:#9AA3B2; font-size:13px; }
@@ -123,6 +123,10 @@ const CSS = `
 .kt-count { font-size:12px; color:#9AA3B2; white-space:nowrap; margin-left:auto; }
 .kt-scroll { overflow-x:auto; border:1px solid #E7EAF0; border-radius:14px; }
 .kt-table { width:100%; border-collapse:collapse; min-width:700px; }
+.kt-sort { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px; user-select:none; }
+.kt-sort:hover { color:#6C5CE7; }
+.kt-sort-arrow { color:#6C5CE7; min-width:9px; display:inline-block; }
+.kt-row { cursor:pointer; }
 .kt-th { padding:10px 12px; text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#8A93A6; border-bottom:1px solid #E7EAF0; background:#F9FAFB; white-space:nowrap; }
 .kt-row { cursor:pointer; }
 .kt-row:hover td { background:#FAFBFF; }

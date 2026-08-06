@@ -16,7 +16,7 @@ export default function EmptyState({ icon = "○", title, sub, action }: {
       className="p-empty"
       initial={{ opacity: 0, scale: 0.985 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, ease: EASE }}
+      transition={{ duration: 0.42, ease: EASE }}
     >
       <div className="p-empty-icon">{icon}</div>
       <div className="p-empty-title">{title}</div>
