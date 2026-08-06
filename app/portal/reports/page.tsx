@@ -9,6 +9,7 @@ import EmptyState from "../_components/EmptyState";
 import ConnectCard from "../_components/ConnectCard";
 import { Stagger } from "../_components/motion";
 import { IconReports } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "current" | "scheduled";
 
@@ -87,7 +88,7 @@ export default function ReportsPage() {
             {summary.activity.recent_content.length > 0 && (
               <div className="p-report-section">
                 <h3>Content published</h3>
-                <div className="p-table-wrap" data-scroll-x>
+                <ResponsiveTable>
                 <table className="p-table">
                   <thead><tr><th>Title</th><th>Target keyword</th><th>Date</th></tr></thead>
                   <tbody>
@@ -100,14 +101,14 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
-                </div>
+                </ResponsiveTable>
               </div>
             )}
 
             {summary.opportunities.length > 0 && (
               <div className="p-report-section">
                 <h3>Biggest opportunities right now</h3>
-                <div className="p-table-wrap" data-scroll-x>
+                <ResponsiveTable>
                 <table className="p-table">
                   <thead><tr><th>Keyword</th><th>Position</th><th>Monthly impressions</th></tr></thead>
                   <tbody>
@@ -120,7 +121,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
-                </div>
+                </ResponsiveTable>
               </div>
             )}
 

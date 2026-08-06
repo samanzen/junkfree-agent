@@ -12,6 +12,7 @@ import ScoreRing from "../_components/ScoreRing";
 import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger } from "../_components/motion";
 import { IconReviews } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "pending" | "all" | "insights";
 
@@ -90,7 +91,7 @@ export default function ReviewsPage() {
         ) : (
           <Panel>
             <PanelHead title="All reviews" badge={reviews.length} />
-            <div className="p-table-wrap">
+            <ResponsiveTable>
               <table className="p-table">
                 <thead><tr><th>Reviewer</th><th>Rating</th><th>Review</th><th>Status</th><th>Date</th></tr></thead>
                 <tbody>
@@ -113,7 +114,7 @@ export default function ReviewsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
           </Panel>
         )
       ) : (

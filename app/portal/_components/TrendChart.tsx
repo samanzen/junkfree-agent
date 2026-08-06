@@ -4,6 +4,7 @@ import {
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
 import ChartTooltip from "./ChartTooltip";
+import { useChartTouch } from "@/lib/ui/useChartTouch";
 
 export type TrendPoint = { date: string } & Record<string, string | number>;
 
@@ -20,6 +21,7 @@ export default function TrendChart({
   height?: number;
   gradientId?: string;
 }) {
+  const t = useChartTouch();
   const reduce = useReducedMotion();
 
   return (
@@ -38,14 +40,14 @@ export default function TrendChart({
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
-        <XAxis
+        <XAxis {...t.xAxis}
           dataKey="date" tick={{ fill: "var(--muted2)", fontSize: 11 }}
           tickLine={false} axisLine={false} dy={6}
         />
         <YAxis
           tick={{ fill: "var(--muted2)", fontSize: 11 }} tickLine={false} axisLine={false} width={44}
         />
-        <Tooltip
+        <Tooltip {...t.tooltip}
           cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
           content={<ChartTooltip />}
         />

@@ -10,6 +10,7 @@ import StatTile from "../../_components/StatTile";
 import ExecutionPanel from "../../_components/ExecutionPanel";
 import { Stagger, fadeUp } from "../../_components/motion";
 import { IconCheck, IconAlert, IconContent, IconTraffic, IconIntelligence } from "../../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type PageRow = {
   page: string; clicks: number; impressions: number; avg_ctr: number;
@@ -108,7 +109,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
           />
         ) : (
           <>
-            <div className="p-table-wrap">
+            <ResponsiveTable>
               <table className="p-table">
                 <thead><tr><th>Page</th><th>Clicks</th><th>Change</th><th>Best pos.</th><th>Keywords</th></tr></thead>
                 <tbody>
@@ -128,7 +129,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
             <ExecutionPanel
               brandId={brandId}
               capabilities={decaying.slice(0, 1).map((p) => ({
@@ -161,7 +162,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
           />
         ) : (
           <>
-            <div className="p-table-wrap">
+            <ResponsiveTable>
               <table className="p-table">
                 <thead><tr><th>Page</th><th>Impressions</th><th>CTR</th></tr></thead>
                 <tbody>
@@ -178,7 +179,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
             <ExecutionPanel
               brandId={brandId}
               capabilities={lowCtr.slice(0, 1).map((r) => ({
@@ -222,7 +223,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
                     </div>
                   </div>
                 </div>
-                <div className="p-table-wrap">
+                <ResponsiveTable>
                   <table className="p-table">
                     <thead><tr><th>Page</th><th>Clicks</th><th>Best pos.</th></tr></thead>
                     <tbody>
@@ -235,7 +236,7 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </ResponsiveTable>
                 <p className="p-rec-text" style={{ margin: "12px 0 0" }}>
                   Pick the page you want to win this term, strengthen it, and point the other page&apos;s
                   internal links at it rather than competing.

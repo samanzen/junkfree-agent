@@ -5,7 +5,7 @@
 // Theme: CSS custom properties on .portal, overridden by [data-theme="dark"]
 // and, absent an explicit choice, by prefers-color-scheme. The toggle
 // (PortalShell) persists the explicit choice to localStorage.
-import { touchTargetCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, responsiveTableCSS, down } from "@/lib/ui/tokens";
 
 // Fonts are no longer fetched here. The Google Fonts @import that used to sit
 // at the top of this string was inside a runtime-injected <style>, so it could
@@ -619,7 +619,9 @@ ${down.md} {
 .p-table tbody tr:last-child td { border-bottom:0; }
 .p-table tbody tr { transition:background .14s; }
 .p-table tbody tr:hover td { background:var(--surface2); }
-.p-table-wrap { overflow-x:auto; margin:0 -22px; padding:0 22px; }
+/* .rt-scroll shares this bleed-to-panel-edge treatment; .rt-stack opts out
+   below sm, where cards should sit inside the panel padding (Phase 3). */
+.p-table-wrap, .rt-scroll { overflow-x:auto; margin:0 -22px; padding:0 22px; }
 .p-table-sort { background:none; border:0; font:inherit; font-size:11px; font-weight:620; letter-spacing:.03em; color:var(--muted); cursor:pointer; padding:0; display:inline-flex; align-items:center; gap:4px; transition:color .18s; }
 .p-table-sort:hover { color:var(--text); }
 .p-table-sort.on { color:var(--accent); }
@@ -800,6 +802,13 @@ ${touchTargetCSS(".portal")}
 }
 .p-subnav::-webkit-scrollbar { display:none; }
 .p-subnav-btn { scroll-snap-align:start; }
+/* ══ Phase 3: card-stack tables ═════════════════════════════════════ */
+${responsiveTableCSS(".portal", {
+  surface: "var(--surface)", line: "var(--line-soft)", muted: "var(--muted)",
+  text: "var(--text)", radius: "var(--r-sm)",
+})}
+
+
 /* ══ Phase 2: bottom navigation ═════════════════════════════════════ */
 /* Hidden by default so it costs desktop nothing; shown only below md, where
    the sidebar has been replaced by the drawer. */

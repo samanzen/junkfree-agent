@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { authedFetch } from "@/lib/authedFetch";
 import { slugify } from "@/lib/utils";
-import { touchTargetCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, responsiveTableCSS, down } from "@/lib/ui/tokens";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
@@ -622,6 +622,15 @@ ${down.sm} { .sr .ov-kpis{grid-template-columns:1fr} .sr .ov-chart-tabs{flex-wra
 
 /* ══ Phase 1 foundation ═══════════════════════════════════════════════════ */
 ${touchTargetCSS(".sr")}
+
+/* ══ Phase 3: card-stack tables ═══════════════════════════════════════════ */
+${responsiveTableCSS(".sr", {
+  surface: "var(--surface)", line: "var(--line)", muted: "var(--muted)",
+  text: "var(--text)", radius: "12px",
+})}
+/* The dashboard's tables carry their own cell padding, which the card layout
+   supplies instead. */
+${down.sm} { .sr .rt-stack td, .sr .rt-stack th { padding-left:0; padding-right:0; } }
 
 /* The tab bar was a plain flex row of six tabs with neither wrap nor scroll,
    so on a phone it pushed the whole page sideways and the last tabs could not

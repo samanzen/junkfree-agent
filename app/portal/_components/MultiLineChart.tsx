@@ -4,6 +4,7 @@ import {
 } from "recharts";
 import { useReducedMotion } from "framer-motion";
 import ChartTooltip from "./ChartTooltip";
+import { useChartTouch } from "@/lib/ui/useChartTouch";
 
 export type Series = { key: string; name: string; color: string };
 
@@ -17,13 +18,14 @@ export default function MultiLineChart({
   xKey?: string;
   height?: number;
 }) {
+  const t = useChartTouch();
   const reduce = useReducedMotion();
 
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
         <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
-        <XAxis
+        <XAxis {...t.xAxis}
           dataKey={xKey} tick={{ fill: "var(--muted2)", fontSize: 11 }}
           tickLine={false} axisLine={false} dy={6}
         />
@@ -31,7 +33,7 @@ export default function MultiLineChart({
           tick={{ fill: "var(--muted2)", fontSize: 11 }} tickLine={false}
           axisLine={false} allowDecimals={false} width={40}
         />
-        <Tooltip
+        <Tooltip {...t.tooltip}
           cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
           content={<ChartTooltip />}
         />

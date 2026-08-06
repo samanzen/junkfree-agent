@@ -5,6 +5,9 @@ import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./ActionButton";
 import MetricExplainer from "./MetricExplainer";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { useChartTouch } from "@/lib/ui/useChartTouch";
+import { useDialog } from "@/lib/ui/useDialog";
 
 type Kw = {
   id: string; keyword: string; status: string;
@@ -100,7 +103,7 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
       </div>
 
       {/* Table */}
-      <div className="kt-scroll">
+      <ResponsiveTable>
         <table className="kt-table">
           <thead>
             <tr>
@@ -166,7 +169,7 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ResponsiveTable>
 
       {/* Pagination */}
       {total > limit && (
@@ -185,6 +188,12 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
 
 // ── Keyword Drawer ────────────────────────────────────────────
 function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onClose: () => void }) {
+  const t = useChartTouch();
+  // Shared with the portal's nav drawer (Phase 2): Escape to dismiss, focus
+  // trapped inside, focus restored to the row that opened it, background scroll
+  // locked. Previously this drawer had none of that -- it could only be closed
+  // by pointer, and Tab walked straight out of it into the page behind.
+  const dialogRef = useDialog<HTMLDivElement>({ open: true, onClose });
   const [range, setRange] = useState("30");
   const [history, setHistory] = useState<{ captured_date: string; position: number; clicks: number; impressions: number; ctr: number }[]>([]);
   const [events, setEvents] = useState<{ occurred_at: string; event_label: string; event_type: string }[]>([]);
@@ -212,8 +221,20 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 200 }} />
-      <div className="kd">
+      {/* Scrim is presentational; the dialog below owns dismissal, so it is
+          hidden from assistive tech rather than announced as a clickable region. */}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.3)", zIndex: 200 }}
+      />
+      <div
+        ref={dialogRef}
+        className="kd"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Keyword detail: ${kw.keyword}`}
+      >
         <div className="kd-head">
           <div>
             <div className="kd-kw">{kw.keyword}</div>
@@ -247,9 +268,9 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} reversed={metric === "position"} />
-              <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }}
+              <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }}
                 formatter={(v: unknown) => { const n = v as number; return [metric === "ctr" ? `${n}%` : metric === "position" ? `#${n}` : n.toLocaleString()]; }} />
               <Line type="monotone" dataKey="value" stroke={metricColor[metric]} strokeWidth={2.5} dot={false} animationDuration={600} />
             </LineChart>

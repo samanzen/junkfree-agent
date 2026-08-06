@@ -5,6 +5,7 @@ import { authedFetch } from "@/lib/authedFetch";
 import EmptyState from "../_components/EmptyState";
 import { IconCheck, IconSparkle } from "../icons";
 import type { AgentAction } from "../_components/ExecutionPanel";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 export type BattleRow = {
   keyword: string;
@@ -59,7 +60,7 @@ export default function KeywordBattleTable({
   if (!rows.length) return <EmptyState title={emptyTitle} sub={emptySub} />;
 
   return (
-    <div className="p-table-wrap">
+    <ResponsiveTable mode="scroll">
       <table className="p-table">
         <thead>
           <tr>
@@ -104,7 +105,7 @@ export default function KeywordBattleTable({
           })}
         </tbody>
       </table>
-    </div>
+    </ResponsiveTable>
   );
 }
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Row = {
   id: string; keyword: string; status: string | null;
@@ -94,7 +95,7 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
         />
       ) : (
         <>
-          <div className="p-table-wrap">
+          <ResponsiveTable>
             <table className="p-table">
               <thead>
                 <tr>
@@ -130,7 +131,7 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTable>
 
           <div className="p-pager">
             <span>Page {page} of {pages} · {total.toLocaleString()} keywords</span>

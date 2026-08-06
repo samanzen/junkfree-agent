@@ -116,7 +116,7 @@ test("the opportunity card collapses to one column, exactly once", () => {
 test("every ad-hoc breakpoint is gone — only the three tokens remain", () => {
   const mins = [...PORTAL_CSS.matchAll(/\(min-width:(\d+)px\)/g)].map((m) => Number(m[1]));
   const maxes = [...PORTAL_CSS.matchAll(/\(max-width:(\d+)px\)/g)].map((m) => Number(m[1]));
-  const tokens = [BREAKPOINTS.sm, BREAKPOINTS.md, BREAKPOINTS.lg];
+  const tokens: number[] = [BREAKPOINTS.sm, BREAKPOINTS.md, BREAKPOINTS.lg];
 
   expect([...new Set(mins)].filter((w) => !tokens.includes(w))).toEqual([]);
   // max-width must always be token-1, never the token itself: a rule at

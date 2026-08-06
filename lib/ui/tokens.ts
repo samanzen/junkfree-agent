@@ -100,6 +100,91 @@ body { overflow-wrap:break-word; }
 `;
 
 /**
+ * Card-stack table rules for one scoped surface.
+ *
+ * Pairs with app/_components/ResponsiveTable.tsx, which stamps each <td> with
+ * its column's heading. Above `sm` this is inert -- the table renders exactly
+ * as it always has, so desktop is untouched by definition rather than by
+ * careful matching.
+ *
+ * `scope` is the surface's root class (".portal" or ".sr"); `cardBg`, `line`
+ * and `muted` are the surface's own colour tokens, since the two frontends
+ * name theirs differently and neither should hardcode the other's.
+ */
+export function responsiveTableCSS(
+  scope: string,
+  vars: { surface: string; line: string; muted: string; text: string; radius: string }
+): string {
+  return `
+/* Both modes scroll horizontally above the card breakpoint, which is the
+   existing behaviour every table already had. */
+${scope} .rt { overflow-x:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; }
+
+${down.sm} {
+  /* "scroll" mode opts out of stacking: kept for tables whose point is
+     comparing values across rows, where separate cards destroy the comparison.
+     A soft edge fade signals there is more to the right. */
+  ${scope} .rt-scroll {
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);
+            mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);
+  }
+  ${scope} .rt-scroll table { min-width:max-content; }
+
+  /* ── Card stack ── */
+  ${scope} .rt-stack { overflow-x:visible; }
+  ${scope} .rt-stack table,
+  ${scope} .rt-stack tbody,
+  ${scope} .rt-stack tr,
+  ${scope} .rt-stack td { display:block; width:100%; }
+
+  /* Headings move into each cell as a label, so the row of <th> is redundant
+     visually -- but it stays in the accessibility tree rather than being
+     display:none'd, which would remove it for screen readers too. */
+  ${scope} .rt-stack thead {
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap;
+  }
+
+  ${scope} .rt-stack tr {
+    background:${vars.surface}; border:1px solid ${vars.line}; border-radius:${vars.radius};
+    padding:13px 15px; margin-bottom:9px;
+  }
+  ${scope} .rt-stack tr:last-child { margin-bottom:0; }
+  ${scope} .rt-stack tbody tr:hover td { background:none; }
+
+  ${scope} .rt-stack td {
+    display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+    padding:6px 0; border:0; text-align:right;
+  }
+  ${scope} .rt-stack td::before {
+    content:attr(data-label);
+    flex:0 0 auto; max-width:46%;
+    text-align:left; font-size:11.5px; font-weight:600; letter-spacing:.01em;
+    color:${vars.muted}; text-transform:none;
+  }
+  /* Cells with no column heading, and full-width cells (empty states, notes),
+     render as ordinary blocks rather than pretending to be a labelled value. */
+  ${scope} .rt-stack td:not([data-label]) { display:block; text-align:left; }
+  ${scope} .rt-stack td[data-full] { text-align:left; padding:4px 0; }
+
+  /* The first cell is the row's identity -- it reads as the card's heading
+     rather than as one more label/value pair. */
+  ${scope} .rt-stack td:first-child {
+    display:block; text-align:left;
+    font-size:14px; font-weight:600; color:${vars.text};
+    padding:0 0 9px; margin-bottom:5px; border-bottom:1px solid ${vars.line};
+    overflow-wrap:anywhere;
+  }
+  ${scope} .rt-stack td:first-child::before { display:none; }
+
+  /* Action buttons in a card get room to be tapped rather than being squeezed
+     against the right edge. */
+  ${scope} .rt-stack td:last-child:not(:first-child) { padding-top:9px; }
+}
+`;
+}
+
+/**
  * Touch-target and input-sizing rules for one scoped surface.
  *
  * Generated rather than hand-written per surface because both frontends need

@@ -14,6 +14,7 @@ import StatTile from "../_components/StatTile";
 import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger } from "../_components/motion";
 import { IconContent, IconSparkle } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "review" | "published" | "google" | "scheduled" | "writer";
 
@@ -83,7 +84,7 @@ export default function ContentPage() {
         ) : (
           <Panel>
             <PanelHead title="Published content" badge={published.length} badgeTone="green" />
-            <div className="p-table-wrap">
+            <ResponsiveTable>
               <table className="p-table">
                 <thead><tr><th>Title</th><th>Type</th><th>Keyword</th><th>Date</th></tr></thead>
                 <tbody>
@@ -99,7 +100,7 @@ export default function ContentPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveTable>
           </Panel>
         )
       ) : tab === "google" ? (

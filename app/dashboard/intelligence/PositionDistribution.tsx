@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { authedFetch } from "@/lib/authedFetch";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
+import { useChartTouch } from "@/lib/ui/useChartTouch";
 
 type Snap = { captured_date: string; top_3: number; top_10: number; top_20: number; top_50: number; top_100: number; not_ranked: number; total_clicks: number };
 
 export default function PositionDistribution({ brandId }: { brandId: string }) {
+  const t = useChartTouch();
   const [data, setData] = useState<Snap[]>([]);
   const [status, setStatus] = useState<DataStatusKind>("ok");
   const [loading, setLoading] = useState(true);
@@ -71,9 +73,9 @@ export default function PositionDistribution({ brandId }: { brandId: string }) {
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
+              <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
               <Bar dataKey="Top 3" fill="#00B894" radius={[3,3,0,0]} />
               <Bar dataKey="Top 10" fill="#6C5CE7" radius={[3,3,0,0]} />
               <Bar dataKey="Top 20" fill="#F5B461" radius={[3,3,0,0]} />

@@ -12,6 +12,7 @@ import ConnectCard from "../_components/ConnectCard";
 import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger } from "../_components/motion";
 import { IconWebsite, IconArrowUp, IconArrowDown, IconExternal } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type PageRow = {
   page: string; clicks: number; impressions: number; avg_ctr: number;
@@ -95,7 +96,7 @@ export default function WebsitePage() {
                 sub="Page performance is built from your Search Console rankings. It appears after your first daily sync."
               />
             ) : (
-              <div className="p-table-wrap">
+              <ResponsiveTable>
                 <table className="p-table">
                   <thead>
                     <tr><th>Page</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Best pos.</th><th>Keywords</th><th>Trend</th></tr>
@@ -123,7 +124,7 @@ export default function WebsitePage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ResponsiveTable>
             )}
           </Panel>
         </div>

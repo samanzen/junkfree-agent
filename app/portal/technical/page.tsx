@@ -16,6 +16,7 @@ import { Stagger } from "../_components/motion";
 import {
   IconWebsite, IconCheck, IconTraffic, IconLink, IconContent, IconTarget, IconAlert,
 } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "health" | "onpage" | "crawl" | "roadmap";
 
@@ -296,7 +297,7 @@ export default function TechnicalPage() {
                   <StatTile label="Non-200" value={tech.summary.non_200 || "—"} tone={tech.summary.non_200 ? "red" : "green"} />
                 </div>
 
-                <div className="p-table-wrap" style={{ marginTop: 18 }}>
+                <ResponsiveTable style={{ marginTop: 18 }}>
                   <table className="p-table">
                     <thead>
                       <tr><th>Page</th><th>Status</th><th>Words</th><th>Issues</th></tr>
@@ -329,7 +330,7 @@ export default function TechnicalPage() {
                       })}
                     </tbody>
                   </table>
-                </div>
+                </ResponsiveTable>
               </>
             )}
           </Panel>
@@ -350,7 +351,7 @@ export default function TechnicalPage() {
                 sub="Every page with meaningful impressions is earning a reasonable share of clicks."
               />
             ) : (
-              <div className="p-table-wrap">
+              <ResponsiveTable>
                 <table className="p-table">
                   <thead><tr><th>Page</th><th>Impressions</th><th>CTR</th><th>Priority</th></tr></thead>
                   <tbody>
@@ -372,7 +373,7 @@ export default function TechnicalPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ResponsiveTable>
             )}
           </Panel>
         </div>

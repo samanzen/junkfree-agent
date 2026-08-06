@@ -5,6 +5,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import CountUp from "./CountUp";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { useChartTouch } from "@/lib/ui/useChartTouch";
 
 type Snap = {
   organic_traffic: number | null; organic_keywords: number | null;
@@ -27,6 +29,7 @@ const AMBER = "#F5B461";
 const CORAL = "#FF6B6B";
 
 export default function Overview({ brandId, token }: { brandId: string; token?: string }) {
+  const t = useChartTouch();
   const [data, setData] = useState<{
     current: Snap | null; previous: Snap | null;
     series: Snap[]; keywords: Kw[]; lowCtrPages: LowCtr[]; agent: Agent;
@@ -141,9 +144,9 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-                <XAxis dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
+                <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
                 <YAxis tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} />
+                <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} />
                 <Area type="monotone" dataKey={cc.key} stroke={cc.color} strokeWidth={2.5}
                   fill={`url(#${cc.gradient})`} name={cc.name} animationDuration={900} />
               </AreaChart>
@@ -176,8 +179,8 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
           {agent.weekly_activity.length > 1 && (
             <ResponsiveContainer width="100%" height={80}>
               <BarChart data={agent.weekly_activity} margin={{ top: 8, right: 0, left: -20, bottom: 0 }}>
-                <XAxis dataKey="week" tick={{ fill: "#B2BAC8", fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
+                <XAxis {...t.xAxis} dataKey="week" tick={{ fill: "#B2BAC8", fontSize: 10 }} tickLine={false} axisLine={false} />
+                <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
                 <Bar dataKey="count" fill={ACCENT} radius={[4, 4, 0, 0]} name="Drafts" />
               </BarChart>
             </ResponsiveContainer>
@@ -195,7 +198,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
           </div>
           <p className="ov-panel-sub">Ranking pos 5–20 — a small content push could reach page 1.</p>
           {keywords.length > 0 ? (
-            <table className="ov-table">
+            <ResponsiveTable><table className="ov-table">
               <thead>
                 <tr><th>Keyword</th><th>Pos</th><th>Impr.</th><th>CTR</th></tr>
               </thead>
@@ -214,7 +217,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></ResponsiveTable>
           ) : (
             <p className="ov-empty-msg">
               {gscConnected
@@ -232,7 +235,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
           </div>
           <p className="ov-panel-sub">High impressions, low clicks — weak title or meta description.</p>
           {lowCtrPages.length > 0 ? (
-            <table className="ov-table">
+            <ResponsiveTable><table className="ov-table">
               <thead>
                 <tr><th>Page</th><th>Impr.</th><th>CTR</th></tr>
               </thead>
@@ -251,7 +254,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></ResponsiveTable>
           ) : (
             <p className="ov-empty-msg">No low-CTR pages detected — good sign.</p>
           )}
@@ -268,10 +271,10 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData} margin={{ top: 8, right: 16, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
+              <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
               <YAxis yAxisId="left" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis yAxisId="right" orientation="right" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} reversed />
-              <Tooltip contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12 }} />
+              <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12 }} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
               <Line yAxisId="left" type="monotone" dataKey="health" stroke={GREEN} strokeWidth={2} dot={false} name="Site health %" animationDuration={900} />
               <Line yAxisId="right" type="monotone" dataKey="position" stroke={AMBER} strokeWidth={2} dot={false} name="Avg. position" animationDuration={900} />

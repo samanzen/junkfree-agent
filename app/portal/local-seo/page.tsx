@@ -12,6 +12,7 @@ import ConnectCard from "../_components/ConnectCard";
 import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger, StaggerItem } from "../_components/motion";
 import { IconLocalSeo, IconReviews, IconExternal } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "overview" | "gbp" | "citations" | "rankings" | "mappack";
 
@@ -214,7 +215,7 @@ export default function LocalSeoPage() {
 
 function CitationList({ rows }: { rows: Citation[] }) {
   return (
-    <div className="p-table-wrap">
+    <ResponsiveTable>
       <table className="p-table">
         <thead>
           <tr><th>Directory</th><th>Category</th><th>Status</th><th>Why it matters</th></tr>
@@ -238,7 +239,7 @@ function CitationList({ rows }: { rows: Citation[] }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </ResponsiveTable>
   );
 }
 

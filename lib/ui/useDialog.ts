@@ -17,6 +17,16 @@ type Options = {
   onClose: () => void;
   /** Element to restore focus to on close. Defaults to whatever had it. */
   restoreTo?: React.RefObject<HTMLElement | null>;
+  /**
+   * Modal (default) traps focus and locks background scroll — correct for a
+   * drawer or sheet that owns the screen.
+   *
+   * Set false for a popover: it still closes on Escape and still restores
+   * focus, but does not trap or lock, because a small informational popover
+   * that steals focus and freezes the page behind it is worse than one that
+   * does neither. Same implementation, correct semantics for each.
+   */
+  modal?: boolean;
 };
 
 const FOCUSABLE = [
@@ -32,7 +42,7 @@ const FOCUSABLE = [
  *  - focus returns to the opener on close
  *  - background scroll is locked
  */
-export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClose, restoreTo }: Options) {
+export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClose, restoreTo, modal = true }: Options) {
   const ref = useRef<T>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -41,9 +51,12 @@ export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClos
 
     previouslyFocused.current = (document.activeElement as HTMLElement) || null;
 
-    // Move focus into the dialog so the next Tab stays inside it.
-    const first = ref.current?.querySelector<HTMLElement>(FOCUSABLE);
-    first?.focus();
+    // Move focus into a modal so the next Tab stays inside it. A popover leaves
+    // focus where the user put it — pulling it away would lose their place.
+    if (modal) {
+      const first = ref.current?.querySelector<HTMLElement>(FOCUSABLE);
+      first?.focus();
+    }
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -51,7 +64,7 @@ export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClos
         onClose();
         return;
       }
-      if (e.key !== "Tab" || !ref.current) return;
+      if (!modal || e.key !== "Tab" || !ref.current) return;
 
       const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE))
         .filter((el) => el.offsetParent !== null || el === document.activeElement);
@@ -74,17 +87,21 @@ export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClos
     document.addEventListener("keydown", onKeyDown, true);
 
     // Lock background scroll without the layout shift a scrollbar removal
-    // would cause on desktop.
+    // would cause on desktop. Modal only — a popover must not freeze the page.
     const prevOverflow = document.body.style.overflow;
     const prevPadding = document.body.style.paddingRight;
-    const gap = window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (gap > 0) document.body.style.paddingRight = `${gap}px`;
+    if (modal) {
+      const gap = window.innerWidth - document.documentElement.clientWidth;
+      document.body.style.overflow = "hidden";
+      if (gap > 0) document.body.style.paddingRight = `${gap}px`;
+    }
 
     return () => {
       document.removeEventListener("keydown", onKeyDown, true);
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPadding;
+      if (modal) {
+        document.body.style.overflow = prevOverflow;
+        document.body.style.paddingRight = prevPadding;
+      }
       const target = restoreTo?.current || previouslyFocused.current;
       // Only restore if focus is still inside the closing dialog, so we never
       // yank it away from somewhere the user has deliberately moved it.
@@ -92,7 +109,7 @@ export function useDialog<T extends HTMLElement = HTMLDivElement>({ open, onClos
         target.focus();
       }
     };
-  }, [open, onClose, restoreTo]);
+  }, [open, onClose, restoreTo, modal]);
 
   return ref;
 }

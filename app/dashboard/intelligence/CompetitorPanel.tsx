@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Comp = { id: string; domain: string; name: string; last_keyword_count: number | null; last_checked_at: string | null };
 type Gap = { keyword: string; position: number; volume: number | null };
@@ -101,7 +102,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
           {gapLoading ? <div className="cp-empty">Fetching gap analysis from DataForSEO…</div> : gaps.length === 0 ? (
             <div className="cp-empty">No gaps found, or DataForSEO returned no data for this domain.</div>
           ) : (
-            <table className="cp-table">
+            <ResponsiveTable><table className="cp-table">
               <thead><tr><th>Keyword</th><th>Their position</th><th>Volume</th><th></th></tr></thead>
               <tbody>
                 {gaps.map((g, i) => (
@@ -118,7 +119,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></ResponsiveTable>
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
 import { Stagger, StaggerItem } from "../../_components/motion";
 import { IconSparkle, IconCheck } from "../../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Rec = {
   priority?: number; category?: string; title?: string; explanation?: string;
@@ -125,7 +126,7 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
         {almost.length === 0 ? (
           <EmptyState icon="⚡" title="Nothing in striking distance right now" sub="Keywords ranking between positions 11 and 20 will show up here." />
         ) : (
-          <div className="p-table-wrap">
+          <ResponsiveTable>
             <table className="p-table">
               <thead>
                 <tr><th>Keyword</th><th>Position</th><th>Searches / mo</th><th>Page</th></tr>
@@ -143,7 +144,7 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </ResponsiveTable>
         )}
       </Panel>
     </div>

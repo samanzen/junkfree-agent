@@ -20,6 +20,7 @@ import {
 import {
   IconIntelligence, IconSparkle, IconLink, IconWebsite, IconTarget, IconClose,
 } from "../icons";
+import ResponsiveTable from "@/app/_components/ResponsiveTable";
 
 type Tab = "battle" | "gaps" | "backlinks" | "visibility";
 
@@ -286,7 +287,7 @@ export default function CompetitorsPage() {
                         sub="Every opportunity your agents have found is either live or intentionally skipped. Run a fresh search below to look for more."
                       />
                     ) : (
-                      <div className="p-table-wrap">
+                      <ResponsiveTable>
                         <table className="p-table">
                           <thead><tr><th>Site</th><th>Category</th><th>Status</th><th>Why</th></tr></thead>
                           <tbody>
@@ -306,7 +307,7 @@ export default function CompetitorsPage() {
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </ResponsiveTable>
                     )}
 
                     <ExecutionPanel

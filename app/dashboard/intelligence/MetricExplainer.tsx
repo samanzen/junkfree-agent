@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDialog } from "@/lib/ui/useDialog";
 
 const EXPLANATIONS: Record<string, { label: string; explain: string }> = {
   avg_position:    { label: "Avg. Position",    explain: "Your average Google ranking across all tracked keywords. Position 1 is the top result. Below 20 means page 2 or deeper — most clicks go to the top 10." },
@@ -18,20 +19,30 @@ type Props = { metric: keyof typeof EXPLANATIONS };
 
 export default function MetricExplainer({ metric }: Props) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // Non-modal: Escape closes and focus returns to the "?" button, but focus is
+  // not trapped and the page is not scroll-locked — this is a hint popover, not
+  // a dialog that owns the screen.
+  const popRef = useDialog<HTMLDivElement>({
+    open, onClose: () => setOpen(false), restoreTo: btnRef, modal: false,
+  });
   const info = EXPLANATIONS[metric];
   if (!info) return null;
 
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
       <button
+        ref={btnRef}
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={`What is ${info.label}?`}
+        data-touch="inline"
         style={{ background: "transparent", border: 0, cursor: "pointer", color: "#B2BAC8", fontSize: 13, padding: "0 2px", lineHeight: 1 }}
-        title={info.label}
       >?</button>
       {open && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
-          <div style={{
+          <div onClick={() => setOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+          <div ref={popRef} role="dialog" aria-label={info.label} style={{
             position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
             zIndex: 50, background: "#fff", border: "1px solid #E7EAF0", borderRadius: 12,
             padding: 14, width: 260, boxShadow: "0 8px 30px rgba(16,24,40,.12)", marginTop: 6,
