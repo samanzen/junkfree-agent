@@ -114,7 +114,8 @@ const CSS = `
 /* ── Keyword Table ── */
 .kt { display:flex; flex-direction:column; gap:0; }
 .kt-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
-.kt-search { flex:1; min-width:160px; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:9px 13px; border-radius:9px; font-size:13px; font-family:inherit; }
+.kt-search-wrap { flex:1; min-width:160px; }
+.kt-search { width:100%; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:9px 13px; border-radius:9px; font-size:13px; font-family:inherit; }
 .kt-search:focus { outline:none; border-color:#6C5CE7; }
 .kt-filter { background:#fff; border:1px solid #E7EAF0; color:#6A7280; padding:9px 13px; border-radius:9px; font-size:13px; font-family:inherit; cursor:pointer; }
 .kt-add { display:flex; gap:6px; }
@@ -180,7 +181,8 @@ const CSS = `
 /* ── Competitors ── */
 .cp { display:flex; flex-direction:column; gap:16px; }
 .cp-add { display:flex; gap:8px; }
-.cp-input { flex:1; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:10px 14px; border-radius:10px; font-size:13px; font-family:inherit; }
+.cp-input-wrap { flex:1; }
+.cp-input { width:100%; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:10px 14px; border-radius:10px; font-size:13px; font-family:inherit; }
 .cp-input:focus { outline:none; border-color:#6C5CE7; }
 .cp-add-btn { background:#6C5CE7; color:#fff; border:0; padding:10px 18px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
 .cp-list { display:flex; flex-direction:column; gap:8px; }

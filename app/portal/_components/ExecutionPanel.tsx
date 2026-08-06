@@ -4,6 +4,7 @@ import Link from "next/link";
 import { m } from "framer-motion";
 import { authedFetch } from "@/lib/authedFetch";
 import { IconSparkle, IconCheck, IconLock, IconChevron } from "../icons";
+import { useToast } from "@/app/_components/Notify";
 
 // ── Contract ────────────────────────────────────────────────────────────────
 // The shared execution surface for every opportunity, now and in future.
@@ -51,6 +52,7 @@ export default function ExecutionPanel({
 }) {
   const [capState, setCapState] = useState<Record<string, "idle" | "busy" | "done">>({});
   const [itemState, setItemState] = useState<Record<string, ItemState>>({});
+  const toast = useToast();
 
   // Runs through the existing /api/intelligence/action endpoint.
   async function runCapability(c: Capability) {
@@ -65,11 +67,11 @@ export default function ExecutionPanel({
       if (res.ok) setCapState((s) => ({ ...s, [c.id]: "done" }));
       else {
         const e = await res.json().catch(() => ({}));
-        alert(e.error || "Couldn't start that. Please try again.");
+        toast.error("Couldn't start that", e.error || "Please try again in a moment.");
         setCapState((s) => ({ ...s, [c.id]: "idle" }));
       }
     } catch {
-      alert("Couldn't start that. Please try again.");
+      toast.error("Couldn't start that", "Check your connection and try again.");
       setCapState((s) => ({ ...s, [c.id]: "idle" }));
     }
   }
@@ -99,11 +101,11 @@ export default function ExecutionPanel({
         }));
       } else {
         const e = await res.json().catch(() => ({}));
-        alert(e.error || "That didn't go through. Please try again.");
+        toast.error("That didn't go through", e.error || "Please try again in a moment.");
         setItemState((s) => ({ ...s, [item.id]: "idle" }));
       }
     } catch {
-      alert("That didn't go through. Please try again.");
+      toast.error("That didn't go through", "Check your connection and try again.");
       setItemState((s) => ({ ...s, [item.id]: "idle" }));
     }
   }

@@ -6,6 +6,7 @@ import EmptyState from "../../_components/EmptyState";
 import { Stagger, StaggerItem } from "../../_components/motion";
 import { IconSparkle, IconCheck } from "../../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { useToast } from "@/app/_components/Notify";
 
 type Rec = {
   priority?: number; category?: string; title?: string; explanation?: string;
@@ -18,6 +19,7 @@ type AlmostRow = {
 };
 
 export default function OpportunitiesTab({ brandId }: { brandId: string }) {
+  const toast = useToast();
   const [recs, setRecs] = useState<Rec[]>([]);
   const [almost, setAlmost] = useState<AlmostRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,11 +54,11 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
       setQueued((q) => ({ ...q, [i]: res.ok ? "done" : "loading" }));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert(err.error || "Couldn't start that task. Please try again.");
+        toast.error("Couldn't start that task", err.error || "Please try again in a moment.");
         setQueued((q) => { const n = { ...q }; delete n[i]; return n; });
       }
     } catch {
-      alert("Couldn't start that task. Please try again.");
+      toast.error("Couldn't start that task", "Check your connection and try again.");
       setQueued((q) => { const n = { ...q }; delete n[i]; return n; });
     }
   }

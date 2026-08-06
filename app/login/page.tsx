@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { touchTargetCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, fieldCSS, down } from "@/lib/ui/tokens";
+import Field from "@/app/_components/Field";
 
 // Where to send someone straight after they sign in. Role comes from the
 // existing /api/me endpoint (lib/auth.ts) -- this adds no new auth logic and
@@ -55,25 +56,33 @@ export default function Login() {
         <div className="brand"><span className="dot" /> Autonomous SEO Platform</div>
         <h1>Sign in</h1>
         <p className="sub">Access your site&apos;s SEO command center.</p>
-        <input
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") signIn(); }}
-          autoComplete="email"
-        />
-        <input
-          placeholder="Password"
-          type="password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") signIn(); }}
-          autoComplete="current-password"
-        />
-        {err && <div className="err">⚠️ {err}</div>}
-        <button onClick={signIn} disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+        <div className="lg-fields">
+          <Field
+            label="Email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); if (err) setErr(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") signIn(); }}
+            autoComplete="email"
+            disabled={busy}
+          />
+          <Field
+            label="Password"
+            type="password"
+            required
+            value={pw}
+            onChange={(e) => { setPw(e.target.value); if (err) setErr(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") signIn(); }}
+            autoComplete="current-password"
+            disabled={busy}
+          />
+        </div>
+        {/* role="alert" so a failed sign-in is announced, and the message is
+            cleared as soon as the user edits either field. */}
+        {err && <div className="err" role="alert">{err}</div>}
+        <button onClick={signIn} disabled={busy} data-busy={busy || undefined} aria-live="polite">
+          <span>{busy ? "Signing in…" : "Sign in"}</span>
         </button>
         {/* Debug: show whether env vars are loaded */}
         {!process.env.NEXT_PUBLIC_SUPABASE_URL && (
@@ -91,13 +100,19 @@ const CSS = `
 .lg .dot { width:8px; height:8px; border-radius:50%; background:#6C5CE7; box-shadow:0 0 0 4px rgba(108,92,231,.15); }
 .lg h1 { font-size:26px; margin:0 0 4px; color:#12172A; }
 .lg .sub { color:#8A93A6; font-size:13px; margin:0 0 24px; }
-.lg input { width:100%; background:#F6F8FB; border:1px solid #E7EAF0; color:#1A2030; padding:13px 15px; border-radius:11px; font-size:14px; margin-bottom:12px; font-family:inherit; box-sizing:border-box; }
-.lg input:focus { outline:none; border-color:#6C5CE7; background:#fff; }
+/* Input styling now comes from the shared fieldCSS below. The old bare
+   ".lg input" rule carried its own margin, which would have fought the
+   field layout's gap. */
+.lg-fields { display:flex; flex-direction:column; gap:15px; margin-bottom:16px; }
 .lg button { width:100%; background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:14px; border-radius:11px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; }
 .lg button:disabled { opacity:.6; cursor:default; }
 .lg .err { color:#E14B4B; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(225,75,75,.08); border-radius:8px; border:1px solid rgba(225,75,75,.2); }
 
-/* ══ Phase 1 foundation ═══════════════════════════════════════════════════ */
+/* ══ Phase 4: shared form fields ══════════════════════════════════════════ */
+${fieldCSS(".lg", {
+  surface: "#F6F8FB", line: "#E7EAF0", lineStrong: "#C6CEDA", muted: "#8A93A6",
+  text: "#1A2030", accent: "#6C5CE7", danger: "#E14B4B", radius: "11px",
+})}
 ${touchTargetCSS(".lg")}
 ${down.sm} {
   .lg { padding:20px 16px; align-items:flex-start; padding-top:12vh; }

@@ -21,6 +21,8 @@ import {
   IconIntelligence, IconSparkle, IconLink, IconWebsite, IconTarget, IconClose,
 } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { useToast, useConfirm } from "@/app/_components/Notify";
+import Field from "@/app/_components/Field";
 
 type Tab = "battle" | "gaps" | "backlinks" | "visibility";
 
@@ -35,6 +37,8 @@ export default function CompetitorsPage() {
   const { brand } = usePortalAuth();
   const { data: platform } = usePlatformData(brand?.id);
 
+  const toast = useToast();
+  const confirm = useConfirm();
   const [competitors, setCompetitors] = useState<CompetitorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -79,10 +83,13 @@ export default function CompetitorsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brand_id: brand.id, domain }),
       });
-      if (res.ok) { setNewDomain(""); await loadCompetitors(); }
-      else {
+      if (res.ok) {
+        setNewDomain("");
+        await loadCompetitors();
+        toast.success("Competitor added", `Now tracking ${domain}.`);
+      } else {
         const e = await res.json().catch(() => ({}));
-        alert(e.error || "Couldn't add that competitor.");
+        toast.error("Couldn't add that competitor", e.error || "Check the domain and try again.");
       }
     } finally { setAdding(false); }
   }
@@ -99,13 +106,24 @@ export default function CompetitorsPage() {
       const d = await res.json().catch(() => ({}));
       await loadCompetitors();
       if (Array.isArray(d.discovered) && d.discovered.length === 0) {
-        alert("No new competitors found beyond the ones you already track.");
+        toast.info("No new competitors found", "Everything we could find is already on your list.");
+      } else if (Array.isArray(d.discovered)) {
+        toast.success(
+          `Found ${d.discovered.length} competitor${d.discovered.length === 1 ? "" : "s"}`,
+          "They have been added to your list.",
+        );
       }
     } finally { setDiscovering(false); }
   }
 
   async function remove(c: CompetitorRow) {
-    if (!confirm(`Stop tracking ${c.domain}?`)) return;
+    const ok = await confirm({
+      title: `Stop tracking ${c.domain}?`,
+      body: "You can add this competitor again later, but the gap analysis for them will be cleared.",
+      confirmLabel: "Stop tracking",
+      danger: true,
+    });
+    if (!ok) return;
     await authedFetch(`/api/intelligence/competitors/${c.id}`, { method: "DELETE" });
     if (selectedId === c.id) { setSelectedId(null); setAnalysis(null); }
     await loadCompetitors();
@@ -150,15 +168,21 @@ export default function CompetitorsPage() {
         />
 
         <div className="p-toolbar">
-          <input
-            className="p-input"
+          <Field
+            hideLabel label="Competitor domain"
+            className="p-toolbar-grow" inputClassName="p-input"
             placeholder="Add a competitor domain, e.g. example.ca"
             value={newDomain}
+            disabled={adding}
             onChange={(e) => setNewDomain(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") addCompetitor(); }}
           />
-          <button className="p-btn primary" onClick={addCompetitor} disabled={adding || !newDomain.trim()}>
-            {adding ? "Adding…" : "Add competitor"}
+          <button
+            className="p-btn primary" onClick={addCompetitor}
+            disabled={adding || !newDomain.trim()}
+            data-busy={adding || undefined}
+          >
+            <span>Add competitor</span>
           </button>
         </div>
 

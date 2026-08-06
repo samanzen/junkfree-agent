@@ -5,7 +5,7 @@
 // Theme: CSS custom properties on .portal, overridden by [data-theme="dark"]
 // and, absent an explicit choice, by prefers-color-scheme. The toggle
 // (PortalShell) persists the explicit choice to localStorage.
-import { touchTargetCSS, responsiveTableCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, responsiveTableCSS, fieldCSS, down } from "@/lib/ui/tokens";
 
 // Fonts are no longer fetched here. The Google Fonts @import that used to sit
 // at the top of this string was inside a runtime-injected <style>, so it could
@@ -802,6 +802,16 @@ ${touchTargetCSS(".portal")}
 }
 .p-subnav::-webkit-scrollbar { display:none; }
 .p-subnav-btn { scroll-snap-align:start; }
+/* Toolbar fields grow to fill the row; the input keeps its own visual class. */
+.p-toolbar-grow { flex:1; min-width:180px; }
+
+/* ══ Phase 4: shared form fields + loading ══════════════════════════ */
+${fieldCSS(".portal", {
+  surface: "var(--surface)", line: "var(--line)", lineStrong: "var(--line-strong)",
+  muted: "var(--muted)", text: "var(--text)", accent: "var(--accent)",
+  danger: "var(--red)", radius: "var(--r-sm)",
+})}
+
 /* ══ Phase 3: card-stack tables ═════════════════════════════════════ */
 ${responsiveTableCSS(".portal", {
   surface: "var(--surface)", line: "var(--line-soft)", muted: "var(--muted)",

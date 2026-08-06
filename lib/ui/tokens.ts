@@ -100,6 +100,112 @@ body { overflow-wrap:break-word; }
 `;
 
 /**
+ * Form-field and loading rules for one scoped surface.
+ *
+ * Pairs with app/_components/Field.tsx. Colours are injected from the surface's
+ * own tokens so a field looks native to the page it renders on rather than
+ * introducing a third visual language. Sizing inherits the Phase 1 guarantees
+ * (44px touch floor, 16px inputs) rather than restating them.
+ */
+export function fieldCSS(
+  scope: string,
+  vars: { surface: string; line: string; lineStrong: string; muted: string; text: string; accent: string; danger: string; radius: string }
+): string {
+  return `
+${scope} .fld { display:flex; flex-direction:column; gap:6px; min-width:0; }
+${scope} .fld-label {
+  font-size:12.5px; font-weight:560; letter-spacing:-.005em; color:${vars.text};
+  display:inline-flex; align-items:center; gap:3px;
+}
+${scope} .fld-label-inline { font-weight:500; color:${vars.muted}; cursor:pointer; }
+${scope} .fld-req { color:${vars.danger}; font-weight:600; }
+
+/* Visually hidden but present for assistive tech — used by hideLabel and by
+   the "(required)" suffix, so "required" is announced rather than conveyed by
+   an asterisk alone. */
+${scope} .fld-sr {
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap;
+}
+
+${scope} .fld-control { position:relative; display:flex; }
+${scope} .fld-input {
+  width:100%; background:${vars.surface}; color:${vars.text};
+  border:1px solid ${vars.line}; border-radius:${vars.radius};
+  padding:10px 13px; font-family:inherit;
+  transition:border-color .16s, box-shadow .16s, background .16s;
+}
+${scope} .fld-input::placeholder { color:${vars.muted}; opacity:.8; }
+${scope} .fld-input:hover:not(:disabled) { border-color:${vars.lineStrong}; }
+${scope} .fld-input:focus {
+  outline:none; border-color:${vars.accent};
+  box-shadow:0 0 0 3px color-mix(in srgb, ${vars.accent} 18%, transparent);
+}
+${scope} .fld-input:disabled { opacity:.55; cursor:not-allowed; }
+${scope} .fld-textarea { min-height:92px; resize:vertical; line-height:1.6; }
+${scope} .fld-select { appearance:none; padding-right:34px; cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,${vars.muted} 50%),linear-gradient(135deg,${vars.muted} 50%,transparent 50%);
+  background-position:calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+  background-size:5px 5px, 5px 5px; background-repeat:no-repeat;
+}
+
+/* Error state is carried by colour AND by the message below it, never colour
+   alone. */
+${scope} .fld.is-error .fld-input { border-color:${vars.danger}; }
+${scope} .fld.is-error .fld-input:focus {
+  box-shadow:0 0 0 3px color-mix(in srgb, ${vars.danger} 18%, transparent);
+}
+${scope} .fld-helper { font-size:11.5px; line-height:1.5; color:${vars.muted}; margin:0; }
+${scope} .fld-error {
+  font-size:11.5px; line-height:1.5; color:${vars.danger}; margin:0;
+  display:flex; align-items:flex-start; gap:5px;
+}
+${scope} .fld-error::before { content:"!"; font-weight:700; flex:none; }
+
+/* ── Toggles ── */
+${scope} .fld-toggle-row { display:flex; align-items:center; gap:9px; }
+${scope} .fld-check, ${scope} .fld-switch { flex:none; cursor:pointer; accent-color:${vars.accent}; }
+${scope} .fld-check { width:17px; height:17px; }
+${scope} .fld-switch {
+  appearance:none; width:38px; height:22px; border-radius:99px;
+  background:${vars.line}; border:1px solid ${vars.line}; position:relative;
+  transition:background .18s, border-color .18s;
+}
+${scope} .fld-switch::after {
+  content:""; position:absolute; top:2px; left:2px; width:16px; height:16px;
+  border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.22);
+  transition:transform .18s cubic-bezier(.32,.72,0,1);
+}
+${scope} .fld-switch:checked { background:${vars.accent}; border-color:${vars.accent}; }
+${scope} .fld-switch:checked::after { transform:translateX(16px); }
+${scope} .fld-switch:focus-visible, ${scope} .fld-check:focus-visible {
+  outline:2px solid ${vars.accent}; outline-offset:2px;
+}
+
+/* ── Loading ── */
+/* Reserves its own space so nothing reflows when it appears — a spinner that
+   shifts the layout is worse than no spinner. */
+${scope} .fld-spinner, ${scope} .ld-spinner {
+  display:inline-block; width:14px; height:14px; flex:none;
+  border:2px solid ${vars.line}; border-top-color:${vars.accent};
+  border-radius:50%; animation:ldSpin .7s linear infinite;
+}
+${scope} .fld-spinner { position:absolute; right:12px; top:50%; margin-top:-7px; }
+@keyframes ldSpin { to { transform:rotate(360deg); } }
+
+/* Buttons keep their width while busy, so a label swapping to a spinner cannot
+   make the row jump. */
+${scope} [data-busy="true"] { position:relative; pointer-events:none; }
+${scope} [data-busy="true"] > * { visibility:hidden; }
+${scope} [data-busy="true"]::after {
+  content:""; position:absolute; inset:0; margin:auto;
+  width:15px; height:15px; border:2px solid currentColor; border-top-color:transparent;
+  border-radius:50%; opacity:.75; animation:ldSpin .7s linear infinite;
+}
+`;
+}
+
+/**
  * Card-stack table rules for one scoped surface.
  *
  * Pairs with app/_components/ResponsiveTable.tsx, which stamps each <td> with

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import { m } from "framer-motion";
 import { fadeUp, EASE } from "./motion";
 import { IconCheck } from "../icons";
+import { useToast } from "@/app/_components/Notify";
 
 // Card for anything awaiting the customer's yes/no: a content draft, a Google
 // post, a drafted review reply. Body is rendered as plain text (never HTML)
@@ -26,6 +27,7 @@ export default function ApprovalCard({
   dismissLabel?: string;
   collapsedHeight?: number;
 }) {
+  const toast = useToast();
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<"" | "approve" | "dismiss">("");
   const [done, setDone] = useState<"" | "approved" | "dismissed">("");
@@ -37,7 +39,7 @@ export default function ApprovalCard({
     const ok = await fn();
     setBusy("");
     if (ok) setDone(which === "approve" ? "approved" : "dismissed");
-    else alert("That didn't go through. Please try again.");
+    else toast.error("That didn't go through", "Please try again in a moment.");
   }
 
   if (done) {

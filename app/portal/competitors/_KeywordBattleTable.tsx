@@ -6,6 +6,7 @@ import EmptyState from "../_components/EmptyState";
 import { IconCheck, IconSparkle } from "../icons";
 import type { AgentAction } from "../_components/ExecutionPanel";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { useToast } from "@/app/_components/Notify";
 
 export type BattleRow = {
   keyword: string;
@@ -28,6 +29,7 @@ export default function KeywordBattleTable({
   emptySub: string;
   competitorDomain: string;
 }) {
+  const toast = useToast();
   const [state, setState] = useState<Record<string, "idle" | "busy" | "done">>({});
 
   async function run(keyword: string) {
@@ -48,11 +50,11 @@ export default function KeywordBattleTable({
       if (res.ok) setState((s) => ({ ...s, [keyword]: "done" }));
       else {
         const e = await res.json().catch(() => ({}));
-        alert(e.error || "Couldn't start that. Please try again.");
+        toast.error("Couldn't start that", e.error || "Please try again in a moment.");
         setState((s) => ({ ...s, [keyword]: "idle" }));
       }
     } catch {
-      alert("Couldn't start that. Please try again.");
+      toast.error("Couldn't start that", "Check your connection and try again.");
       setState((s) => ({ ...s, [keyword]: "idle" }));
     }
   }

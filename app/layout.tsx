@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import { GLOBAL_CSS } from "@/lib/ui/tokens";
+import { NotifyProvider } from "./_components/Notify";
 
 // Inter, self-hosted by next/font at build time. This replaces THREE separate
 // render-blocking Google Fonts requests that previously existed:
@@ -33,7 +34,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>
       <body style={{ margin: 0, fontFamily: "var(--font-sans)", background: "#0b0f14", color: "#e6edf3" }}>
-        {children}
+        {/* Mounted once at the root so /dashboard and /portal share one toast
+            stack and one confirm dialog, and shared components can raise either
+            without knowing which tree they are rendering in. */}
+        <NotifyProvider>{children}</NotifyProvider>
       </body>
     </html>
   );

@@ -8,6 +8,7 @@ import DataStatus, { type DataStatusKind } from "./DataStatus";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import { useChartTouch } from "@/lib/ui/useChartTouch";
 import { useDialog } from "@/lib/ui/useDialog";
+import Field from "@/app/_components/Field";
 
 type Kw = {
   id: string; keyword: string; status: string;
@@ -89,15 +90,31 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
     <div className="kt">
       {/* Toolbar */}
       <div className="kt-toolbar">
-        <input className="kt-search" placeholder="Search keywords…" value={search}
+        {/* Labels are hidden visually — the toolbar has no room for them and
+            the placeholders read fine — but they exist for screen readers,
+            which a placeholder alone never gave. */}
+        <Field
+          hideLabel label="Search keywords" type="search"
+          className="kt-search-wrap" inputClassName="kt-search"
+          placeholder="Search keywords…" value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-        <select className="kt-filter" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
+        <Field
+          as="select" hideLabel label="Filter by status" inputClassName="kt-filter"
+          value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
           <option value="">All statuses</option>
           {["improving","stable","declining","new","recovered"].map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        </Field>
         <div className="kt-add">
-          <input className="kt-search" placeholder="Add keyword…" value={addKw} onChange={(e) => setAddKw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addKeyword()} />
-          <button className="kt-add-btn" onClick={addKeyword} disabled={adding}>{adding ? "…" : "+"}</button>
+          <Field
+            hideLabel label="Add a keyword to track"
+            className="kt-search-wrap" inputClassName="kt-search"
+            placeholder="Add keyword…" value={addKw} disabled={adding}
+            onChange={(e) => setAddKw(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addKeyword()} />
+          <button
+            className="kt-add-btn" onClick={addKeyword} disabled={adding}
+            data-busy={adding || undefined} aria-label="Add keyword"
+          ><span>+</span></button>
         </div>
         <span className="kt-count">{total.toLocaleString()} keywords</span>
       </div>

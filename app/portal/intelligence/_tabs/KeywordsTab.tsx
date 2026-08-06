@@ -4,6 +4,7 @@ import { authedFetch } from "@/lib/authedFetch";
 import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import Field from "@/app/_components/Field";
 
 type Row = {
   id: string; keyword: string; status: string | null;
@@ -68,17 +69,20 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
       <PanelHead title="Your keywords" badge={total || undefined} sub="Every keyword we track for your business, ranked by opportunity." />
 
       <div className="p-toolbar">
-        <input
-          className="p-input" placeholder="Search keywords…" value={search}
+        <Field
+          hideLabel label="Search keywords" type="search"
+          className="p-toolbar-grow" inputClassName="p-input"
+          placeholder="Search keywords…" value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
-        <select className="p-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+        <Field as="select" hideLabel label="Filter by status" inputClassName="p-select"
+          value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
           <option value="">All statuses</option>
           <option value="improving">Improving</option>
           <option value="declining">Declining</option>
           <option value="stable">Stable</option>
           <option value="new">New</option>
-        </select>
+        </Field>
       </div>
 
       {loading ? (

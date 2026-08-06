@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import Field from "@/app/_components/Field";
 
 type Comp = { id: string; domain: string; name: string; last_keyword_count: number | null; last_checked_at: string | null };
 type Gap = { keyword: string; position: number; volume: number | null };
@@ -65,8 +66,10 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
     <div className="cp">
       {/* Add competitor */}
       <div className="cp-add">
-        <input className="cp-input" placeholder="competitor-domain.com" value={domain} onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        <button className="cp-add-btn" onClick={add} disabled={adding}>{adding ? "Adding…" : "Add competitor"}</button>
+        <Field hideLabel label="Competitor domain" className="cp-input-wrap" inputClassName="cp-input"
+          placeholder="competitor-domain.com" value={domain} disabled={adding}
+          onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="cp-add-btn" onClick={add} disabled={adding} data-busy={adding || undefined}><span>Add competitor</span></button>
         <button className="cp-add-btn" onClick={discover} disabled={discovering} style={{ background: "#0984E3" }}>
           {discovering ? "Discovering…" : "🔍 Discover competitors"}
         </button>

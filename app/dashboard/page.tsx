@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { authedFetch } from "@/lib/authedFetch";
 import { slugify } from "@/lib/utils";
-import { touchTargetCSS, responsiveTableCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, responsiveTableCSS, fieldCSS, down } from "@/lib/ui/tokens";
+import { useToast, useConfirm } from "@/app/_components/Notify";
+import Field, { focusFirstError } from "@/app/_components/Field";
 import Overview from "./Overview";
 import IntelligencePage from "./intelligence/IntelligencePage";
 
@@ -38,6 +40,8 @@ export default function Dashboard() {
   const [authed, setAuthed] = useState(false);
   const router = useRouter();
   const [token, setToken] = useState<string>("");
+  const toast = useToast();
+  const confirm = useConfirm();
 
   // Sprint 6.3 Phase 3 — admin-only brand onboarding (replaces the SQL editor
   // as the way to add a tenant). allBrands is the admin management list
@@ -48,18 +52,40 @@ export default function Dashboard() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [creatingBrand, setCreatingBrand] = useState(false);
   const [brandFormErr, setBrandFormErr] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const brandFormRef = useRef<HTMLDivElement>(null);
 
   async function loadAllBrands() {
     const d = await (await authedFetch("/api/brands")).json();
     setAllBrands(d.brands || []);
   }
 
+  // Inline, per-field validation. Presentation only — the same three fields
+  // were already required, and the server still validates them independently;
+  // this just tells the user which box is wrong before a round trip.
+  function validateBrand(): boolean {
+    const errs: Record<string, string> = {};
+    if (!newBrand.name.trim()) errs.name = "Give the brand a name.";
+    if (!newBrand.slug.trim()) errs.slug = "A slug is required.";
+    else if (!/^[a-z0-9-]+$/.test(newBrand.slug.trim())) errs.slug = "Use only lowercase letters, numbers and hyphens.";
+    if (!newBrand.site_url.trim()) errs.site_url = "A site URL is required.";
+    else if (!/^https?:\/\/.+\..+/.test(newBrand.site_url.trim())) errs.site_url = "Include the full address, starting with https://";
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) {
+      // Land the user on the first problem instead of leaving them to find it.
+      setTimeout(() => focusFirstError(brandFormRef.current), 0);
+      return false;
+    }
+    return true;
+  }
+
+  function clearFieldError(key: string) {
+    setFieldErrors((e) => (e[key] ? { ...e, [key]: "" } : e));
+  }
+
   async function createBrand() {
     setBrandFormErr("");
-    if (!newBrand.name.trim() || !newBrand.slug.trim() || !newBrand.site_url.trim()) {
-      setBrandFormErr("Name, slug, and site URL are required.");
-      return;
-    }
+    if (!validateBrand()) return;
     setCreatingBrand(true);
     try {
       const res = await authedFetch("/api/brands", {
@@ -88,12 +114,17 @@ export default function Dashboard() {
 
   async function linkUser(brandId: string, email: string, role: string) {
     const trimmed = email.trim();
-    if (!trimmed) { alert("Enter an email."); return; }
+    if (!trimmed) { toast.warning("Enter an email address", "Type the address of an existing user first."); return; }
     const brandName = allBrands.find((b) => b.id === brandId)?.name || "this brand";
     // Explicit confirmation — this can silently move an EXISTING customer to a
     // different brand, not just link a fresh one, so a careless click must
     // never be able to do that unconfirmed.
-    if (!window.confirm(`Link ${trimmed} to ${brandName} as ${role}?\n\nIf they're already linked to a different brand, this moves them.`)) return;
+    const ok = await confirm({
+      title: `Link ${trimmed} to ${brandName}?`,
+      body: `They will be given the ${role} role. If they are already linked to a different brand, this moves them.`,
+      confirmLabel: "Link user",
+    });
+    if (!ok) return;
     try {
       const res = await authedFetch(`/api/brands/${brandId}/users`, {
         method: "POST",
@@ -101,10 +132,10 @@ export default function Dashboard() {
         body: JSON.stringify({ email: trimmed, role }),
       });
       const r = await res.json();
-      if (!res.ok) { alert(r.error || `Failed to link user (${res.status}).`); return; }
-      alert(`Linked ${trimmed} to ${brandName}.`);
-    } catch (e) {
-      alert("Failed to link user: " + String(e));
+      if (!res.ok) { toast.error("Couldn't link that user", r.error || `The server returned ${res.status}.`); return; }
+      toast.success("User linked", `${trimmed} now has access to ${brandName}.`);
+    } catch {
+      toast.error("Couldn't link that user", "Check your connection and try again.");
     }
   }
 
@@ -119,11 +150,11 @@ export default function Dashboard() {
         body: JSON.stringify({ active: true }),
       });
       const r = await res.json();
-      if (!res.ok) { alert(r.error || `Failed to activate brand (${res.status}).`); return; }
+      if (!res.ok) { toast.error("Couldn't activate that brand", r.error || `The server returned ${res.status}.`); return; }
       await loadAllBrands();
       load(); // refresh the active-brand switcher too
-    } catch (e) {
-      alert("Failed to activate brand: " + String(e));
+    } catch {
+      toast.error("Couldn't activate that brand", "Check your connection and try again.");
     }
   }
 
@@ -169,8 +200,8 @@ export default function Dashboard() {
   async function draftAct(id: string, path: string) {
     try {
       const r = await (await authedFetch(`/api/drafts/${id}/${path}`, { method: "POST" })).json();
-      if (r.ok === false && r.error) alert(r.error);
-    } catch (e) { alert("Action failed: " + String(e)); }
+      if (r.ok === false && r.error) toast.error("That action didn't complete", r.error);
+    } catch { toast.error("That action didn't complete", "Check your connection and try again."); }
     load();
   }
   async function sendFeedback(id: string) {
@@ -178,8 +209,9 @@ export default function Dashboard() {
     setBusy(id);
     try {
       const r = await (await authedFetch(`/api/drafts/${id}/revise`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: feedbackText }) })).json();
-      if (r.ok === false) alert(r.error || "Revision failed");
-    } catch (e) { alert("Revision failed: " + String(e)); }
+      if (r.ok === false) toast.error("Revision failed", r.error || "The agent could not rewrite this draft.");
+      else toast.success("Draft revised", "The agent has rewritten it with your feedback.");
+    } catch { toast.error("Revision failed", "Check your connection and try again."); }
     setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
   }
   async function toggleAuto(id: string, current: boolean) {
@@ -207,18 +239,18 @@ export default function Dashboard() {
         // run) cases — both now return a specific `message` from the API,
         // so show that instead of a single hardcoded string.
         const errBody = await res.json().catch(() => ({}));
-        alert(errBody.message || "This brand already has a run starting elsewhere — try again shortly.");
+        toast.warning("Not started", errBody.message || "This brand already has a run starting elsewhere — try again shortly.");
         return;
       }
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         setRunning(false); setRunStatus("");
-        alert(errBody.error || errBody.message || `Failed to start run (${res.status}).`);
+        toast.error("Couldn't start the run", errBody.error || errBody.message || `The server returned ${res.status}.`);
         return;
       }
     } catch (e) {
       setRunning(false); setRunStatus("");
-      alert("Failed to start run: " + String(e));
+      toast.error("Couldn't start the run", "Check your connection and try again.");
       return;
     }
     // Process the queue one step at a time. A slow step may time out at the
@@ -333,14 +365,22 @@ export default function Dashboard() {
             </div>
             {feedbackFor === d.id && (
               <div className="fb">
-                <input autoFocus value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)}
+                <Field
+                  hideLabel label="Feedback for the agent" className="fb-input-wrap"
+                  autoFocus value={feedbackText} disabled={busy === d.id}
+                  onChange={(e) => setFeedbackText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
                   placeholder="Tell the agent what to change — shorter, different tone, add local detail…" />
                 <button className="primary" onClick={() => sendFeedback(d.id)} disabled={busy === d.id}>{busy === d.id ? "Revising…" : "Send"}</button>
               </div>
             )}
           </article>
-        )) : <Empty label="No content in the queue. Hit Run agents." />)}
+        )) : <Empty
+          icon="✍"
+          title="No content waiting"
+          body="When the agents plan and write work for this brand, drafts land here for you to review before anything goes live."
+          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
+        />)}
 
         {!loading && tab === "gbp" && (bGbp.length ? bGbp.map((g) => (
           <article className="card" key={g.id}>
@@ -353,7 +393,12 @@ export default function Dashboard() {
               <button className="ghost" onClick={() => rowAct("gbp_posts", g.id, "dismissed")}>Dismiss</button>
             </div>
           </article>
-        )) : <Empty label="No Google posts yet. Hit Run agents." />)}
+        )) : <Empty
+          icon="📍"
+          title="No Google posts drafted"
+          body="Posts for this brand's Google Business Profile appear here once the agents run their local SEO pass."
+          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
+        />)}
 
         {!loading && tab === "citations" && (bCites.length ? bCites.map((c) => (
           <article className="card row" key={c.id}>
@@ -367,34 +412,68 @@ export default function Dashboard() {
               <button className="ghost" onClick={() => rowAct("citations", c.id, "skipped")}>Skip</button>
             </div>
           </article>
-        )) : <Empty label="No backlink opportunities yet. Hit Run agents." />)}
+        )) : <Empty
+          icon="🔗"
+          title="No backlink opportunities yet"
+          body="The agents search for directories and citation sources worth a listing. Results appear here, ranked by how much they help."
+          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
+        />)}
 
         {tab === "brands" && role === "admin" && (
           <>
             <article className="card">
               <h3>Add brand</h3>
               <p className="why">New brands are created inactive — activate them below when ready.</p>
-              <div className="brandform">
-                <input placeholder="Name" value={newBrand.name}
+              {/* Errors are per-field now, so the reader is told which box is
+                  wrong instead of being handed one sentence for the whole form. */}
+              <div className="brandform" ref={brandFormRef}>
+                <Field
+                  label="Name" required
+                  value={newBrand.name}
+                  error={fieldErrors.name}
+                  disabled={creatingBrand}
                   onChange={(e) => {
                     const name = e.target.value;
                     setNewBrand((b) => ({ ...b, name, slug: slugTouched ? b.slug : slugify(name) }));
+                    clearFieldError("name");
                   }} />
-                <input placeholder="slug" value={newBrand.slug}
-                  onChange={(e) => { setSlugTouched(true); setNewBrand((b) => ({ ...b, slug: e.target.value })); }} />
-                <input placeholder="https://example.com" value={newBrand.site_url}
-                  onChange={(e) => setNewBrand((b) => ({ ...b, site_url: e.target.value }))} />
-                <select value={newBrand.business_model}
+                <Field
+                  label="Slug" required
+                  helper="Lowercase letters, numbers and hyphens."
+                  value={newBrand.slug}
+                  error={fieldErrors.slug}
+                  disabled={creatingBrand}
+                  onChange={(e) => { setSlugTouched(true); setNewBrand((b) => ({ ...b, slug: e.target.value })); clearFieldError("slug"); }} />
+                <Field
+                  label="Site URL" required type="url"
+                  placeholder="https://example.com"
+                  value={newBrand.site_url}
+                  error={fieldErrors.site_url}
+                  disabled={creatingBrand}
+                  onChange={(e) => { setNewBrand((b) => ({ ...b, site_url: e.target.value })); clearFieldError("site_url"); }} />
+                <Field
+                  as="select" label="Business model"
+                  value={newBrand.business_model}
+                  disabled={creatingBrand}
                   onChange={(e) => setNewBrand((b) => ({ ...b, business_model: e.target.value }))}>
                   {BUSINESS_MODELS.map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
-                </select>
-                <input placeholder="GSC property (optional)" value={newBrand.gsc_property}
+                </Field>
+                <Field
+                  label="GSC property"
+                  helper="Optional — e.g. sc-domain:example.com"
+                  value={newBrand.gsc_property}
+                  disabled={creatingBrand}
                   onChange={(e) => setNewBrand((b) => ({ ...b, gsc_property: e.target.value }))} />
-                <button className="primary" onClick={createBrand} disabled={creatingBrand}>
-                  {creatingBrand ? "Creating…" : "Create brand"}
+                <button
+                  className="primary brandform-submit"
+                  onClick={createBrand}
+                  disabled={creatingBrand}
+                  data-busy={creatingBrand || undefined}
+                >
+                  <span>{creatingBrand ? "Creating…" : "Create brand"}</span>
                 </button>
               </div>
-              {brandFormErr && <p className="why" style={{ color: "var(--coral)" }}>{brandFormErr}</p>}
+              {brandFormErr && <p className="why" role="alert" style={{ color: "var(--coral)" }}>{brandFormErr}</p>}
             </article>
 
             {allBrands.length ? allBrands.map((b) => {
@@ -422,7 +501,11 @@ export default function Dashboard() {
                   </div>
                 </article>
               );
-            }) : <Empty label="No brands yet." />}
+            }) : <Empty
+              icon="◆"
+              title="No brands yet"
+              body="Create your first brand with the form above. New brands start inactive, so nothing runs until you switch it on."
+            />}
           </>
         )}
       </div>
@@ -430,7 +513,27 @@ export default function Dashboard() {
   );
 }
 
-function Empty({ label }: { label: string }) { return <div className="empty">{label}</div>; }
+// A real empty state rather than a bare line of grey text: it says what will
+// appear here, why it is empty, and offers the one action that fills it.
+function Empty({ icon, title, body, action }: {
+  icon?: string;
+  title: string;
+  body?: string;
+  action?: { label: string; onClick: () => void; disabled?: boolean };
+}) {
+  return (
+    <div className="empty">
+      {icon && <div className="empty-icon" aria-hidden="true">{icon}</div>}
+      <div className="empty-title">{title}</div>
+      {body && <p className="empty-body">{body}</p>}
+      {action && (
+        <button className="primary empty-action" onClick={action.onClick} disabled={action.disabled}>
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
 
 // Sprint 6.4 Phase 3 — "is this brand actually running" indicator for the
 // Brands tab, sourced from app/api/brands' last_run_at (lib/scheduling.ts's
@@ -460,11 +563,12 @@ function BrandLinkForm({ brandId, onLink }: { brandId: string; onLink: (brandId:
   const [role, setRole] = useState("customer");
   return (
     <div className="acts">
-      <input placeholder="user@email.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ minWidth: 180 }} />
-      <select value={role} onChange={(e) => setRole(e.target.value)}>
+      <Field hideLabel label="User email" type="email" className="acts-email"
+        placeholder="user@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Field as="select" hideLabel label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
         <option value="customer">Customer</option>
         <option value="admin">Admin</option>
-      </select>
+      </Field>
       <button className="primary" onClick={() => { onLink(brandId, email, role); setEmail(""); }}>Link user</button>
     </div>
   );
@@ -552,14 +656,19 @@ const CSS = `
 .sr .fb { display:flex; gap:9px; margin-top:12px; }
 .sr .fb input { flex:1; background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .fb input:focus { outline:none; border-color:var(--accent); }
-.sr .brandform { display:flex; gap:9px; flex-wrap:wrap; margin-top:10px; }
-.sr .brandform input, .sr .brandform select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
-.sr .brandform input:focus, .sr .brandform select:focus { outline:none; border-color:var(--accent); }
+/* Labelled fields need vertical room, so the old single flex row becomes a
+   responsive grid. Field styling comes from the shared fieldCSS. */
+.sr .brandform { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-top:12px; align-items:start; }
+.sr .brandform-submit { align-self:end; }
 .sr .acts select { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 11px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .acts input { background:var(--surface); border:1px solid var(--line); color:var(--text); padding:9px 13px; border-radius:9px; font-family:inherit; font-size:13px; }
 .sr .link { font-family:var(--font-mono); font-size:12px; color:var(--accent); text-decoration:none; word-break:break-all; }
 .sr .muted, .sr .lmuted { color:var(--muted); font-size:13px; }
-.sr .empty, .sr .lempty { border:1px dashed var(--line); border-radius:16px; padding:44px; text-align:center; color:var(--muted); font-size:14px; background:var(--surface); }
+.sr .empty, .sr .lempty { border:1px dashed var(--line); border-radius:16px; padding:44px 28px; text-align:center; color:var(--muted); font-size:14px; background:var(--surface); }
+.sr .empty-icon { font-size:26px; line-height:1; margin-bottom:12px; opacity:.75; }
+.sr .empty-title { font-size:15.5px; font-weight:650; color:var(--text); letter-spacing:-.015em; margin-bottom:7px; }
+.sr .empty-body { font-size:13px; line-height:1.65; color:var(--muted); margin:0 auto; max-width:44ch; }
+.sr .empty-action { margin-top:18px; }
 /* Overview CSS moved to Sprint 3 block */
 @media (prefers-reduced-motion:reduce){ .sr .pulse.live,.sr .run.on::after,.sr .card,.sr .lkpi,.sr .lpanel,.sr .lkwt td{ animation:none; } }
 /* ── Overview (Sprint 3) ───────────────────────────────────────────────────── */
@@ -622,6 +731,16 @@ ${down.sm} { .sr .ov-kpis{grid-template-columns:1fr} .sr .ov-chart-tabs{flex-wra
 
 /* ══ Phase 1 foundation ═══════════════════════════════════════════════════ */
 ${touchTargetCSS(".sr")}
+
+.sr .fb-input-wrap { flex:1; min-width:0; }
+.sr .acts-email { min-width:180px; }
+
+/* ══ Phase 4: shared form fields + loading ════════════════════════════════ */
+${fieldCSS(".sr", {
+  surface: "var(--surface)", line: "var(--line)", lineStrong: "#C6CEDA",
+  muted: "var(--muted)", text: "var(--text)", accent: "var(--accent)",
+  danger: "var(--coral)", radius: "10px",
+})}
 
 /* ══ Phase 3: card-stack tables ═══════════════════════════════════════════ */
 ${responsiveTableCSS(".sr", {

@@ -6,6 +6,7 @@ import { authedFetch } from "@/lib/authedFetch";
 import PageHeader from "../_components/PageHeader";
 import { Reveal, Stagger, StaggerItem, EASE } from "../_components/motion";
 import { IconSparkle, IconSend } from "../icons";
+import Field from "@/app/_components/Field";
 
 type Msg = { role: "user" | "assistant"; text: string };
 
@@ -122,15 +123,20 @@ export default function AssistantPage() {
           className="p-chat-input-row"
           onSubmit={(e) => { e.preventDefault(); ask(input); }}
         >
-          <input
-            className="p-input"
+          <Field
+            hideLabel label="Ask a question about your SEO"
+            className="p-toolbar-grow" inputClassName="p-input"
             placeholder="Ask about your rankings, traffic, content…"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={busy}
           />
-          <button type="submit" className="p-btn primary" disabled={busy || !input.trim()}>
-            <IconSend size={15} /> Ask
+          <button
+            type="submit" className="p-btn primary"
+            disabled={busy || !input.trim()}
+            data-busy={busy || undefined}
+          >
+            <span><IconSend size={15} /> Ask</span>
           </button>
         </form>
       </div>
