@@ -12,7 +12,7 @@ import { keywordStrategy, competitorGaps } from "./intelligence";
 import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
-import { auditSite, type AuditedPage } from "./auditor";
+import { auditSite, inspectPage, type AuditedPage } from "./auditor";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
 import { executeChange } from "./execution/engine";
@@ -178,7 +178,32 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   } else if (type === "new_page") {
     title = `Page: ${kw}`; body = await writeContent(brand, kw, "Local service page");
   } else if (type === "improve_content") {
-    title = `Audit + rewrite: ${p.target_url || kw}`; body = await auditPage(brand, kw, "");
+    // Phase 8A: this passed "" for the page's content, so auditPage() never saw
+    // the page it was auditing and returned a generic checklist of what a page
+    // targeting this keyword *should* contain. Fetching the live page first is
+    // the difference between a template and an actual audit. inspectPage is the
+    // crawler stepAudit already uses, so nothing new fetches or parses HTML.
+    const auditUrl = (p.target_url as string) || "";
+    const live = auditUrl ? await safe(() => inspectPage(auditUrl)) : null;
+
+    // Only pass the fetched text if enough of it came back to be the real page.
+    // The crawler reads raw HTML, so a client-rendered site returns its pre-JS
+    // shell — junkfree.ca yields 10 words for every URL. Handing the agent that
+    // shell is worse than handing it nothing: it would conclude the page is
+    // almost empty and recommend rewriting content that is actually there.
+    // Below the threshold we fall back to the previous behaviour, where
+    // auditPage's prompt already handles "no content provided" explicitly.
+    const MIN_READABLE_WORDS = 100;
+    const readable = live && live.words >= MIN_READABLE_WORDS ? live.text : "";
+    if (live && !readable) {
+      console.warn(
+        `[stepContent] ${brand.slug}: ${auditUrl} returned only ${live.words} words of pre-JS HTML — ` +
+        `auditing without page content. This site needs JS rendering to audit properly.`
+      );
+    }
+
+    title = `Audit + rewrite: ${p.target_url || kw}`;
+    body = await auditPage(brand, kw, readable);
   } else {
     title = `Meta rewrite: ${p.target_url || kw}`; body = await rewriteMeta(brand, (p.target_url as string) || "", `Target keyword: ${kw}`);
   }

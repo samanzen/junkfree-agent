@@ -55,6 +55,35 @@ test("the depth instruction defers to the blueprint instead of contradicting it"
   expect(src).toMatch(/blueprint\?\.target_depth_words \?/);
 });
 
+// ── auditPage → real page content ───────────────────────────────────────────
+test("improve_content no longer audits an empty string", () => {
+  const src = read("lib/steps.ts");
+  expect(src).not.toMatch(/auditPage\(brand, kw, ""\)/);
+  expect(src).toMatch(/auditPage\(brand, kw, readable\)/);
+});
+
+test("the page fetch reuses the existing crawler", () => {
+  // A second fetch-and-strip implementation would drift from the auditor's.
+  const src = read("lib/steps.ts");
+  expect(src).toContain("inspectPage");
+  expect(src).not.toMatch(/replace\(\/<script/);
+});
+
+test("a pre-JS shell is not passed off as the page's content", () => {
+  // junkfree.ca returns 10 words for every URL. Passing that would make the
+  // agent conclude the page is empty and recommend rewriting content that
+  // exists — worse than the empty string it replaced.
+  const src = read("lib/steps.ts");
+  expect(src).toMatch(/MIN_READABLE_WORDS/);
+  expect(src).toMatch(/live\.words >= MIN_READABLE_WORDS \? live\.text : ""/);
+});
+
+test("inspectPage returns the text it already computed", () => {
+  const src = read("lib/auditor.ts");
+  expect(src).toMatch(/^export async function inspectPage/m);
+  expect(src).toMatch(/status: res\.status, canonical, robots, text/);
+});
+
 // ── AI visibility → metric snapshots ────────────────────────────────────────
 test("checkAiVisibility has a caller", () => {
   expect(callersOf("checkAiVisibility", "lib/geo-agent.ts").length).toBeGreaterThan(0);

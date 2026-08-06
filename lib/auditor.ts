@@ -34,10 +34,24 @@ export type AuditedPage = {
   status: number | null;
   canonical: string;
   robots: string;
+  /**
+   * The page's visible text. Already computed to derive `words` and previously
+   * discarded; kept so the content pipeline can audit a page's real content
+   * (Phase 8A). Deliberately NOT persisted — stepAudit maps page_audits columns
+   * explicitly, so this never reaches the database.
+   */
+  text: string;
 };
 
 // Fetch a page and extract title, meta description, and visible text length.
-async function inspectPage(url: string): Promise<AuditedPage | null> {
+/**
+ * Exported for the content pipeline (Phase 8A). `improve_content` used to call
+ * auditPage() with an empty content string, so the agent produced a generic
+ * checklist of what a page *should* contain rather than an audit of the page
+ * in front of it. This is the fetch-and-extract the crawler already performs —
+ * reused rather than reimplemented in lib/steps.
+ */
+export async function inspectPage(url: string): Promise<AuditedPage | null> {
   try {
     const res = await fetch(url, { headers: { "User-Agent": "SEO-Platform-Auditor" } });
     if (!res.ok) return null;
@@ -63,7 +77,7 @@ async function inspectPage(url: string): Promise<AuditedPage | null> {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    return { url, title, meta, h1, words: text.split(" ").length, status: res.status, canonical, robots };
+    return { url, title, meta, h1, words: text.split(" ").length, status: res.status, canonical, robots, text };
   } catch {
     return null;
   }
