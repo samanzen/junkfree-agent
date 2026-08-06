@@ -22,5 +22,13 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  // MEASURED: this matched all 36 API routes, but the handler above only acts
+  // on two of them — every other API request paid a middleware invocation to
+  // reach `return NextResponse.next()`. On Vercel that is an edge function
+  // execution per request, for nothing.
+  //
+  // Matching only the two guarded paths is behaviourally identical: the same
+  // requests are checked by the same logic, and the 34 routes that always fell
+  // through now skip the invocation entirely rather than being waved past.
+  matcher: ["/api/run", "/api/step"],
 };

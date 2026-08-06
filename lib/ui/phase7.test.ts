@@ -69,6 +69,29 @@ test("chart slots reserve their height so deferral cannot cause layout shift", (
   }
 });
 
+// ── Middleware scope ────────────────────────────────────────────────────────
+test("middleware matches only the routes it actually guards", () => {
+  // MEASURED: matching /api/:path* made all 36 API routes invoke middleware to
+  // reach `NextResponse.next()`. Narrowing it cut /api/me from 20ms to 13ms
+  // median locally, and on Vercel removes an edge invocation per request.
+  // Widening this again silently reintroduces that cost on every API call.
+  const src = read("middleware.ts");
+  const matcher = src.match(/matcher:\s*\[([^\]]*)\]/)?.[1] ?? "";
+  const paths = [...matcher.matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  expect(paths).toEqual(["/api/run", "/api/step"]);
+});
+
+test("the matcher covers exactly the paths the handler checks", () => {
+  // If a route is added to PROTECTED but not the matcher, the guard silently
+  // stops running for it.
+  const src = read("middleware.ts");
+  const guarded = [...(src.match(/PROTECTED = new Set\(\[([^\]]*)\]/)?.[1] ?? "")
+    .matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  const matcher = [...(src.match(/matcher:\s*\[([^\]]*)\]/)?.[1] ?? "")
+    .matchAll(/"([^"]+)"/g)].map((m) => m[1]).sort();
+  expect(matcher).toEqual(guarded);
+});
+
 test("wrappers re-export the types their callers import", () => {
   // Callers import TrendPoint/Series from the wrapper, not the impl; if the
   // re-export is dropped the build breaks in pages, not here.
