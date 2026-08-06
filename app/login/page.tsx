@@ -95,7 +95,7 @@ export default function Login() {
 
 const CSS = `
 .lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#F6F8FB,#EEF1FF); font-family:var(--font-sans); color:#1A2030; padding:20px; }
-.lg .card { width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0; border-radius:20px; padding:36px; box-shadow:0 12px 40px rgba(16,24,40,.08); }
+.lg .card { width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-lg); padding:36px; box-shadow:var(--shadow-4); }
 .lg .brand { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8A93A6; margin-bottom:22px; }
 .lg .dot { width:8px; height:8px; border-radius:50%; background:#6C5CE7; box-shadow:0 0 0 4px rgba(108,92,231,.15); }
 .lg h1 { font-size:26px; margin:0 0 4px; color:#12172A; }
@@ -103,19 +103,19 @@ const CSS = `
 /* Input styling now comes from the shared fieldCSS below. The old bare
    ".lg input" rule carried its own margin, which would have fought the
    field layout's gap. */
-.lg-fields { display:flex; flex-direction:column; gap:15px; margin-bottom:16px; }
-.lg button { width:100%; background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:14px; border-radius:11px; font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; }
+.lg-fields { display:flex; flex-direction:column; gap:16px; margin-bottom:16px; }
+.lg button { width:100%; background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:14px; border-radius:var(--radius-sm); font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; }
 .lg button:disabled { opacity:.6; cursor:default; }
-.lg .err { color:#E14B4B; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(225,75,75,.08); border-radius:8px; border:1px solid rgba(225,75,75,.2); }
+.lg .err { color:#E14B4B; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(225,75,75,.08); border-radius:var(--radius-sm); border:1px solid rgba(225,75,75,.2); }
 
 /* ══ Phase 4: shared form fields ══════════════════════════════════════════ */
 ${fieldCSS(".lg", {
   surface: "#F6F8FB", line: "#E7EAF0", lineStrong: "#C6CEDA", muted: "#8A93A6",
-  text: "#1A2030", accent: "#6C5CE7", danger: "#E14B4B", radius: "11px",
+  text: "#1A2030", accent: "#6C5CE7", danger: "#E14B4B", radius: "var(--radius-sm)",
 })}
 ${touchTargetCSS(".lg")}
 ${down.sm} {
   .lg { padding:20px 16px; align-items:flex-start; padding-top:12vh; }
-  .lg .card { padding:26px 22px; border-radius:16px; }
+  .lg .card { padding:26px 22px; border-radius:var(--radius-md); }
 }
 `;

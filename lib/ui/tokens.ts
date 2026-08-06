@@ -102,6 +102,44 @@ export const GLOBAL_CSS = `
   --dur-4:420ms;   /* entrances: hero and page-level reveals */
   --ease-out:cubic-bezier(.16,1,.3,1);      /* decelerate — things arriving */
   --ease-inout:cubic-bezier(.32,.72,0,1);   /* both ends — things moving */
+
+  /* ── Radius ──
+     23 distinct radii were in use. Five steps cover every surface in the
+     product, from a badge to a modal. The portal's own --r* tokens map onto
+     these; the admin dashboard, login and toast layer had no tokens at all. */
+  --radius-xs:6px;    /* chips, inline badges */
+  --radius-sm:10px;   /* buttons, inputs, small controls */
+  --radius-md:14px;   /* cards, panels, table containers */
+  --radius-lg:20px;   /* dialogs, drawers, hero surfaces */
+  --radius-full:999px;
+
+  /* ── Elevation ──
+     36 distinct box-shadow declarations existed. The portal already had a
+     sensible 5-step scale; these are the same steps hoisted to the root so the
+     other surfaces stop inventing their own. A surface with its own palette
+     (the portal in dark mode) still overrides them locally. */
+  --shadow-1:0 1px 2px rgba(16,24,40,.05);
+  --shadow-2:0 2px 4px rgba(16,24,40,.04), 0 4px 12px rgba(16,24,40,.05);
+  --shadow-3:0 8px 24px rgba(16,24,40,.08), 0 2px 6px rgba(16,24,40,.04);
+  --shadow-4:0 20px 56px rgba(16,24,40,.14), 0 6px 16px rgba(16,24,40,.06);
+
+  /* ── Type scale ──
+     28 sizes and 18 weights collapse to these. The weights matter most: 480,
+     520, 530, 540, 550, 560, 570 and 580 were all in use and are visually
+     indistinguishable from one another. */
+  --fz-caption:11px;   /* eyebrows, table headers, chip text */
+  --fz-small:12.5px;   /* helper text, metadata, dense tables */
+  --fz-body:13.5px;    /* default body and control text */
+  --fz-lead:15px;      /* card titles, emphasised body */
+  --fz-h3:17px;
+  --fz-h2:22px;
+  --fz-h1:29px;
+
+  --fw-normal:400;
+  --fw-medium:500;     /* absorbs 480/520/530/540/550 */
+  --fw-semi:600;       /* absorbs 560/570/580/620 */
+  --fw-bold:660;       /* absorbs 640/650/670/680 */
+  --fw-heavy:720;
 }
 
 /* Horizontal-overflow backstop. A single unwrapped table or an over-wide flex
@@ -149,8 +187,8 @@ export function fieldCSS(
   return `
 ${scope} .fld { display:flex; flex-direction:column; gap:6px; min-width:0; }
 ${scope} .fld-label {
-  font-size:12.5px; font-weight:560; letter-spacing:-.005em; color:${vars.text};
-  display:inline-flex; align-items:center; gap:3px;
+  font-size:12.5px; font-weight:600; letter-spacing:-.005em; color:${vars.text};
+  display:inline-flex; align-items:center; gap:4px;
 }
 ${scope} .fld-label-inline { font-weight:500; color:${vars.muted}; cursor:pointer; }
 ${scope} .fld-req { color:${vars.danger}; font-weight:600; }
@@ -167,7 +205,7 @@ ${scope} .fld-control { position:relative; display:flex; }
 ${scope} .fld-input {
   width:100%; background:${vars.surface}; color:${vars.text};
   border:1px solid ${vars.line}; border-radius:${vars.radius};
-  padding:10px 13px; font-family:inherit;
+  padding:10px 12px; font-family:inherit;
   transition:border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out);
 }
 ${scope} .fld-input::placeholder { color:${vars.muted}; opacity:.8; }
@@ -193,16 +231,16 @@ ${scope} .fld.is-error .fld-input:focus {
 ${scope} .fld-helper { font-size:11.5px; line-height:1.5; color:${vars.muted}; margin:0; }
 ${scope} .fld-error {
   font-size:11.5px; line-height:1.5; color:${vars.danger}; margin:0;
-  display:flex; align-items:flex-start; gap:5px;
+  display:flex; align-items:flex-start; gap:4px;
 }
 ${scope} .fld-error::before { content:"!"; font-weight:700; flex:none; }
 
 /* ── Toggles ── */
-${scope} .fld-toggle-row { display:flex; align-items:center; gap:9px; }
+${scope} .fld-toggle-row { display:flex; align-items:center; gap:8px; }
 ${scope} .fld-check, ${scope} .fld-switch { flex:none; cursor:pointer; accent-color:${vars.accent}; }
 ${scope} .fld-check { width:17px; height:17px; }
 ${scope} .fld-switch {
-  appearance:none; width:38px; height:22px; border-radius:99px;
+  appearance:none; width:38px; height:22px; border-radius:var(--radius-full);
   background:${vars.line}; border:1px solid ${vars.line}; position:relative;
   transition:background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
@@ -288,7 +326,7 @@ ${down.sm} {
 
   ${scope} .rt-stack tr {
     background:${vars.surface}; border:1px solid ${vars.line}; border-radius:${vars.radius};
-    padding:13px 15px; margin-bottom:9px;
+    padding:12px 16px; margin-bottom:9px;
   }
   ${scope} .rt-stack tr:last-child { margin-bottom:0; }
   ${scope} .rt-stack tbody tr:hover td { background:none; }
@@ -313,7 +351,7 @@ ${down.sm} {
   ${scope} .rt-stack td:first-child {
     display:block; text-align:left;
     font-size:14px; font-weight:600; color:${vars.text};
-    padding:0 0 9px; margin-bottom:5px; border-bottom:1px solid ${vars.line};
+    padding:0 0 8px; margin-bottom:5px; border-bottom:1px solid ${vars.line};
     overflow-wrap:anywhere;
   }
   ${scope} .rt-stack td:first-child::before { display:none; }
@@ -347,13 +385,13 @@ export function touchTargetCSS(scope: string): string {
 ${scope} :focus-visible {
   outline:2px solid currentColor;
   outline-offset:2px;
-  border-radius:6px;
+  border-radius:var(--radius-xs);
 }
 /* Skip link: present for keyboard users, out of the way for everyone else. */
 ${scope} .skip-link {
   position:absolute; left:12px; top:-60px; z-index:9500;
-  padding:10px 16px; border-radius:10px;
-  background:#16181D; color:#F2F4F7; font-size:13px; font-weight:560;
+  padding:10px 16px; border-radius:var(--radius-sm);
+  background:#16181D; color:#F2F4F7; font-size:13px; font-weight:600;
   text-decoration:none; transition:top var(--dur-2) var(--ease-out);
 }
 ${scope} .skip-link:focus { top:12px; }

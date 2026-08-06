@@ -230,7 +230,7 @@ const NOTIFY_CSS = `
 .nt-sr { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
 
 .nt-viewport {
-  position:fixed; z-index:9000; display:flex; flex-direction:column; gap:9px;
+  position:fixed; z-index:9000; display:flex; flex-direction:column; gap:8px;
   right:16px; bottom:16px; width:min(380px, calc(100vw - 32px));
   pointer-events:none;
 }
@@ -244,9 +244,9 @@ const NOTIFY_CSS = `
 
 .nt-toast {
   pointer-events:auto;
-  display:flex; align-items:flex-start; gap:11px;
+  display:flex; align-items:flex-start; gap:12px;
   background:#16181D; color:#F2F4F7;
-  border:1px solid rgba(255,255,255,.10); border-radius:12px;
+  border:1px solid rgba(255,255,255,.10); border-radius:var(--radius-md);
   padding:12px 12px 12px 14px;
   box-shadow:0 12px 32px rgba(0,0,0,.30), 0 2px 8px rgba(0,0,0,.20);
   animation:ntIn .22s cubic-bezier(.32,.72,0,1);
@@ -268,7 +268,7 @@ const NOTIFY_CSS = `
 
 .nt-close {
   flex:none; background:none; border:0; cursor:pointer; color:#8A93A6;
-  width:26px; height:26px; border-radius:7px; display:grid; place-items:center;
+  width:26px; height:26px; border-radius:var(--radius-xs); display:grid; place-items:center;
   transition:color var(--dur-2), background var(--dur-2);
 }
 .nt-close:hover { color:#F2F4F7; background:rgba(255,255,255,.08); }
@@ -282,17 +282,17 @@ const NOTIFY_CSS = `
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
   width:min(420px, calc(100vw - 32px));
   background:#fff; color:#1A2030;
-  border-radius:16px; padding:22px;
-  box-shadow:0 24px 64px rgba(0,0,0,.28);
+  border-radius:var(--radius-md); padding:22px;
+  box-shadow:var(--shadow-4);
   font-family:var(--font-sans);
   animation:ntIn .2s cubic-bezier(.32,.72,0,1);
 }
-.nt-confirm-title { font-size:16.5px; font-weight:650; letter-spacing:-.02em; margin:0 0 7px; }
+.nt-confirm-title { font-size:16.5px; font-weight:660; letter-spacing:-.02em; margin:0 0 8px; }
 .nt-confirm-body { font-size:13.5px; line-height:1.6; color:#4A5568; margin:0 0 20px; overflow-wrap:anywhere; }
-.nt-confirm-actions { display:flex; gap:9px; justify-content:flex-end; flex-wrap:wrap; }
+.nt-confirm-actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
 .nt-btn {
-  font-family:inherit; font-size:13.5px; font-weight:560; cursor:pointer;
-  padding:10px 17px; border-radius:10px; border:1px solid transparent;
+  font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;
+  padding:10px 16px; border-radius:var(--radius-sm); border:1px solid transparent;
   min-height:42px; transition:background var(--dur-2), border-color var(--dur-2), color var(--dur-2);
 }
 @media (pointer:coarse) { .nt-btn { min-height:44px; flex:1; } }
