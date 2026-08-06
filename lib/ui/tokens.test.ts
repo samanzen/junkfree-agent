@@ -102,7 +102,57 @@ test("sub-nav overflow is made visible rather than silently clipped", () => {
   expect(PORTAL_CSS).toMatch(/\.p-subnav-btn \{[^}]*scroll-snap-align/);
 });
 
-test("the one uncollapsed two-column grid now collapses below sm", () => {
-  const belowSm = PORTAL_CSS.slice(PORTAL_CSS.lastIndexOf(down.sm));
-  expect(belowSm).toMatch(/\.p-opp-body \{ grid-template-columns:1fr/);
+test("the opportunity card collapses to one column, exactly once", () => {
+  // Phase 1 added a second collapse rule for .p-opp-body under the mistaken
+  // belief that it had none; it already collapsed at the old 760px breakpoint.
+  // The duplicate is gone and the original is now on the shared md token.
+  const rules = [...PORTAL_CSS.matchAll(/\.p-opp-body \{ grid-template-columns:1fr/g)];
+  expect(rules).toHaveLength(1);
+  const belowMd = PORTAL_CSS.slice(PORTAL_CSS.indexOf(down.md));
+  expect(belowMd).toMatch(/\.p-opp-body \{ grid-template-columns:1fr/);
+});
+
+// ── Phase 2: navigation ─────────────────────────────────────────────────────
+test("every ad-hoc breakpoint is gone — only the three tokens remain", () => {
+  const mins = [...PORTAL_CSS.matchAll(/\(min-width:(\d+)px\)/g)].map((m) => Number(m[1]));
+  const maxes = [...PORTAL_CSS.matchAll(/\(max-width:(\d+)px\)/g)].map((m) => Number(m[1]));
+  const tokens = [BREAKPOINTS.sm, BREAKPOINTS.md, BREAKPOINTS.lg];
+
+  expect([...new Set(mins)].filter((w) => !tokens.includes(w))).toEqual([]);
+  // max-width must always be token-1, never the token itself: a rule at
+  // max-width:640px and one at min-width:640px both match a 640px viewport,
+  // so the two collide at exactly the boundary.
+  expect([...new Set(maxes)].filter((w) => !tokens.includes(w + 1))).toEqual([]);
+});
+
+test("reduced motion is declared once, globally, not per surface", () => {
+  expect(PORTAL_CSS).not.toMatch(/prefers-reduced-motion/);
+  expect(GLOBAL_CSS).toMatch(/prefers-reduced-motion/);
+});
+
+test("bottom nav costs desktop nothing and only appears below md", () => {
+  expect(PORTAL_CSS).toMatch(/\.p-bnav \{ display:none; \}/);
+  const belowMd = PORTAL_CSS.slice(PORTAL_CSS.indexOf(down.md));
+  expect(belowMd).toMatch(/\.p-bnav \{[\s\S]*?display:grid/);
+});
+
+test("bottom nav clears the iOS home indicator", () => {
+  expect(PORTAL_CSS).toMatch(/\.p-bnav \{[\s\S]*?env\(safe-area-inset-bottom\)/);
+});
+
+test("page content is padded so the fixed bar never covers it", () => {
+  expect(PORTAL_CSS).toMatch(/\.p-main \{ padding:22px 16px calc\(84px \+ env\(safe-area-inset-bottom\)\)/);
+});
+
+test("the drawer stacks above the bottom bar, not behind it", () => {
+  const belowMd = PORTAL_CSS.slice(PORTAL_CSS.indexOf(down.md));
+  const bnavZ = Number(belowMd.match(/\.p-bnav \{[\s\S]*?z-index:(\d+)/)![1]);
+  const drawerZ = Number(belowMd.match(/\.p-side-mobile \{ z-index:(\d+)/)![1]);
+  const scrimZ = Number(belowMd.match(/\.p-scrim \{ z-index:(\d+)/)![1]);
+  expect(scrimZ).toBeGreaterThan(bnavZ);
+  expect(drawerZ).toBeGreaterThan(scrimZ);
+});
+
+test("navigation chrome is hidden when printing a report", () => {
+  expect(PORTAL_CSS).toMatch(/@media print \{ \.p-bnav \{ display:none !important/);
 });

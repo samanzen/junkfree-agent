@@ -301,13 +301,17 @@ export default function Dashboard() {
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 
-        <nav className="tabs">
-          <button className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
-          <button className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>🧠 Intelligence</button>
-          <button className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span>{bDrafts.length}</span></button>
-          {activeBrandIsLocal && <button className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span>{bGbp.length}</span></button>}
-          {activeBrandIsLocal && <button className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span>{bCites.length}</span></button>}
-          {role === "admin" && <button className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span>{allBrands.length}</span></button>}
+        {/* role="tablist" + aria-selected: these swap the panel below rather
+            than navigating, so tab semantics are correct here (aria-current
+            would claim a page change that never happens). Counts are given an
+            accessible name so "Content 5" is not announced as "Content five". */}
+        <nav className="tabs" role="tablist" aria-label="Dashboard sections">
+          <button role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
+          <button role="tab" aria-selected={tab === "intelligence"} className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}><span aria-hidden="true">🧠</span> Intelligence</button>
+          <button role="tab" aria-selected={tab === "content"} className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span aria-label={`${bDrafts.length} waiting`}>{bDrafts.length}</span></button>
+          {activeBrandIsLocal && <button role="tab" aria-selected={tab === "gbp"} className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span aria-label={`${bGbp.length} waiting`}>{bGbp.length}</span></button>}
+          {activeBrandIsLocal && <button role="tab" aria-selected={tab === "citations"} className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span aria-label={`${bCites.length} waiting`}>{bCites.length}</span></button>}
+          {role === "admin" && <button role="tab" aria-selected={tab === "brands"} className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span aria-label={`${allBrands.length} total`}>{allBrands.length}</span></button>}
         </nav>
 
         {loading && <p className="muted">Loading signal…</p>}

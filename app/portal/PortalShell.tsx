@@ -1,11 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LazyMotion, MotionConfig, domMax, m, AnimatePresence } from "framer-motion";
 import { usePortalAuth } from "@/lib/portalAuth";
+import { useDialog } from "@/lib/ui/useDialog";
 import { PORTAL_CSS } from "./portalTheme";
 import { EASE } from "./_components/motion";
+import BottomNav from "./_components/BottomNav";
 import {
   IconDashboard, IconIntelligence, IconLocalSeo, IconWebsite, IconContent,
   IconReviews, IconReports, IconBilling, IconSettings, IconAssistant,
@@ -63,6 +65,15 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
 
+  // Focus returns to whichever control opened the drawer — the topbar button or
+  // the bottom bar's "More" — rather than to the top of the document.
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useDialog<HTMLElement>({
+    open: navOpen,
+    onClose: () => setNavOpen(false),
+    restoreTo: menuBtnRef,
+  });
+
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
@@ -91,7 +102,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             {g.items.map((item) => {
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
               return (
-                <Link key={item.href} href={item.href} className={`p-nav-item ${active ? "on" : ""}`}>
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`p-nav-item ${active ? "on" : ""}`}
+                  aria-current={active ? "page" : undefined}
+                >
                   {active && (
                     <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.3, ease: EASE }} />
                   )}
@@ -132,7 +148,11 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                     onClick={() => setNavOpen(false)}
                   />
                   <m.aside
+                    ref={drawerRef}
                     className="p-side p-side-mobile"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Sections"
                     initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
                     transition={{ duration: 0.28, ease: EASE }}
                   >
@@ -144,7 +164,13 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
             <div className="p-main-col">
               <div className="p-topbar">
-                <button className="p-icon-btn" onClick={() => setNavOpen((o) => !o)} aria-label="Open navigation">
+                <button
+                  ref={menuBtnRef}
+                  className="p-icon-btn"
+                  onClick={() => setNavOpen((o) => !o)}
+                  aria-label={navOpen ? "Close navigation" : "Open navigation"}
+                  aria-expanded={navOpen}
+                >
                   {navOpen ? <IconClose size={17} /> : <IconMenu size={17} />}
                 </button>
                 <span className="p-side-name">{brand?.name || "Your Business"}</span>
@@ -164,6 +190,10 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 )}
                 {loading ? <ShellSkeleton /> : error ? <ShellError msg={error} /> : children}
               </main>
+
+              {/* Thumb-reachable nav below md. "More" opens the same drawer,
+                  so every section stays reachable — nothing is mobile-only. */}
+              <BottomNav onMore={() => setNavOpen((o) => !o)} moreOpen={navOpen} />
             </div>
           </div>
         </div>

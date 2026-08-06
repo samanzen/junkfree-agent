@@ -143,12 +143,16 @@ export const PORTAL_CSS = `
 .p-main { flex:1; max-width:1280px; width:100%; margin:0 auto; padding:34px 34px 100px; }
 .p-scrim { display:none; position:fixed; inset:0; background:rgba(6,7,11,.6); backdrop-filter:blur(3px); z-index:190; }
 .p-side-mobile { position:fixed; left:0; top:0; display:none; padding:12px; }
-@media (max-width:1000px) {
+/* Phase 2: the last stray breakpoint (1000px) folded onto the shared md token.
+   The sidebar is 252px, so it still fits comfortably at 900px — content keeps
+   648px, which is wider than the point any layout in here breaks. */
+${down.md} {
   .p-side-desktop { display:none; }
   .p-side-mobile { display:flex; }
   .p-topbar { display:flex; }
   .p-scrim.open { display:block; }
-  .p-main { padding:22px 16px 76px; }
+  /* Bottom padding clears the fixed bottom nav plus the iOS home indicator. */
+  .p-main { padding:22px 16px calc(84px + env(safe-area-inset-bottom)); }
 }
 
 .p-preview {
@@ -200,7 +204,7 @@ export const PORTAL_CSS = `
 .p-mission-cell:last-child { border-right:0; }
 .p-mission-cell-label { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted2); margin-bottom:6px; }
 .p-mission-cell-val { font-size:20px; font-weight:660; letter-spacing:-.03em; font-variant-numeric:tabular-nums; display:flex; align-items:baseline; gap:7px; }
-@media (max-width:640px) {
+${down.sm} {
   .p-mission { padding:26px 22px 0; }
   .p-mission-strip { margin:24px -22px 0; }
   .p-mission-top { flex-direction:column; align-items:flex-start; }
@@ -265,7 +269,7 @@ export const PORTAL_CSS = `
 .p-ai-opp-meta { font-size:12.5px; color:var(--muted); margin-top:5px; }
 .p-ai-opp-meta b { color:var(--text2); font-weight:640; font-variant-numeric:tabular-nums; }
 .p-ai-opp-cta { flex-shrink:0; }
-@media (max-width:640px) { .p-ai { padding:22px 18px; } .p-ai-opp-cta { width:100%; } }
+${down.sm} { .p-ai { padding:22px 18px; } .p-ai-opp-cta { width:100%; } }
 
 /* ══ AI Opportunities ═══════════════════════════════════════════════ */
 .p-opp-list { display:flex; flex-direction:column; gap:13px; }
@@ -355,7 +359,7 @@ export const PORTAL_CSS = `
   color:var(--accent); text-decoration:none; margin-top:2px;
 }
 .p-exec-more:hover { text-decoration:underline; }
-@media (max-width:760px) {
+${down.md} {
   .p-opp-facts { display:none; }
   .p-opp-body { grid-template-columns:1fr; gap:16px; }
 }
@@ -710,7 +714,7 @@ export const PORTAL_CSS = `
 
 /* ══ Layout ═════════════════════════════════════════════════════════ */
 .p-2col { display:grid; grid-template-columns:1.4fr 1fr; gap:20px; align-items:start; }
-@media (max-width:1000px) { .p-2col { grid-template-columns:1fr; } }
+${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-stack { display:flex; flex-direction:column; gap:20px; min-width:0; }
 .p-home { display:flex; flex-direction:column; gap:20px; }
 .p-subgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:15px; }
@@ -761,7 +765,7 @@ export const PORTAL_CSS = `
 .p-msg-typing span:nth-child(3) { animation-delay:.36s; }
 .p-chat-error { font-size:12.5px; color:var(--red); background:var(--red-soft); padding:12px 15px; border-radius:11px; }
 .p-chat-input-row { display:flex; gap:10px; padding:16px; border-top:1px solid var(--line-soft); background:var(--surface); }
-@media (max-width:1000px) { .p-assistant-page { height:calc(100vh - 150px); } .p-msg-bubble { max-width:88%; } }
+${down.md} { .p-assistant-page { height:calc(100vh - 150px); } .p-msg-bubble { max-width:88%; } }
 
 /* ══ Report ═════════════════════════════════════════════════════════ */
 .p-report { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-xl); padding:38px; box-shadow:var(--sh-1); }
@@ -778,11 +782,9 @@ export const PORTAL_CSS = `
   .p-report-section { break-inside:avoid; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .portal *, .portal *::before, .portal *::after {
-    animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;
-  }
-}
+/* Reduced motion is handled globally in lib/ui/tokens.ts GLOBAL_CSS, which
+   applies to every element on the page — a portal-scoped copy would be a
+   second declaration of the same rule. */
 
 /* ══ Phase 1 foundation ═════════════════════════════════════════════ */
 ${touchTargetCSS(".portal")}
@@ -798,11 +800,47 @@ ${touchTargetCSS(".portal")}
 }
 .p-subnav::-webkit-scrollbar { display:none; }
 .p-subnav-btn { scroll-snap-align:start; }
-${down.sm} {
-  /* Opportunity card bodies were the one two-column grid with no collapse
-     rule, so their detail pane was squeezed to an unreadable width on phones. */
-  .p-opp-body { grid-template-columns:1fr; gap:16px; }
+/* ══ Phase 2: bottom navigation ═════════════════════════════════════ */
+/* Hidden by default so it costs desktop nothing; shown only below md, where
+   the sidebar has been replaced by the drawer. */
+.p-bnav { display:none; }
+
+${down.md} {
+  .p-bnav {
+    display:grid; grid-template-columns:repeat(5,1fr);
+    position:fixed; left:0; right:0; bottom:0; z-index:180;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+    background:var(--glass);
+    backdrop-filter:saturate(180%) blur(20px); -webkit-backdrop-filter:saturate(180%) blur(20px);
+    border-top:1px solid var(--line);
+  }
+  .p-bnav-item {
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    padding:7px 2px 5px; border:0; background:none; cursor:pointer;
+    font-family:inherit; color:var(--muted2); text-decoration:none;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .18s ease;
+  }
+  .p-bnav-item:hover { color:var(--text2); }
+  .p-bnav-item.on { color:var(--accent); }
+  .p-bnav-ico {
+    position:relative; display:flex; align-items:center; justify-content:center;
+    width:44px; height:27px; border-radius:9px;
+  }
+  .p-bnav-ico > svg { position:relative; z-index:1; }
+  .p-bnav-pill {
+    position:absolute; inset:0; border-radius:9px; z-index:0;
+    background:var(--accent-soft); border:1px solid var(--accent-line);
+  }
+  .p-bnav-label { font-size:10.5px; font-weight:560; letter-spacing:-.005em; line-height:1; }
+
+  /* The drawer sits above the bottom bar rather than behind it. */
+  .p-side-mobile { z-index:200; }
+  .p-scrim { z-index:190; }
 }
+
+/* Printing a report should never include navigation chrome. */
+@media print { .p-bnav { display:none !important; } }
 `;
 
 function darkVars() {
