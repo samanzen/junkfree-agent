@@ -1,19 +1,33 @@
 "use client";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
-import { useReducedMotion } from "framer-motion";
-import ChartTooltip from "./ChartTooltip";
-import { useChartTouch } from "@/lib/ui/useChartTouch";
+import dynamic from "next/dynamic";
+import type { TrendPoint } from "./TrendChart.impl";
 
-export type TrendPoint = { date: string } & Record<string, string | number>;
+// Lazy boundary for Recharts.
+//
+// MEASURED: chunk 616 is 353 kB uncompressed and contains Recharts. Routes
+// that render a chart shipped 317-326 kB of First Load JS; routes that do not
+// shipped 191 kB. Recharts alone was ~130 kB on four routes, eagerly, before
+// anything was drawn.
+//
+// Every chart in the portal sits below the fold — under the KPI row on the
+// dashboard, inside a panel on Technical SEO, inside a tab on Intelligence —
+// so none of them is needed for first paint.
+//
+// The split is inside the component rather than at the call sites, so no page
+// changes and no import moves. Callers keep the identical props API.
+//
+// SAFE BECAUSE: the placeholder reserves exactly the same height the chart
+// will occupy, so nothing reflows when it arrives (the Phase 5 layout-stability
+// guarantee). ssr:false because Recharts measures the DOM to size itself and
+// has no meaningful server render anyway.
+const Impl = dynamic(() => import("./TrendChart.impl"), {
+  ssr: false,
+  loading: () => null,
+});
 
-// Themed area chart used across the portal. Reads its colors from the portal
-// CSS variables so it tracks light/dark mode automatically, and draws itself
-// in on mount unless the viewer prefers reduced motion.
-export default function TrendChart({
-  data, dataKey, name, color = "var(--accent)", height = 240, gradientId = "pTrend",
-}: {
+export type { TrendPoint };
+
+export default function TrendChart(props: {
   data: TrendPoint[];
   dataKey: string;
   name: string;
@@ -21,46 +35,12 @@ export default function TrendChart({
   height?: number;
   gradientId?: string;
 }) {
-  const t = useChartTouch();
-  const reduce = useReducedMotion();
-
+  const height = props.height ?? 240;
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.30} />
-            <stop offset="60%" stopColor={color} stopOpacity={0.07} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id={`${gradientId}-line`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="var(--accent3)" />
-            <stop offset="50%" stopColor={color} />
-            <stop offset="100%" stopColor="var(--accent2)" />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
-        <XAxis {...t.xAxis}
-          dataKey="date" tick={{ fill: "var(--muted2)", fontSize: 11 }}
-          tickLine={false} axisLine={false} dy={6}
-        />
-        <YAxis
-          tick={{ fill: "var(--muted2)", fontSize: 11 }} tickLine={false} axisLine={false} width={44}
-        />
-        <Tooltip {...t.tooltip}
-          cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
-          content={<ChartTooltip />}
-        />
-        <Area
-          type="monotone" dataKey={dataKey}
-          stroke={`url(#${gradientId}-line)`} strokeWidth={2.4}
-          fill={`url(#${gradientId})`} name={name}
-          activeDot={{ r: 5, strokeWidth: 2.5, stroke: "var(--surface)", fill: color }}
-          isAnimationActive={!reduce}
-          animationDuration={1100}
-          animationEasing="ease-out"
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    // Height is reserved by the wrapper, not the placeholder, so the reserved
+    // box is identical whether the chart has loaded or not.
+    <div style={{ height }} className="p-chart-slot">
+      <Impl {...props} />
+    </div>
   );
 }

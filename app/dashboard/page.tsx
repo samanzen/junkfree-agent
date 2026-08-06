@@ -7,8 +7,20 @@ import { slugify } from "@/lib/utils";
 import { touchTargetCSS, responsiveTableCSS, fieldCSS, down } from "@/lib/ui/tokens";
 import { useToast, useConfirm } from "@/app/_components/Notify";
 import Field, { focusFirstError } from "@/app/_components/Field";
+import dynamic from "next/dynamic";
 import Overview from "./Overview";
-import IntelligencePage from "./intelligence/IntelligencePage";
+
+// MEASURED: the Intelligence tab pulls seven components plus Recharts — the
+// 353 kB chunk that dominated this route's bundle. It is not the default tab,
+// so none of that is needed until the user clicks it. Statically imported, it
+// was in the initial bundle for every admin regardless.
+//
+// SAFE BECAUSE: it is already conditionally rendered (`tab === "intelligence"`),
+// so deferring the code changes nothing about when it mounts. The fallback
+// matches the section's existing min-height, so switching tabs does not reflow.
+const IntelligencePage = dynamic(() => import("./intelligence/IntelligencePage"), {
+  loading: () => <div style={{ minHeight: 300 }} />,
+});
 
 type JobFailure = { kind: string; error: string; finished_at: string };
 type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[]; active?: boolean };

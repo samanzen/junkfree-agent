@@ -1,58 +1,26 @@
 "use client";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from "recharts";
-import { useReducedMotion } from "framer-motion";
-import ChartTooltip from "./ChartTooltip";
-import { useChartTouch } from "@/lib/ui/useChartTouch";
+import dynamic from "next/dynamic";
+import type { Series } from "./MultiLineChart.impl";
 
-export type Series = { key: string; name: string; color: string };
+// Same lazy boundary as TrendChart — see that file for the measurement and the
+// reasoning. Props API and rendered output are unchanged.
+const Impl = dynamic(() => import("./MultiLineChart.impl"), {
+  ssr: false,
+  loading: () => null,
+});
 
-// Themed multi-series line chart (position distribution over time, etc).
-// Each series draws in with a slight stagger so the chart assembles itself.
-export default function MultiLineChart({
-  data, series, xKey = "date", height = 268,
-}: {
+export type { Series };
+
+export default function MultiLineChart(props: {
   data: Record<string, string | number | null>[];
   series: Series[];
   xKey?: string;
   height?: number;
 }) {
-  const t = useChartTouch();
-  const reduce = useReducedMotion();
-
+  const height = props.height ?? 268;
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="2 4" stroke="var(--line)" vertical={false} />
-        <XAxis {...t.xAxis}
-          dataKey={xKey} tick={{ fill: "var(--muted2)", fontSize: 11 }}
-          tickLine={false} axisLine={false} dy={6}
-        />
-        <YAxis
-          tick={{ fill: "var(--muted2)", fontSize: 11 }} tickLine={false}
-          axisLine={false} allowDecimals={false} width={40}
-        />
-        <Tooltip {...t.tooltip}
-          cursor={{ stroke: "var(--accent-line)", strokeWidth: 1.5, strokeDasharray: "4 4" }}
-          content={<ChartTooltip />}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: 11.5, color: "var(--muted)", paddingTop: 10 }}
-          iconType="circle" iconSize={7}
-        />
-        {series.map((s, i) => (
-          <Line
-            key={s.key} type="monotone" dataKey={s.key} name={s.name}
-            stroke={s.color} strokeWidth={2} dot={false}
-            activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }}
-            isAnimationActive={!reduce}
-            animationDuration={900}
-            animationBegin={i * 90}
-            animationEasing="ease-out"
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
+    <div style={{ height }} className="p-chart-slot">
+      <Impl {...props} />
+    </div>
   );
 }

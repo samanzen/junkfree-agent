@@ -1,12 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
-import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts";
 import CountUp from "./CountUp";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
-import { useChartTouch } from "@/lib/ui/useChartTouch";
+// Recharts is no longer imported here — the three chart blocks moved behind a
+// lazy boundary (./OverviewCharts), which is what keeps it out of this route's
+// initial bundle.
+import { TrendArea, WeeklyBars, HealthVsPosition } from "./OverviewCharts";
 
 type Snap = {
   organic_traffic: number | null; organic_keywords: number | null;
@@ -29,7 +28,8 @@ const AMBER = "#F5B461";
 const CORAL = "#FF6B6B";
 
 export default function Overview({ brandId, token }: { brandId: string; token?: string }) {
-  const t = useChartTouch();
+  // useChartTouch moved into OverviewCharts.impl with the charts themselves —
+  // keeping it here would have pulled the module back into this bundle.
   const [data, setData] = useState<{
     current: Snap | null; previous: Snap | null;
     series: Snap[]; keywords: Kw[]; lowCtrPages: LowCtr[]; agent: Agent;
@@ -135,22 +135,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
             </div>
           </div>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                <defs>
-                  <linearGradient id={cc.gradient} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={cc.color} stopOpacity={0.25} />
-                    <stop offset="100%" stopColor={cc.color} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-                <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
-                <YAxis tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} />
-                <Area type="monotone" dataKey={cc.key} stroke={cc.color} strokeWidth={2.5}
-                  fill={`url(#${cc.gradient})`} name={cc.name} animationDuration={900} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <TrendArea data={chartData} cc={cc} />
           ) : (
             <div className="ov-chart-empty">Run the agents a few times to see trend data here.</div>
           )}
@@ -177,13 +162,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
             ))}
           </div>
           {agent.weekly_activity.length > 1 && (
-            <ResponsiveContainer width="100%" height={80}>
-              <BarChart data={agent.weekly_activity} margin={{ top: 8, right: 0, left: -20, bottom: 0 }}>
-                <XAxis {...t.xAxis} dataKey="week" tick={{ fill: "#B2BAC8", fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
-                <Bar dataKey="count" fill={ACCENT} radius={[4, 4, 0, 0]} name="Drafts" />
-              </BarChart>
-            </ResponsiveContainer>
+            <WeeklyBars data={agent.weekly_activity} />
           )}
         </div>
       </div>
@@ -268,18 +247,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
             <h3>Site health vs. average position</h3>
             <span className="ov-panel-sub-inline">Health should rise as position falls</span>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={chartData} margin={{ top: 8, right: 16, left: -18, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
-              <YAxis yAxisId="left" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} reversed />
-              <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12 }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-              <Line yAxisId="left" type="monotone" dataKey="health" stroke={GREEN} strokeWidth={2} dot={false} name="Site health %" animationDuration={900} />
-              <Line yAxisId="right" type="monotone" dataKey="position" stroke={AMBER} strokeWidth={2} dot={false} name="Avg. position" animationDuration={900} />
-            </LineChart>
-          </ResponsiveContainer>
+          <HealthVsPosition data={chartData} />
         </div>
       )}
     </div>
