@@ -2,6 +2,7 @@ import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance } from "./gsc";
 import { domainOverview, backlinksSummary, rankedKeywords, isConfigured, geoOf } from "./dataforseo";
+import { checkAiVisibility } from "./geo-agent";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -42,6 +43,22 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     site_health = typeof parsed?.score === "number" ? parsed.score : null;
   } catch { /* leave null */ }
 
+  // checkAiVisibility (lib/geo-agent.ts) has existed since Sprint 5 with zero
+  // callers, which is why ai_visibility has been null in every snapshot ever
+  // taken and why the portal's AI Visibility card reads "Coming soon".
+  //
+  // It asks a model, with web search, the discovery question a customer would
+  // ask ("best <service> in <city>") and reports whether this brand appears in
+  // the answer. That is a genuine yes/no, so it is stored as 100 or 0 rather
+  // than dressed up as a percentage — the card's wording says exactly what the
+  // number means.
+  //
+  // Best-effort: a failure leaves the column null, which is what every previous
+  // snapshot already contained, so nothing downstream changes.
+  const aiVisibility = await checkAiVisibility(brand)
+    .then((r) => (r.mentioned ? 100 : 0))
+    .catch(() => null);
+
   let strikingCount = striking.length;
   let avgPos = striking.length
     ? striking.reduce((s, r) => s + r.position, 0) / striking.length
@@ -59,7 +76,7 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     referring_domains: backlinks?.referring_domains ?? null,
     striking_distance: strikingCount || null,
     avg_position: avgPos ? Math.round(avgPos * 10) / 10 : null,
-    ai_visibility: null,
+    ai_visibility: aiVisibility,
     site_health,
   };
 

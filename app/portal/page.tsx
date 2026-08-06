@@ -152,7 +152,19 @@ export default function PortalDashboard() {
           <ScoreCard label="SEO Score" value={seoScore} hint="Needs ranking data" />
           <ScoreCard label="Local SEO" value={localScore} hint="Needs citation data" />
           <ScoreCard label="Website Health" value={websiteHealth} hint="Runs with your next audit" />
-          <ScoreCard label="AI Visibility" value={aiVisibility} hint="Coming soon" />
+          {/* 100 or 0 is a yes/no, not a percentage — the hint says which, so
+              the number is never read as a score it isn't. */}
+          <ScoreCard
+            label="AI Visibility"
+            value={aiVisibility}
+            hint={
+              aiVisibility == null
+                ? "Checked on your next agent run"
+                : aiVisibility >= 100
+                ? "AI assistants recommend you for your main service search"
+                : "Not yet named when AI assistants are asked for your service"
+            }
+          />
           <ScoreCard label="Google Business Profile" value={gbpScore} hint="Connect your profile" />
         </Stagger>
       </section>

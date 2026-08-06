@@ -17,6 +17,7 @@ import {
   IconWebsite, IconCheck, IconTraffic, IconLink, IconContent, IconTarget, IconAlert,
 } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import LlmsTxtPanel from "./_LlmsTxtPanel";
 
 type Tab = "health" | "onpage" | "crawl" | "roadmap";
 
@@ -401,6 +402,10 @@ export default function TechnicalPage() {
                 : "We can't confirm your sitemap yet. The audit reads /sitemap.xml and /sitemap_index.xml — until it succeeds and produces a score, we won't claim either way."}
             </p>
           </Panel>
+
+          {/* Surfaces the existing buildLlmsTxt() generator, which had no
+              caller until Phase 8A. Not a ConnectCard — this one is real. */}
+          <LlmsTxtPanel brandId={brand.id} />
 
           <Stagger className="p-subgrid">
             <ConnectCard
