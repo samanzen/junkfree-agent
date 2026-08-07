@@ -85,14 +85,22 @@ test("a service that cannot be connected states what it would take", () => {
   expect(src).toMatch(/actions: \[\], accounts: null, requirement,/);
 });
 
-test("GBP and Analytics are declared unavailable rather than fake-connectable", () => {
-  // They are declared through unavailable(), which returns no actions and
-  // requires customer-facing `requirement` copy. Asserting on the wording
-  // itself was wrong: it pinned the developer language Priority 2.1 removed.
+test("every Google product goes through the shared sign-in", () => {
+  // These were `unavailable` placeholders until the OAuth layer existed. They
+  // are now real connections, and all three must resolve through the same
+  // googleProduct() describer rather than each growing its own auth path.
   const src = read("lib/connections.ts");
-  for (const key of ["google_business_profile", "google_analytics"]) {
-    expect(src).toMatch(new RegExp(`unavailable\\(\\s*"${key}"`));
-  }
+  expect(src).toMatch(/googleProduct\(brand, "google_business_profile"\)/);
+  expect(src).toMatch(/googleProduct\(brand, "google_analytics"\)/);
+  expect(src).toMatch(/async function googleProduct\(brand: Brand, key: GoogleProductKey\)/);
+});
+
+test("a Google product still explains itself when sign-in isn't configured", () => {
+  // Missing platform credentials must read as "not available yet" to the
+  // customer, never as a broken Connect button.
+  const src = read("lib/connections.ts");
+  expect(src).toMatch(/if \(!googleConfigured\(\)\) \{[\s\S]{0,400}status: "unavailable"/);
+  expect(src).toMatch(/actions: \[\],/);
 });
 
 test("the panel renders the reason for every row", () => {

@@ -24,7 +24,14 @@ import { encryptCredentials, decryptCredentials } from "./crypto";
 // The column is plain text by design, so adding these needs no migration.
 export type IntegrationProvider =
   | "ga4" | "highlevel" | "stripe" | "quickbooks" | "jobber"
-  | "wordpress" | "webhook";
+  | "wordpress" | "webhook"
+  // One row per brand holds EVERY linked Google account and every Google
+  // product selection (see lib/google/store.ts). Deliberately not one provider
+  // per Google product: the table is unique on (brand_id, provider), and a
+  // single shared identity is what lets Search Console, Analytics and Business
+  // Profile reuse one sign-in rather than asking the customer three times.
+  // "ga4" above predates this and is unused.
+  | "google";
 
 export type IntegrationStatus = "disconnected" | "connected" | "error" | "expired";
 

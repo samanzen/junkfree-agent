@@ -26,6 +26,10 @@ import { isConfigured as dataForSeoConfigured } from "./dataforseo";
 import { listIntegrations, integrationsReachable } from "./integrations";
 import { describeAdapters } from "./execution/registry";
 import { db } from "./supabase";
+import { googleConfigured } from "./google/oauth";
+import { readGoogle, type GoogleMetadata } from "./google/store";
+import { accessTokenFor } from "./google/tokens";
+import { GOOGLE_PRODUCTS, type GoogleProductKey } from "./google/registry";
 
 export type ConnectionStatus =
   | "connected"
@@ -108,6 +112,10 @@ export const ACTIONABLE_KEYS: ConnectionKey[] = ["search_console", "website_publ
 const siteLabel = (p: string) =>
   p.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 
+/** Signals that the legacy administrator-shared picker should be skipped in
+ *  favour of customer sign-in. Not an error condition. */
+class SkipLegacyPicker extends Error {}
+
 const fmtDate = (iso: string) =>
   new Date(iso + (iso.length === 10 ? "T00:00:00Z" : "")).toLocaleDateString("en-CA", {
     month: "short", day: "numeric", timeZone: "UTC",
@@ -116,9 +124,19 @@ const fmtDate = (iso: string) =>
 /**
  * Search Console.
  *
- * Auth is a shared service account the customer grants access to their
- * property, so "connect" is: confirm we can read it, then record which
- * property. There is no OAuth redirect and it would be dishonest to imply one.
+ * Two auth paths coexist here, deliberately:
+ *
+ *   Customer sign-in (lib/google/*) is the route offered whenever the platform
+ *   has Google credentials configured. The customer approves access at Google
+ *   and picks their own property.
+ *
+ *   A shared service account, which an administrator adds to a property, was
+ *   the only path before OAuth existed. It still reads data in lib/gsc.ts, so
+ *   brands set up that way keep working with no migration. It is only hidden
+ *   from the picker, so a customer is never shown two ways to do one thing.
+ *
+ * This describer is separate from googleProduct() below because it alone has a
+ * data-freshness signal and the legacy fallback to reason about.
  */
 async function searchConsole(brand: Brand): Promise<ConnectionState> {
   const base = {
@@ -131,6 +149,14 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
   let accounts: ConnectionAccount[] | null = null;
   let listError: string | null = null;
   try {
+    // Once customers can sign in with Google, that is the only way to connect
+    // this — offering the administrator-shared list as a second picker would
+    // mean two different routes to the same setting on one card.
+    //
+    // The service account itself is NOT retired: lib/gsc.ts still reads data
+    // through it, so every brand connected that way keeps working untouched.
+    // What changes here is only which choices the customer is offered.
+    if (googleConfigured()) throw new SkipLegacyPicker();
     const props = await listProperties();
     accounts = props.map((p) => ({
       id: p.siteUrl,
@@ -140,7 +166,8 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
       detail: p.permissionLevel === "siteFullUser" ? "Full access" : "Limited access",
     }));
   } catch (e) {
-    listError = e instanceof Error ? e.message : String(e);
+    // A skipped legacy picker simply means "no legacy choices", not a fault.
+    if (!(e instanceof SkipLegacyPicker)) listError = e instanceof Error ? e.message : String(e);
   }
 
   // Nothing selected yet.
@@ -156,7 +183,9 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
     if (!accounts?.length) {
       return {
         ...base, status: "not_connected", detail: null, accounts: [],
-        why: "No website has been shared with us yet. Your account manager sets this up — it only takes a moment.",
+        why: googleConfigured()
+          ? "Sign in with Google to bring your rankings, clicks and impressions through."
+          : "No website has been shared with us yet. Your account manager sets this up — it only takes a moment.",
         lastSyncAt: null, lastSyncLabel: null,
         actions: ["connect"], requirement: null,
       };
@@ -377,23 +406,103 @@ export async function describeConnections(brand: Brand): Promise<ConnectionState
     keywordData(brand),
   ]);
 
-  return [
-    gsc,
-    keywords,
-    publishing,
-    unavailable(
-      "google_business_profile",
-      "Google Business Profile",
-      "Your position in the local map results, how people find your profile, and your reviews.",
-      "Linking your Business Profile isn't available yet.",
-      "Once this is ready you'll see where you rank in the local map results, how many people called or asked for directions, and every review as it arrives — with a reply drafted for you. We'll let you know the moment you can link your profile."
-    ),
-    unavailable(
-      "google_analytics",
-      "Google Analytics",
-      "What visitors do once they reach your site, and which searches turn into enquiries.",
-      "Linking Google Analytics isn't available yet.",
-      "Once this is ready you'll be able to follow a visitor from the search they typed through to the enquiry they sent, so you can see which keywords actually win work rather than just traffic. We'll let you know when you can link it."
-    ),
-  ];
+  const [gbp, ga4] = await Promise.all([
+    googleProduct(brand, "google_business_profile"),
+    googleProduct(brand, "google_analytics"),
+  ]);
+
+  return [gsc, keywords, publishing, gbp, ga4];
+}
+
+/**
+ * A Google product that connects through the shared sign-in.
+ *
+ * Search Console keeps its own describer above because it also has the
+ * service-account path and a data-freshness signal; these two are pure OAuth.
+ *
+ * Business Profile is the interesting case: the customer can sign in
+ * successfully and still have nothing to choose, because Google holds the
+ * project at zero quota until it approves the access application. That is a
+ * real state, not an error, and it is reported as "signed in, waiting on
+ * Google" rather than as a failure the customer could fix.
+ */
+async function googleProduct(brand: Brand, key: GoogleProductKey): Promise<ConnectionState> {
+  const product = GOOGLE_PRODUCTS[key];
+  const base = {
+    key,
+    name: product.name,
+    purpose: product.purpose,
+    accounts: null as ConnectionAccount[] | null,
+    requirement: null as string | null,
+  };
+
+  if (!googleConfigured()) {
+    return {
+      ...base, status: "unavailable",
+      why: `Connecting ${product.name} isn't available yet.`,
+      detail: null, lastSyncAt: null, lastSyncLabel: null, lastError: null,
+      actions: [],
+      requirement: "We're finishing this connection off. We'll let you know the moment you can link it.",
+    };
+  }
+
+  const google: GoogleMetadata = await readGoogle(brand.id).catch(() => ({ accounts: [], selections: {} }));
+  const selection = google.selections[key];
+
+  // Nothing linked yet.
+  if (!selection) {
+    const signedIn = google.accounts.length > 0;
+    return {
+      ...base, status: "not_connected",
+      why: signedIn
+        ? `You're signed in to Google — choose which ${product.resourceNoun} to use.`
+        : `Connect your Google account to bring in ${product.name.replace("Google ", "").toLowerCase()} data.`,
+      detail: null, lastSyncAt: null, lastSyncLabel: null, lastError: null,
+      actions: ["connect"],
+    };
+  }
+
+  const account = google.accounts.find((a) => a.id === selection.accountId);
+  if (!account) {
+    // A selection pointing at an account that is gone — recoverable by
+    // connecting again, so say that rather than showing a broken state.
+    return {
+      ...base, status: "expired",
+      why: "This connection needs to be set up again.",
+      detail: selection.label, lastSyncAt: null, lastSyncLabel: null,
+      lastError: `Selection references missing account ${selection.accountId}.`,
+      actions: ["reconnect", "disconnect"],
+    };
+  }
+
+  // Confirm the stored access still works. This is what turns "we saved a
+  // token once" into a real health check.
+  let healthy = true;
+  let failure: string | null = null;
+  try {
+    await accessTokenFor(brand.id, selection.accountId);
+  } catch (e) {
+    healthy = false;
+    failure = e instanceof Error ? e.message : String(e);
+  }
+
+  if (!healthy) {
+    return {
+      ...base, status: "expired",
+      why: "Google is asking you to sign in again to keep this connected.",
+      detail: selection.label, lastSyncAt: null, lastSyncLabel: null, lastError: failure,
+      actions: ["reconnect", "disconnect"],
+    };
+  }
+
+  return {
+    ...base,
+    status: "connected",
+    why: `Connected as ${account.email}.`,
+    detail: selection.label,
+    lastSyncAt: selection.selectedAt,
+    lastSyncLabel: `Connected ${fmtDate(selection.selectedAt.slice(0, 10))}`,
+    lastError: null,
+    actions: ["reconnect", "disconnect"],
+  };
 }

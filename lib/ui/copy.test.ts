@@ -125,13 +125,14 @@ test("the route returns the stripped shape", () => {
 });
 
 // ── an unavailable service sells the outcome, not the plumbing ──────────────
-test("services that aren't ready describe what the customer will get", () => {
+test("a service that isn't ready never offers a Connect button that can't work", () => {
+  // GBP and Analytics used to be permanent placeholders; they are real
+  // connections now. What must survive is the rule: anything marked
+  // unavailable offers no actions and still explains itself.
   const src = read("lib/connections.ts");
-  for (const phrase of ["Once this is ready", "isn't available yet"]) {
-    expect(src).toContain(phrase);
-  }
-  // And no Connect button that cannot work.
+  expect(src).toContain("isn't available yet");
   expect(src).toMatch(/actions: \[\], accounts: null, requirement,/);
+  expect(src).toMatch(/function unavailable\([\s\S]{0,200}requirement: string\s*\)/);
 });
 
 test("the account is shown as a website, not a provider identifier", () => {

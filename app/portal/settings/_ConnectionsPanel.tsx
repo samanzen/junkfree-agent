@@ -33,6 +33,103 @@ const ACTION_LABEL: Record<ConnectionAction, string> = {
   sync_now: "Sync now",
 };
 
+/** Connections that authenticate by signing in at Google. */
+const GOOGLE_KEYS = new Set(["search_console", "google_analytics", "google_business_profile"]);
+
+/** What the customer is choosing, in their words rather than Google's. */
+const NOUN: Record<string, string> = {
+  search_console: "website",
+  google_analytics: "property",
+  google_business_profile: "location",
+};
+
+type PickState = {
+  loading: boolean;
+  accountId: string | null;
+  items: { id: string; label: string; detail: string | null }[];
+  chosen: string;
+  reason: string | null;
+};
+
+/** The list of things a customer can point a Google connection at. */
+function GooglePicker({
+  state, noun, busy, onChange, onSave,
+}: {
+  state: PickState;
+  noun: string;
+  busy: boolean;
+  onChange: (v: string) => void;
+  onSave: () => void;
+}) {
+  if (state.loading) {
+    return <div className="p-conn-meta">Loading your {noun}s from Google…</div>;
+  }
+  if (state.reason === "reauth_required") {
+    return <div className="p-conn-note"><IconAlert size={13} /><span>Please sign in to Google again to continue.</span></div>;
+  }
+  if (state.reason === "unavailable") {
+    return (
+      <div className="p-conn-note">
+        <IconSparkle size={13} />
+        <span>You&apos;re signed in. We&apos;re still waiting on Google to approve access for this one — nothing more is needed from you.</span>
+      </div>
+    );
+  }
+  if (!state.items.length) {
+    return (
+      <div className="p-conn-note">
+        <IconAlert size={13} />
+        <span>We couldn&apos;t find any {noun}s on that Google account. Try connecting with a different account.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="p-conn-pick">
+      <Field
+        as="select"
+        label={`Choose a ${noun}`}
+        hideLabel
+        value={state.chosen}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Select a {noun}…</option>
+        {state.items.map((i) => (
+          <option key={i.id} value={i.id}>
+            {i.label}{i.detail ? ` — ${i.detail}` : ""}
+          </option>
+        ))}
+      </Field>
+      <button
+        className="p-btn primary"
+        style={{ marginTop: 8 }}
+        onClick={onSave}
+        disabled={!state.chosen || busy}
+        data-busy={busy || undefined}
+      >
+        <span>{busy ? "Saving…" : `Use this ${noun}`}</span>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the customer is told when Google sends them back. The callback can only
+ * pass a short code in the URL, so the wording lives here where it can stay in
+ * the customer's language rather than being assembled server-side.
+ */
+const RETURN_MESSAGE: Record<string, { kind: "success" | "info" | "error"; title: string; detail: string }> = {
+  connected: { kind: "success", title: "Connected", detail: "Your data will start flowing through shortly." },
+  choose: { kind: "info", title: "Almost there", detail: "Choose which one you'd like us to use." },
+  cancelled: { kind: "info", title: "Sign-in cancelled", detail: "Nothing was changed. You can try again whenever you're ready." },
+  empty: { kind: "info", title: "Signed in", detail: "We couldn't find anything on that Google account to connect. Try another account." },
+  linked_no_access: {
+    kind: "info",
+    title: "Signed in",
+    detail: "We're still waiting on Google to approve access for this one. Nothing more is needed from you.",
+  },
+  failed: { kind: "error", title: "That didn't work", detail: "We couldn't complete the connection. Please try again." },
+};
+
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -40,6 +137,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
+  const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
 
   const load = useCallback(async () => {
     try {
@@ -60,7 +158,124 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  /** Load what this Google connection can be pointed at. */
+  const loadGoogleOptions = useCallback(async (key: string) => {
+    setGooglePick((g) => ({
+      ...g,
+      [key]: { loading: true, accountId: null, items: [], chosen: "", reason: null },
+    }));
+    try {
+      const res = await authedFetch(`/api/portal/google/select?brand=${brandId}&product=${key}`);
+      const data = await res.json().catch(() => ({}));
+      setGooglePick((g) => ({
+        ...g,
+        [key]: {
+          loading: false,
+          accountId: data.accountId || null,
+          items: data.resources || [],
+          // Preselect what's already in use, so "change it" starts from today's value.
+          chosen: data.selected || "",
+          reason: data.reason || null,
+        },
+      }));
+    } catch {
+      setGooglePick((g) => ({
+        ...g,
+        [key]: { loading: false, accountId: null, items: [], chosen: "", reason: "unavailable" },
+      }));
+    }
+  }, [brandId]);
+
+  // Google sends the customer back here with a result code. Report it, then
+  // strip it from the URL so a refresh doesn't replay the same message.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("google");
+    if (!result) return;
+
+    const msg = RETURN_MESSAGE[result] || RETURN_MESSAGE.failed;
+    toast[msg.kind](msg.title, msg.detail);
+
+    // Returning with "choose" means the account linked but more than one
+    // option exists, so open that picker straight away rather than making the
+    // customer hunt for it.
+    if (result === "choose" || result === "linked_no_access") {
+      const prod = params.get("product");
+      if (prod) void loadGoogleOptions(prod);
+    }
+
+    params.delete("google");
+    params.delete("product");
+    params.delete("reason");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    load();
+  }, [toast, load, loadGoogleOptions]);
+
+
+  async function saveGoogleChoice(row: PublicConnectionState) {
+    const pick = googlePick[row.key];
+    if (!pick?.chosen || !pick.accountId) return;
+    setBusy(`${row.key}:save`);
+    try {
+      const res = await authedFetch("/api/portal/google/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand_id: brandId,
+          product: row.key,
+          action: "select",
+          account_id: pick.accountId,
+          resource_id: pick.chosen,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't save that", undefined);
+        return;
+      }
+      toast.success("Connected", data.label ? `Now using ${data.label}.` : undefined);
+      setGooglePick((g) => {
+        const next = { ...g };
+        delete next[row.key];
+        return next;
+      });
+      await load();
+    } catch {
+      toast.error("We couldn't save that", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function startGoogle(row: PublicConnectionState) {
+    setBusy(`${row.key}:connect`);
+    try {
+      const res = await authedFetch(
+        `/api/portal/google/start?brand=${brandId}&product=${row.key}`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        toast.error(data.error || "We couldn't start the connection", "Please try again in a moment.");
+        setBusy(null);
+        return;
+      }
+      // Deliberately a full navigation, not a popup: popups are blocked by
+      // default on mobile Safari, which is where a lot of these are done.
+      window.location.href = data.url;
+    } catch {
+      toast.error("We couldn't start the connection", "Check your connection and try again.");
+      setBusy(null);
+    }
+  }
+
   async function act(row: PublicConnectionState, action: ConnectionAction) {
+    // Connecting or reconnecting a Google product means signing in at Google.
+    if (GOOGLE_KEYS.has(row.key) && (action === "connect" || action === "reconnect")) {
+      await startGoogle(row);
+      return;
+    }
+
     if (action === "disconnect") {
       const ok = await confirm({
         title: `Disconnect ${row.name}?`,
@@ -76,16 +291,26 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
 
     setBusy(`${row.key}:${action}`);
     try {
-      const res = await authedFetch("/api/portal/connections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brand_id: brandId,
-          key: row.key,
-          action,
-          account: choice[row.key] || undefined,
-        }),
-      });
+      // Disconnecting a Google product clears its selection through the Google
+      // routes, which also keep brands.gsc_property in step. The older
+      // connections route knows nothing about Analytics or Business Profile.
+      const useGoogleRoute = GOOGLE_KEYS.has(row.key) && action === "disconnect" && row.key !== "search_console";
+      const res = useGoogleRoute
+        ? await authedFetch("/api/portal/google/select", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brand_id: brandId, product: row.key, action: "disconnect" }),
+          })
+        : await authedFetch("/api/portal/connections", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              brand_id: brandId,
+              key: row.key,
+              action,
+              account: choice[row.key] || undefined,
+            }),
+          });
       const data = await res.json().catch(() => ({}));
 
       if (data.redirect) {
@@ -190,6 +415,19 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                       ))}
                     </Field>
                   </div>
+                )}
+
+                {/* Google products fetch their options from Google itself, so
+                    the list is loaded on demand rather than made part of every
+                    page load. */}
+                {GOOGLE_KEYS.has(row.key) && googlePick[row.key] && (
+                  <GooglePicker
+                    state={googlePick[row.key]}
+                    noun={NOUN[row.key] || "option"}
+                    busy={busy === `${row.key}:save`}
+                    onChange={(v) => setGooglePick((g) => ({ ...g, [row.key]: { ...g[row.key], chosen: v } }))}
+                    onSave={() => saveGoogleChoice(row)}
+                  />
                 )}
 
                 {row.accounts?.length === 0 && row.status === "not_connected" && (
