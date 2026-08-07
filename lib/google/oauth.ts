@@ -84,6 +84,26 @@ export function verifyState(raw: string): OAuthState | null {
 // ── The flow ────────────────────────────────────────────────────────────────
 
 /**
+ * Scopes the shared layer itself needs, on every request regardless of product.
+ *
+ * fetchIdentity() reads the OpenID userinfo endpoint to learn WHICH Google
+ * account signed in, which is how accounts are keyed so a brand can link more
+ * than one. That endpoint requires `openid`; a token carrying only a product
+ * scope such as webmasters.readonly is rejected with 401 "Invalid Credentials"
+ * — measured, and the cause of the first sign-in failing at
+ * "Could not read Google account identity (401)".
+ *
+ * These belong here rather than in each product's scope list precisely because
+ * they are the layer's requirement, not the product's: a future Ads or YouTube
+ * entry gets them without having to know it needed them.
+ */
+export const IDENTITY_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
+
+/**
  * Where to send the customer to sign in.
  *
  * `access_type=offline` + `prompt=consent` is what actually returns a refresh
@@ -92,11 +112,14 @@ export function verifyState(raw: string): OAuthState | null {
  * and then silently cannot refresh — the classic failure here.
  */
 export function authUrl(scopes: string[], redirectUri: string, state: string): string {
+  // Deduplicated so a product that redundantly declares an identity scope
+  // cannot produce a request asking for the same thing twice.
+  const requested = Array.from(new Set([...IDENTITY_SCOPES, ...scopes]));
   const params = new URLSearchParams({
     client_id: clientId(),
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: scopes.join(" "),
+    scope: requested.join(" "),
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -173,7 +196,16 @@ export async function fetchIdentity(accessToken: string): Promise<{ id: string; 
   const res = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error(`Could not read Google account identity (${res.status})`);
+  if (!res.ok) {
+    // Include Google's own words. A bare status hid the first failure here:
+    // 401 "Invalid Credentials" meant the token lacked `openid`, which is
+    // indistinguishable from a genuinely bad token without the body.
+    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error(
+      `Could not read Google account identity (${res.status}). ` +
+      `Check that IDENTITY_SCOPES are granted. Google said: ${detail}`
+    );
+  }
   const j = (await res.json()) as { sub?: string; email?: string };
   if (!j.sub) throw new Error("Google account identity was incomplete.");
   return { id: j.sub, email: j.email || "" };

@@ -7,7 +7,7 @@
 
 import fs from "fs";
 import { test, expect } from "vitest";
-import { signState, verifyState } from "../google/oauth";
+import { signState, verifyState, authUrl, IDENTITY_SCOPES } from "../google/oauth";
 import { GOOGLE_PRODUCTS, GOOGLE_PRODUCT_KEYS, isGoogleProduct } from "../google/registry";
 
 const ROOT = process.cwd();
@@ -111,6 +111,42 @@ test("all three products are registered and recognised", () => {
   );
   expect(isGoogleProduct("search_console")).toBe(true);
   expect(isGoogleProduct("dropbox")).toBe(false);
+});
+
+test("every authorisation request carries the identity scopes", () => {
+  // The layer reads the OpenID userinfo endpoint to key accounts by Google
+  // user id. A token holding only a product scope is rejected there with 401
+  // "Invalid Credentials" — which is exactly how the first sign-in failed.
+  process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "test-client-id";
+  const url = new URL(
+    authUrl(["https://www.googleapis.com/auth/webmasters.readonly"], "https://x.test/cb", "state")
+  );
+  const scope = (url.searchParams.get("scope") || "").split(" ");
+  for (const s of IDENTITY_SCOPES) expect(scope).toContain(s);
+  // ...without losing the product scope.
+  expect(scope).toContain("https://www.googleapis.com/auth/webmasters.readonly");
+});
+
+test("identity scopes live in the shared layer, not in each product", () => {
+  // A future Ads or YouTube entry must inherit them rather than remember to
+  // declare them.
+  for (const key of GOOGLE_PRODUCT_KEYS) {
+    for (const s of IDENTITY_SCOPES) {
+      expect(GOOGLE_PRODUCTS[key].scopes).not.toContain(s);
+    }
+  }
+  expect(IDENTITY_SCOPES).toEqual([
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+  ]);
+});
+
+test("a scope is never requested twice", () => {
+  process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "test-client-id";
+  const url = new URL(authUrl(["openid", "https://www.googleapis.com/auth/analytics.readonly"], "https://x.test/cb", "s"));
+  const scope = (url.searchParams.get("scope") || "").split(" ");
+  expect(new Set(scope).size).toBe(scope.length);
 });
 
 test("each product asks only for the scopes it needs", () => {
