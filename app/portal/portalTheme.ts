@@ -743,6 +743,21 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-conn-name { font-size:13.5px; font-weight:600; letter-spacing:-.018em; }
 .p-conn-desc { font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.6; }
 .p-conn-detail { display:inline-block; margin-top:8px; font-family:var(--font-mono); font-size:10.5px; background:var(--surface2); border:1px solid var(--line-soft); padding:2.4px 8px; border-radius:var(--r-xs); color:var(--muted); }
+/* Integration Center. Every connection states WHY it is in its current state,
+   so .p-conn-why is not optional decoration -- it is the row's explanation. */
+.p-conn-why { font-size:12.5px; color:var(--text); margin-top:7px; line-height:1.6; }
+.p-conn-meta { font-size:11.5px; color:var(--muted2); margin-top:6px; font-variant-numeric:tabular-nums; }
+.p-conn-meta.err { color:var(--red); word-break:break-word; }
+.p-conn-note { display:flex; gap:8px; align-items:flex-start; margin-top:9px; padding:9px 11px; background:var(--surface2); border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:12px; color:var(--muted); line-height:1.55; }
+.p-conn-note.error { background:var(--red-soft); border-color:transparent; color:var(--red); }
+.p-conn-note svg { flex-shrink:0; margin-top:1px; }
+.p-conn-pick { margin-top:10px; max-width:380px; }
+.p-conn-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.p-inline-link { color:var(--accent); text-decoration:none; white-space:nowrap; }
+.p-inline-link:hover { text-decoration:underline; }
+.p-linkbtn { background:none; border:0; padding:0; font:inherit; color:var(--accent); cursor:pointer; text-decoration:underline; min-height:var(--touch); }
+.p-btn.ghost.danger { color:var(--red); }
+.p-btn.ghost.danger:hover { border-color:var(--red); color:var(--red); }
 
 /* ══ Assistant ══════════════════════════════════════════════════════ */
 .p-assistant-page { height:calc(100vh - 190px); min-height:540px; }

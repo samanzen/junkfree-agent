@@ -182,3 +182,52 @@ export async function keywordDailyHistory(
     ctr: r.ctr,
   }));
 }
+
+// CONNECTION SUPPORT (Connections / Integration Center).
+//
+// Both functions below are additive and reuse the same service-account JWT the
+// rest of this file uses — there is no second Google auth implementation.
+//
+// Context that shapes them: this platform authenticates to Search Console with
+// one shared service account that a customer adds as a user on their property.
+// There is no per-customer OAuth flow, so "connect" means "confirm the service
+// account can actually read this property", not "send the user to Google".
+
+/**
+ * Every property the service account has been granted access to.
+ *
+ * This is what makes account/property selection real rather than a free-text
+ * box: the customer picks from what we can genuinely read. Verified live —
+ * returns sc-domain:junkfree.ca and sc-domain:pomobuild.ca at siteFullUser.
+ *
+ * Throws on API failure so the caller can report why, rather than showing an
+ * empty picker that looks like "you have no properties".
+ */
+export async function listProperties(): Promise<{ siteUrl: string; permissionLevel: string }[]> {
+  const jwt = auth();
+  const { access_token } = await jwt.authorize();
+  const res = await fetch("https://searchconsole.googleapis.com/webmasters/v3/sites", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!res.ok) throw new Error(`GSC sites.list failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { siteEntry?: { siteUrl: string; permissionLevel: string }[] };
+  return (data.siteEntry || []).filter((s) => s.permissionLevel !== "siteUnverifiedUser");
+}
+
+/**
+ * The most recent date this property actually has data for.
+ *
+ * Search Console lags roughly two days, so "last synced 5 minutes ago" would
+ * be misleading on its own — what a customer needs to know is how fresh the
+ * underlying data is. Returns null when the property has no data at all, which
+ * is a different and reportable state from a failed call (which throws).
+ */
+export async function latestDataDate(gscProperty: string): Promise<string | null> {
+  // rowLimit must cover the whole 28-day window. Search Console orders rows by
+  // clicks, not by date, so asking for 10 rows returns 10 arbitrary days and
+  // the newest of those is not the newest day with data — measured returning
+  // Jul 19 for a property that had data through Aug 4.
+  const rows = await query(gscProperty, ["date"], 100);
+  if (!rows.length) return null;
+  return rows.map((r) => r.keys[0]).sort().reverse()[0] || null;
+}
