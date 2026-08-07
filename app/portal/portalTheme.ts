@@ -754,7 +754,9 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
    so .p-conn-why is not optional decoration -- it is the row's explanation. */
 .p-conn-why { font-size:12.5px; color:var(--text); margin-top:7px; line-height:1.6; }
 .p-conn-meta { font-size:11.5px; color:var(--muted2); margin-top:6px; font-variant-numeric:tabular-nums; }
-.p-conn-meta.err { color:var(--red); word-break:break-word; }
+/* The connected account, shown as a person recognises their website rather
+   than as the provider's internal identifier. */
+.p-conn-account { display:inline-block; margin-top:8px; font-size:12px; font-weight:600; color:var(--text); }
 .p-conn-note { display:flex; gap:8px; align-items:flex-start; margin-top:9px; padding:9px 11px; background:var(--surface2); border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:12px; color:var(--muted); line-height:1.55; }
 .p-conn-note.error { background:var(--red-soft); border-color:transparent; color:var(--red); }
 .p-conn-note svg { flex-shrink:0; margin-top:1px; }

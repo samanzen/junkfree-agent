@@ -48,14 +48,26 @@ export type ConnectionState = {
   name: string;
   purpose: string;
   status: ConnectionStatus;
-  /** Why the status is what it is. Never empty — see rule 1 above. */
+  /**
+   * Why the status is what it is, in the customer's language. Never empty —
+   * see rule 1 above, and never a raw error string: see `lastError` below.
+   */
   why: string;
-  /** The connected identifier (a GSC property, a site URL), when there is one. */
+  /** The connected account as a person would recognise it, e.g. "junkfree.ca". */
   detail: string | null;
   /** ISO timestamp of the last successful sync we can evidence, or null. */
   lastSyncAt: string | null;
   /** Human phrasing of data freshness, e.g. "Search Console data through Aug 4". */
   lastSyncLabel: string | null;
+  /**
+   * Diagnostic detail for the server log ONLY — never rendered.
+   *
+   * This holds raw provider and database errors ("42501: permission denied for
+   * table brand_integrations"). Showing that to a customer turns the page into
+   * an internal dashboard, so the route strips this field before responding
+   * and the customer sees `why` instead. Kept on the type so the diagnosis
+   * still reaches the log rather than being thrown away.
+   */
   lastError: string | null;
   /** Actions the UI should offer. Empty for unavailable services. */
   actions: ConnectionAction[];
@@ -64,6 +76,22 @@ export type ConnectionState = {
   /** For `unavailable` only: exactly what it would take to enable this. */
   requirement: string | null;
 };
+
+/**
+ * What the customer receives. `lastError` is removed here rather than in the
+ * route so that no future caller can leak it by forgetting to strip it.
+ */
+export type PublicConnectionState = Omit<ConnectionState, "lastError">;
+
+/** Strip diagnostics, logging them first so the detail is not simply lost. */
+export function toPublic(states: ConnectionState[], brandSlug: string): PublicConnectionState[] {
+  return states.map(({ lastError, ...rest }) => {
+    if (lastError) {
+      console.warn(`[connections] ${brandSlug}/${rest.key} (${rest.status}): ${lastError}`);
+    }
+    return rest;
+  });
+}
 
 export type ConnectionKey =
   | "search_console"
@@ -74,6 +102,11 @@ export type ConnectionKey =
 
 /** Services whose state we can genuinely act on. */
 export const ACTIONABLE_KEYS: ConnectionKey[] = ["search_console", "website_publishing"];
+
+/** Search Console property ids look like "sc-domain:junkfree.ca". Show the
+ *  part a person recognises as their website. */
+const siteLabel = (p: string) =>
+  p.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 
 const fmtDate = (iso: string) =>
   new Date(iso + (iso.length === 10 ? "T00:00:00Z" : "")).toLocaleDateString("en-CA", {
@@ -101,8 +134,10 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
     const props = await listProperties();
     accounts = props.map((p) => ({
       id: p.siteUrl,
-      label: p.siteUrl.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/\/$/, ""),
-      detail: p.permissionLevel === "siteFullUser" ? "Full access" : p.permissionLevel,
+      label: siteLabel(p.siteUrl),
+      // Google's own wording here is "siteFullUser" / "siteRestrictedUser",
+      // which means nothing to a customer choosing their website.
+      detail: p.permissionLevel === "siteFullUser" ? "Full access" : "Limited access",
     }));
   } catch (e) {
     listError = e instanceof Error ? e.message : String(e);
@@ -113,7 +148,7 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
     if (listError) {
       return {
         ...base, status: "error", detail: null, accounts: null,
-        why: "We couldn't reach Search Console to see which properties we can read.",
+        why: "We couldn't reach Google Search Console just now, so we can't show which websites are available to link.",
         lastSyncAt: null, lastSyncLabel: null, lastError: listError,
         actions: ["reconnect"], requirement: null,
       };
@@ -121,14 +156,14 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
     if (!accounts?.length) {
       return {
         ...base, status: "not_connected", detail: null, accounts: [],
-        why: "Search Console hasn't granted us access to any property yet.",
+        why: "No website has been shared with us yet. Your account manager sets this up — it only takes a moment.",
         lastSyncAt: null, lastSyncLabel: null,
         actions: ["connect"], requirement: null,
       };
     }
     return {
       ...base, status: "not_connected", detail: null, accounts,
-      why: `We can read ${accounts.length} propert${accounts.length === 1 ? "y" : "ies"}, but none is linked to this account yet.`,
+      why: `${accounts.length} website${accounts.length === 1 ? " is" : "s are"} ready to link, but none is connected to this account yet. Choose one below.`,
       lastSyncAt: null, lastSyncLabel: null,
       actions: ["connect"], requirement: null,
     };
@@ -140,10 +175,10 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
 
   if (stillGranted === false) {
     return {
-      ...base, status: "expired", detail: selected, accounts,
-      why: "Our access to this property was removed in Search Console, so new data has stopped arriving.",
+      ...base, status: "expired", detail: siteLabel(selected), accounts,
+      why: "Google has stopped sharing this website's search data with us, so your rankings and traffic figures are no longer updating.",
       lastSyncAt: null, lastSyncLabel: null,
-      lastError: "Service account no longer listed on this property.",
+      lastError: "Access to this property was removed.",
       actions: ["reconnect", "disconnect"], requirement: null,
     };
   }
@@ -158,8 +193,8 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
 
   if (freshErr) {
     return {
-      ...base, status: "error", detail: selected, accounts,
-      why: "The property is linked, but the last attempt to read its data failed.",
+      ...base, status: "error", detail: siteLabel(selected), accounts,
+      why: "This website is linked, but we couldn't read its latest search data. This is usually temporary.",
       lastSyncAt: null, lastSyncLabel: null, lastError: freshErr,
       actions: ["reconnect", "sync_now", "disconnect"], requirement: null,
     };
@@ -170,7 +205,7 @@ async function searchConsole(brand: Brand): Promise<ConnectionState> {
   return {
     ...base,
     status: "connected",
-    detail: selected,
+    detail: siteLabel(selected),
     accounts,
     why: freshness
       ? "Connected and receiving data."
@@ -219,7 +254,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   if (!reach.ok) {
     return {
       ...base, status: "error", detail: null,
-      why: "The integrations table can't be read, so we can't tell what's connected.",
+      why: "We can't check your website connection right now. This is on our side — please try again shortly.",
       lastSyncAt: null, lastSyncLabel: null, lastError: reach.reason,
       actions: ["reconnect"],
     };
@@ -277,15 +312,15 @@ async function keywordData(brand: Brand): Promise<ConnectionState> {
     purpose: "Search volume, keyword difficulty and competitor rankings.",
     status: configured ? "connected" : "error",
     why: configured
-      ? "Included with your plan and active — nothing for you to connect."
-      : "The platform's ranking data provider isn't configured, so volume and difficulty are unavailable.",
+      ? "Included with your plan and running — nothing for you to connect."
+      : "Your search volume and difficulty figures are temporarily unavailable.",
     detail: configured ? "Included with your plan" : null,
     lastSyncAt: lastSync,
     lastSyncLabel: lastSync ? `Last refreshed ${fmtDate(lastSync.slice(0, 10))}` : "Not refreshed yet",
-    lastError: configured ? null : "DATAFORSEO credentials are not set on the server.",
+    lastError: configured ? null : "Ranking data provider not configured.",
     actions: configured ? ["sync_now"] : [],
     accounts: null,
-    requirement: configured ? null : "A platform administrator needs to set the ranking data credentials.",
+    requirement: configured ? null : "Your ranking data is briefly unavailable. Our team has been notified and is restoring it — nothing is needed from you.",
   };
 }
 
@@ -306,6 +341,19 @@ function unavailable(
     actions: [], accounts: null, requirement,
   };
 }
+
+/**
+ * Copy rule for anything a customer reads on this page.
+ *
+ * Say what the feature will do for their business and when it becomes
+ * available. Never name the machinery: no OAuth, APIs, Google Cloud, client
+ * IDs, service accounts, tables, endpoints or provider names. A customer
+ * cannot act on any of that, and reading it makes a product feel like
+ * somebody's internal tooling.
+ *
+ * Diagnostics still exist — they go to `lastError`, which is stripped by
+ * toPublic() and written to the server log instead.
+ */
 
 /** Every connection for a brand, with live status. */
 export async function describeConnections(brand: Brand): Promise<ConnectionState[]> {
@@ -336,18 +384,16 @@ export async function describeConnections(brand: Brand): Promise<ConnectionState
     unavailable(
       "google_business_profile",
       "Google Business Profile",
-      "Would add map pack rankings, profile insights and review syncing.",
-      brand.gbp_location_id
-        ? "Your location ID is on file, but the platform has no Business Profile connection to read it with yet."
-        : "The platform can't connect to Business Profile yet, so map pack data and reviews aren't available.",
-      "Requires a Google Cloud OAuth application with the Business Profile API enabled and a verified consent screen. Your account manager can tell you when this is scheduled."
+      "Your position in the local map results, how people find your profile, and your reviews.",
+      "Linking your Business Profile isn't available yet.",
+      "Once this is ready you'll see where you rank in the local map results, how many people called or asked for directions, and every review as it arrives — with a reply drafted for you. We'll let you know the moment you can link your profile."
     ),
     unavailable(
       "google_analytics",
       "Google Analytics",
-      "Would add on-site behaviour, conversions and lead attribution.",
-      "The platform has no Analytics connection yet, so on-site behaviour and conversions aren't available.",
-      "Requires a Google Cloud OAuth application with the Analytics Data API enabled. Your account manager can tell you when this is scheduled."
+      "What visitors do once they reach your site, and which searches turn into enquiries.",
+      "Linking Google Analytics isn't available yet.",
+      "Once this is ready you'll be able to follow a visitor from the search they typed through to the enquiry they sent, so you can see which keywords actually win work rather than just traffic. We'll let you know when you can link it."
     ),
   ];
 }

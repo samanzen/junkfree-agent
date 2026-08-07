@@ -3,7 +3,7 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { enqueue, pendingCount, type JobKind } from "@/lib/queue";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
-import { describeConnections, type ConnectionKey } from "@/lib/connections";
+import { describeConnections, toPublic, type ConnectionKey } from "@/lib/connections";
 import { disconnectIntegration } from "@/lib/integrations";
 import type { SitePlatform } from "@/lib/execution/types";
 import { listProperties } from "@/lib/gsc";
@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
   const brand = await getBrandById(brandId);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
-  const connections = await describeConnections(brand);
+  // Diagnostics are stripped here and written to the server log instead, so a
+  // raw provider or database error can never reach the customer.
+  const connections = toPublic(await describeConnections(brand), brand.slug);
   return NextResponse.json({ connections });
 }
 
@@ -95,7 +97,10 @@ export async function POST(req: NextRequest) {
   if (key === "search_console") {
     if (action === "disconnect") {
       const { error } = await db.from("brands").update({ gsc_property: null }).eq("id", brandId);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        console.error("[connections] disconnect failed:", error.message);
+        return NextResponse.json({ error: "We couldn't disconnect that just now. Please try again." }, { status: 500 });
+      }
       return NextResponse.json({
         ok: true,
         message: "Search Console disconnected. Ranking and traffic data will stop updating.",
@@ -111,8 +116,8 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       return NextResponse.json(
         {
-          error: "Couldn't reach Search Console to verify access.",
-          detail: e instanceof Error ? e.message : String(e),
+          error: "We couldn't reach Google just now.",
+          detail: "Please try again in a moment.",
         },
         { status: 502 }
       );
@@ -121,26 +126,29 @@ export async function POST(req: NextRequest) {
     // Reconnect with nothing chosen just re-verifies what is already stored.
     const wanted = account || brand.gsc_property;
     if (!wanted) {
-      return NextResponse.json({ error: "Choose a property to connect." }, { status: 400 });
+      return NextResponse.json({ error: "Choose a website to connect." }, { status: 400 });
     }
     if (!available.some((p) => p.siteUrl === wanted)) {
       return NextResponse.json(
         {
-          error: "We don't have access to that property.",
+          error: "We can't access that website yet.",
           detail:
-            "Add our service account as a user on the property in Search Console, then try again.",
+            "Your account manager needs to share this website with us first.",
         },
         { status: 403 }
       );
     }
 
     const { error } = await db.from("brands").update({ gsc_property: wanted }).eq("id", brandId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[connections] connect failed:", error.message);
+      return NextResponse.json({ error: "We couldn't save that connection. Please try again." }, { status: 500 });
+    }
     return NextResponse.json({
       ok: true,
       message:
         action === "reconnect"
-          ? "Reconnected — we can read this property."
+          ? "Reconnected. We can read this website's search data."
           : "Connected. Your first data sync will start shortly.",
     });
   }

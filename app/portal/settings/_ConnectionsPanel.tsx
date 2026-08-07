@@ -4,8 +4,8 @@ import { authedFetch } from "@/lib/authedFetch";
 import { useToast, useConfirm } from "@/app/_components/Notify";
 import Field from "@/app/_components/Field";
 import { Panel, PanelHead } from "../_components/Panel";
-import { IconCheck, IconAlert, IconLink, IconExternal } from "../icons";
-import type { ConnectionState, ConnectionAction } from "@/lib/connections";
+import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
+import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
 
 // THE INTEGRATION CENTER.
 //
@@ -18,7 +18,7 @@ import type { ConnectionState, ConnectionAction } from "@/lib/connections";
 // platform can't connect to yet renders what it would take instead of a button
 // that does nothing.
 
-const BADGE: Record<ConnectionState["status"], { cls: string; label: string }> = {
+const BADGE: Record<PublicConnectionState["status"], { cls: string; label: string }> = {
   connected: { cls: "green", label: "Connected" },
   not_connected: { cls: "", label: "Not connected" },
   expired: { cls: "amber", label: "Access expired" },
@@ -36,7 +36,7 @@ const ACTION_LABEL: Record<ConnectionAction, string> = {
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
-  const [rows, setRows] = useState<ConnectionState[] | null>(null);
+  const [rows, setRows] = useState<PublicConnectionState[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
@@ -53,14 +53,14 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       setFailed(null);
       setRows(data.connections || []);
     } catch {
-      setFailed("We couldn't reach the server to check your connections.");
+      setFailed("We couldn't check your connections just now.");
       setRows([]);
     }
   }, [brandId]);
 
   useEffect(() => { load(); }, [load]);
 
-  async function act(row: ConnectionState, action: ConnectionAction) {
+  async function act(row: PublicConnectionState, action: ConnectionAction) {
     if (action === "disconnect") {
       const ok = await confirm({
         title: `Disconnect ${row.name}?`,
@@ -152,7 +152,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                 {/* Why this status — always present, so no state is unexplained. */}
                 <div className="p-conn-why">{row.why}</div>
 
-                {row.detail && <code className="p-conn-detail">{row.detail}</code>}
+                {row.detail && <div className="p-conn-account">{row.detail}</div>}
 
                 {row.lastSyncLabel && (
                   <div className="p-conn-meta">
@@ -161,16 +161,14 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.lastError && (
-                  <div className="p-conn-meta err" title={row.lastError}>
-                    {truncate(row.lastError, 140)}
-                  </div>
-                )}
+                {/* Raw provider and database errors are deliberately not
+                    rendered — the server strips them and logs them instead, so
+                    a customer reads `why` rather than a Postgres error code. */}
 
-                {/* Not available yet: say what it would take, never a dead end. */}
+                {/* Not available yet: describe what's coming, never a dead end. */}
                 {row.requirement && (
                   <div className="p-conn-note">
-                    <IconAlert size={13} />
+                    <IconSparkle size={13} />
                     <span>{row.requirement}</span>
                   </div>
                 )}
@@ -179,12 +177,12 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   <div className="p-conn-pick">
                     <Field
                       as="select"
-                      label={`Choose a property for ${row.name}`}
+                      label={`Choose a website for ${row.name}`}
                       hideLabel
-                      value={choice[row.key] || row.detail || ""}
+                      value={choice[row.key] || ""}
                       onChange={(e) => setChoice((c) => ({ ...c, [row.key]: e.target.value }))}
                     >
-                      <option value="">Select a property…</option>
+                      <option value="">Select a website…</option>
                       {row.accounts!.map((a) => (
                         <option key={a.id} value={a.id}>
                           {a.label}{a.detail ? ` — ${a.detail}` : ""}
@@ -198,8 +196,8 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   <div className="p-conn-note">
                     <IconAlert size={13} />
                     <span>
-                      Add our service account as a user on your property in Search Console, then
-                      choose it here.{" "}
+                      Your account manager needs to share your website with us before it can be
+                      connected here.{" "}
                       <a
                         href="https://search.google.com/search-console/users"
                         target="_blank"
@@ -225,7 +223,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                           onClick={() => act(row, a)}
                           disabled={!!busy || blocked}
                           data-busy={isBusy || undefined}
-                          title={blocked ? "Choose a property first" : undefined}
+                          title={blocked ? "Choose a website first" : undefined}
                         >
                           <span>{isBusy ? "Working…" : ACTION_LABEL[a]}</span>
                         </button>
@@ -244,9 +242,6 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   );
 }
 
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
 
 function relative(iso: string): string {
   const then = new Date(iso).getTime();

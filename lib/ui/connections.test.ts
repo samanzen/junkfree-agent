@@ -86,9 +86,13 @@ test("a service that cannot be connected states what it would take", () => {
 });
 
 test("GBP and Analytics are declared unavailable rather than fake-connectable", () => {
+  // They are declared through unavailable(), which returns no actions and
+  // requires customer-facing `requirement` copy. Asserting on the wording
+  // itself was wrong: it pinned the developer language Priority 2.1 removed.
   const src = read("lib/connections.ts");
-  expect(src).toMatch(/"google_business_profile",[\s\S]{0,600}?OAuth application/);
-  expect(src).toMatch(/"google_analytics",[\s\S]{0,600}?OAuth application/);
+  for (const key of ["google_business_profile", "google_analytics"]) {
+    expect(src).toMatch(new RegExp(`unavailable\\(\\s*"${key}"`));
+  }
 });
 
 test("the panel renders the reason for every row", () => {
