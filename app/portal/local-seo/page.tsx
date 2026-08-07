@@ -128,18 +128,22 @@ export default function LocalSeoPage() {
                 title="Own the map pack"
                 desc="Your Business Profile drives the three local results Google shows above everything else — where most local customers actually click."
                 unlocks={["Profile views, calls and direction requests", "The exact searches people used to find you", "Map pack position tracked week to week"]}
-                note="Ask your account manager to link your profile."
+                requirement="Ask your account manager to link your profile."
                 cta={{ label: "View connections", href: "/portal/settings" }}
               />
               <ConnectCard
                 title="A profile that converts"
                 desc="We score your profile on hours, categories, services, photos and description — then tell you precisely what's missing and why it matters."
                 unlocks={["A completeness score you can act on", "Prioritised fixes, biggest impact first"]}
+                requirement="Needs a Google Business Profile connection to read your profile. The platform has no Business Profile integration yet — Connections shows exactly what that requires."
+                cta={{ label: "See what's required", href: "/portal/settings" }}
               />
               <ConnectCard
                 title="Posts that get seen"
                 desc="See which Google Posts actually drive views and clicks, and get fresh ones drafted for you automatically every week."
                 unlocks={["Per-post views and click-throughs", "New posts written in your voice"]}
+                requirement="Post drafting works today and appears under Content. Per-post views and clicks need a Business Profile connection to read them back."
+                cta={{ label: "Open Content", href: "/portal/content" }}
               />
             </Stagger>
           )}
@@ -172,7 +176,7 @@ export default function LocalSeoPage() {
               title="Never lose rankings to a typo"
               desc="Mismatched contact details across directories are one of the most common reasons local rankings quietly stall. We watch every listing for you."
               unlocks={["Name, address and phone checked across all directories", "Alerts the moment something drifts out of sync"]}
-              note="Requires directory monitoring to be enabled."
+              requirement="Requires directory monitoring to be enabled."
             />
           </Stagger>
         </div>
@@ -193,19 +197,24 @@ export default function LocalSeoPage() {
             title="Know your map pack position"
             desc="Track exactly where you sit in Google's local 3-pack for every service you offer, and watch it move week to week."
             unlocks={["Position tracked per service", "Week-over-week movement alerts"]}
-            note="Requires Google Business Profile to be connected."
+            requirement="Requires Google Business Profile to be connected."
             cta={{ label: "View connections", href: "/portal/settings" }}
           />
           <ConnectCard
             title="See your reach street by street"
             desc="Rankings change block to block. A geo-grid shows exactly where you dominate and where a competitor quietly owns the neighbourhood."
             unlocks={["Visual heatmap across your service area", "Pinpoint the suburbs worth targeting next"]}
+            requirement="Needs grid ranking checks from multiple coordinates across your service area. Rankings are currently measured once per keyword, not per location."
           />
+          {/* Organic competitor comparison is real and already built; only the
+              map-pack half depends on Business Profile. */}
           <ConnectCard
             icon={<IconReviews size={19} />}
             title="Size up every local rival"
-            desc="See which businesses outrank you in the map pack — their rating, review count and how their profile is set up differently to yours."
+            desc="See which businesses outrank you, what they rank for, and the specific keyword gaps you can close."
             unlocks={["Side-by-side competitor comparison", "The specific gaps you can close"]}
+            requirement="Map pack position and profile comparison need a Business Profile connection. Organic competitor tracking is available now."
+            cta={{ label: "Open Competitors", href: "/portal/competitors" }}
           />
         </Stagger>
       )}

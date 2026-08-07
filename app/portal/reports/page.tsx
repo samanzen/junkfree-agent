@@ -146,17 +146,19 @@ export default function ReportsPage() {
             title="Reports that arrive on their own"
             desc="Have this report delivered automatically every week, month or quarter — to you, your business partner, or anyone else who should see the numbers."
             unlocks={["Delivered weekly, monthly or quarterly", "To any recipients you choose", "No login required to read it"]}
-            note="Report emails aren't switched on for your account yet."
+            requirement="Report emails aren't switched on for your account yet."
           />
           <ConnectCard
             title="White-label reports"
             desc="Put your own logo, colours and company details on every report, so it can be shared with clients as your own work."
             unlocks={["Your logo, colours and company details", "Shareable as your own work"]}
+            requirement="Needs your branding stored and applied at render time. Reports use a single shared template today."
           />
           <ConnectCard
             title="Period comparisons"
             desc="Compare any two date ranges side by side — this month vs last, this quarter vs the same quarter last year."
             unlocks={["Any two date ranges side by side", "Quarter-over-quarter and year-over-year"]}
+            requirement="Needs at least two completed reporting periods to compare. This appears once a second period is available."
           />
         </Stagger>
       )}

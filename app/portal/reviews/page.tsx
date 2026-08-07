@@ -124,22 +124,25 @@ export default function ReviewsPage() {
             title="Never miss a review again"
             desc="New reviews arrive the moment they're posted, from Google, Facebook and the directories that matter in your industry — with a reply already drafted."
             unlocks={["Reviews pulled in automatically", "A reply drafted before you've even read it", "Negative reviews flagged first"]}
-            note="Requires Google Business Profile to be connected."
+            requirement="Requires Google Business Profile to be connected."
           />
           <ConnectCard
             title="Review growth tracking"
             desc="Track how many new reviews you gain each month and how your average rating trends against local competitors."
             unlocks={["New reviews per month at a glance", "Your rating trend vs local competitors"]}
+            requirement="Needs review history over time, which requires a Google Business Profile connection to collect reviews. That integration doesn't exist yet."
           />
           <ConnectCard
             title="Review requests"
             desc="Send review invitations to happy customers by SMS or email, and see which campaigns actually convert."
             unlocks={["Invite happy customers by SMS or email", "See which campaigns actually convert"]}
+            requirement="Needs a Business Profile connection plus a way to message customers. Neither exists yet."
           />
           <ConnectCard
             title="Sentiment themes"
             desc="Groups what customers praise and complain about most, so you know what to fix and what to promote."
             unlocks={["What customers praise most", "What to fix, ranked by how often it comes up"]}
+            requirement="Needs a body of collected reviews to analyse, which can't be gathered until a Business Profile connection exists."
           />
         </Stagger>
       )}

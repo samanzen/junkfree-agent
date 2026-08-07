@@ -559,6 +559,13 @@ ${down.md} {
 .p-onboard-list svg { color:var(--green); flex-shrink:0; margin-top:2px; }
 .p-onboard-foot { position:relative; display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:4px; flex-wrap:wrap; }
 .p-onboard-note { font-size:11.5px; color:var(--muted2); line-height:1.5; }
+/* A card that still needs something is not "Available". The tag now reflects
+   which state the card is in rather than always claiming availability. */
+.p-onboard-tag.pending { color:var(--muted); background:var(--surface2); border-color:var(--line); }
+/* What is required before this capability exists. Present on every card that
+   has no CTA, which is what makes a dead-end card impossible. */
+.p-onboard-req { display:flex; gap:8px; align-items:flex-start; margin-top:12px; padding:10px 12px; background:var(--surface2); border:1px solid var(--line-soft); border-radius:var(--r-sm); font-size:11.5px; color:var(--muted); line-height:1.55; }
+.p-onboard-req svg { flex-shrink:0; margin-top:1px; color:var(--muted2); }
 
 /* ══ Empty states ═══════════════════════════════════════════════════ */
 .p-empty {

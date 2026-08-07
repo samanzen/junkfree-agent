@@ -413,21 +413,21 @@ export default function TechnicalPage() {
               title="Index coverage"
               desc="Which of your pages Google has actually indexed, which are excluded, and the precise reason for each."
               unlocks={["Indexed vs excluded, page by page", "Alerts when pages fall out of the index"]}
-              note="Requires the Search Console URL Inspection API, which isn't connected."
+              requirement="Requires the Search Console URL Inspection API, which isn't connected."
             />
             <ConnectCard
               icon={<IconLink size={19} />}
               title="Broken links & redirect chains"
               desc="Continuous scanning for links that 404 or bounce through multiple redirects, internally and outbound."
               unlocks={["Every broken link, with the page it sits on", "Redirect chains costing you crawl budget"]}
-              note="Requires a full-site link crawler. Today's audit samples pages from your sitemap and doesn't follow links."
+              requirement="Requires a full-site link crawler. Today's audit samples pages from your sitemap and doesn't follow links."
             />
             <ConnectCard
               icon={<IconTarget size={19} />}
               title="Site-wide robots.txt"
               desc="Validation that your robots.txt isn't blocking anything you want indexed."
               unlocks={["robots.txt fetched and parsed", "Blocked paths cross-checked against your sitemap"]}
-              note="Per-page robots directives and canonicals ARE now recorded — see On-page issues. This card covers the site-level robots.txt file, which the auditor doesn't fetch yet."
+              requirement="Per-page robots directives and canonicals ARE now recorded — see On-page issues. This card covers the site-level robots.txt file, which the auditor doesn't fetch yet."
             />
           </Stagger>
         </div>
@@ -452,28 +452,28 @@ export default function TechnicalPage() {
               title="Missing alt text & oversized pages"
               desc="Images without descriptions, and pages heavy enough to hurt load time."
               unlocks={["Every image missing alt text", "Pages ranked by weight"]}
-              note="The auditor doesn't currently parse images or measure page weight."
+              requirement="The auditor doesn't currently parse images or measure page weight."
             />
             <ConnectCard
               icon={<IconTraffic size={19} />}
               title="Core Web Vitals"
               desc="Loading, interactivity and layout stability on mobile and desktop, tracked against Google's thresholds."
               unlocks={["LCP, INP and CLS over time", "Alerts when a release slows you down"]}
-              note="Requires the PageSpeed Insights or CrUX API, which isn't connected."
+              requirement="Requires the PageSpeed Insights or CrUX API, which isn't connected."
             />
             <ConnectCard
               icon={<IconTarget size={19} />}
               title="Schema markup"
               desc="Checks your LocalBusiness, Service, FAQ and Review structured data and generates what's missing."
               unlocks={["Coverage of every schema type that applies", "Eligibility for rich results"]}
-              note="Requires the auditor to extract and validate structured data per page."
+              requirement="Requires the auditor to extract and validate structured data per page."
             />
             <ConnectCard
               icon={<IconLink size={19} />}
               title="Internal linking opportunities"
               desc="Pages that should link to each other based on topic overlap — one of the highest-leverage, lowest-effort wins in SEO."
               unlocks={["Suggested links with anchor text", "Orphan pages with no links in"]}
-              note="Requires a site-wide link graph, which means crawling every page rather than sampling."
+              requirement="Requires a site-wide link graph, which means crawling every page rather than sampling."
             />
           </Stagger>
         </div>

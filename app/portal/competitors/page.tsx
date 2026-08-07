@@ -379,13 +379,13 @@ export default function CompetitorsPage() {
                       title="Page-level comparison"
                       desc="See which of their pages pull the most traffic and which of your pages they outperform, side by side."
                       unlocks={["Their top pages by estimated traffic", "The pages of yours they beat"]}
-                      note="Our competitor feed returns keywords and positions, not page URLs — this needs a different data source."
+                      requirement="Our competitor feed returns keywords and positions, not page URLs — this needs a different data source."
                     />
                     <ConnectCard
                       title="Visibility share"
                       desc="Track what percentage of your market's search visibility you own versus each competitor, week over week."
                       unlocks={["Share-of-voice trend", "Alerts when a rival overtakes you"]}
-                      note="Requires competitor history, which begins accumulating from your first analysis."
+                      requirement="Requires competitor history, which begins accumulating from your first analysis."
                     />
                   </Stagger>
                 </div>

@@ -263,21 +263,21 @@ export default function InsightsTab({ brandId }: { brandId: string }) {
           title="Search intent changes"
           desc="Know when Google reinterprets a keyword — when a term you rank for stops meaning what it used to, and the page that wins it changes shape."
           unlocks={["Intent shifts flagged as they happen", "The content change each shift calls for"]}
-          note="We store each keyword's current intent but not a history of it, so there's nothing to compare against yet. Detecting a change needs intent recorded per enrichment run."
+          requirement="We store each keyword's current intent but not a history of it, so there's nothing to compare against yet. Detecting a change needs intent recorded per enrichment run."
         />
         <ConnectCard
           icon={<IconTraffic size={19} />}
           title="Estimated revenue opportunity"
           desc="Translate ranking gains into pounds and pence, so you can weigh SEO work against everything else competing for your budget."
           unlocks={["Revenue impact per keyword", "Opportunities ranked by money, not clicks"]}
-          note="Needs your average job value, visitor-to-lead rate and lead-to-customer rate. None are set on your account, so every revenue figure would be invented — we'd rather show nothing."
+          requirement="Needs your average job value, visitor-to-lead rate and lead-to-customer rate. None are set on your account, so every revenue figure would be invented — we'd rather show nothing."
         />
         <ConnectCard
           icon={<IconContent size={19} />}
           title="Competitor overlap & gaps"
           desc="See which rivals target the same searches and where they rank for terms you don't appear for at all."
           unlocks={["Head-to-head keyword comparison", "Gaps ranked by search volume"]}
-          note="Already built — open the Competitors section to track a rival and run the analysis."
+          requirement="Already built — open the Competitors section to track a rival and run the analysis."
         />
       </Stagger>
 
