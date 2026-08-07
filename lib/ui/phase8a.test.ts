@@ -73,9 +73,10 @@ test("a pre-JS shell is not passed off as the page's content", () => {
   // junkfree.ca returns 10 words for every URL. Passing that would make the
   // agent conclude the page is empty and recommend rewriting content that
   // exists — worse than the empty string it replaced.
+  // Phase 8B renamed this to the shared RENDER_THRESHOLD_WORDS so "too thin to
+  // be real" means one number across the crawler and the content step.
   const src = read("lib/steps.ts");
-  expect(src).toMatch(/MIN_READABLE_WORDS/);
-  expect(src).toMatch(/live\.words >= MIN_READABLE_WORDS \? live\.text : ""/);
+  expect(src).toMatch(/live\.words >= RENDER_THRESHOLD_WORDS \? live\.text : ""/);
 });
 
 test("inspectPage returns the text it already computed", () => {

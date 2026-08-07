@@ -12,7 +12,8 @@ import { keywordStrategy, competitorGaps } from "./intelligence";
 import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
-import { auditSite, inspectPage, type AuditedPage } from "./auditor";
+import { auditSite, inspectPage, RENDER_THRESHOLD_WORDS, type AuditedPage } from "./auditor";
+import { canUse } from "./capabilities";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
 import { executeChange } from "./execution/engine";
@@ -184,21 +185,25 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     // the difference between a template and an actual audit. inspectPage is the
     // crawler stepAudit already uses, so nothing new fetches or parses HTML.
     const auditUrl = (p.target_url as string) || "";
-    const live = auditUrl ? await safe(() => inspectPage(auditUrl)) : null;
+    // Phase 8B: opt into JS rendering. inspectPage only pays for a render when
+    // the raw HTML comes back too short to be the real page, so a
+    // server-rendered target costs nothing extra. Gated so a future plan tier
+    // can turn it off without touching this logic.
+    const render = canUse(brand, "js_rendering");
+    const live = auditUrl ? await safe(() => inspectPage(auditUrl, { render })) : null;
 
     // Only pass the fetched text if enough of it came back to be the real page.
-    // The crawler reads raw HTML, so a client-rendered site returns its pre-JS
-    // shell — junkfree.ca yields 10 words for every URL. Handing the agent that
+    // With rendering on this is now rarely the fallback path, but it still
+    // guards the cases rendering can't fix — an unreachable host, a render
+    // failure, or a page that genuinely is near-empty. Handing the agent a
     // shell is worse than handing it nothing: it would conclude the page is
     // almost empty and recommend rewriting content that is actually there.
-    // Below the threshold we fall back to the previous behaviour, where
     // auditPage's prompt already handles "no content provided" explicitly.
-    const MIN_READABLE_WORDS = 100;
-    const readable = live && live.words >= MIN_READABLE_WORDS ? live.text : "";
+    const readable = live && live.words >= RENDER_THRESHOLD_WORDS ? live.text : "";
     if (live && !readable) {
       console.warn(
-        `[stepContent] ${brand.slug}: ${auditUrl} returned only ${live.words} words of pre-JS HTML — ` +
-        `auditing without page content. This site needs JS rendering to audit properly.`
+        `[stepContent] ${brand.slug}: ${auditUrl} yielded only ${live.words} words ` +
+        `(render=${render}) — auditing without page content.`
       );
     }
 
@@ -276,7 +281,9 @@ export async function stepAudit(brand: Brand, runId: string) {
   // (this job itself is still "running", so >0 means a prior audit already ran today)
   if ((count || 0) > 0) return;
 
-  const result = await safe(() => auditSite(brand, 12));
+  // Phase 8B: audit what the page actually says, not its pre-JS shell. Gated
+  // so a future plan tier can disable rendering without changing this step.
+  const result = await safe(() => auditSite(brand, 12, { render: canUse(brand, "js_rendering") }));
   const audited = (result as { audited?: number } | null)?.audited || 0;
   const issues = (result as { issues?: { url: string; problem: string; severity: string; fix: string; task_type: string }[] } | null)?.issues || [];
   const pages = (result as { pages?: AuditedPage[] } | null)?.pages || [];

@@ -119,6 +119,55 @@ export function isConfigured() {
   return !!authHeader();
 }
 
+// JS-RENDERED PAGE CONTENT (Phase 8B).
+//
+// The platform's own crawler (lib/auditor.ts) reads raw HTML, so a
+// client-rendered site returns its pre-JS shell. Measured on junkfree.ca:
+// every one of 12 sampled pages yielded exactly 10 words and no H1, which made
+// 100% of them look like thin content. The same URLs through this endpoint
+// with enable_javascript return 346 and 231 words of real copy.
+//
+// This reuses DataForSEO — already integrated, already funded — rather than
+// adding a headless browser or a second vendor. enable_javascript is what
+// actually matters: with it false this endpoint returns 0 words, reproducing
+// our crawler's failure exactly, which is how the diagnosis was confirmed.
+//
+// Cost: $0.0015 per rendered page vs $0.00015 without, so a 12-page audit
+// costs about $0.018. Callers opt in (see inspectPage's `render` option) so no
+// existing path starts paying this by default.
+export async function renderedPageContent(
+  url: string
+): Promise<{ text: string; markdown: string } | null> {
+  const data = await post<Task<unknown>>("/on_page/content_parsing/live", {
+    url,
+    enable_javascript: true,
+    markdown_view: true,
+  });
+  const item = (
+    data?.tasks?.[0]?.result?.[0] as { items?: { page_content?: unknown; page_as_markdown?: string }[] } | undefined
+  )?.items?.[0];
+  if (!item) return null;
+
+  // page_content nests text under header/footer/main_topic/secondary_topic,
+  // each an object or array carrying `text`. Walk it rather than hardcoding a
+  // shape that varies by page.
+  const bits: string[] = [];
+  const collect = (node: unknown): void => {
+    if (!node) return;
+    if (Array.isArray(node)) return void node.forEach(collect);
+    if (typeof node === "object") {
+      const rec = node as Record<string, unknown>;
+      if (typeof rec.text === "string") bits.push(rec.text);
+      Object.values(rec).forEach(collect);
+    }
+  };
+  collect(item.page_content);
+
+  const text = bits.join(" ").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  return { text, markdown: item.page_as_markdown || "" };
+}
+
 // Domain overview: organic traffic estimate, organic keyword count, rank.
 export async function domainOverview(domain: string, geo: Geo = {}): Promise<{ organic_traffic: number | null; organic_keywords: number | null } | null> {
   const data = await post<Task<unknown>>(

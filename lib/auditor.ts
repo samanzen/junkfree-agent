@@ -4,6 +4,15 @@
 
 import { callClaude, extractJSON } from "./anthropic";
 import { brandBlock, type Brand } from "./brands";
+import { renderedPageContent } from "./dataforseo";
+
+/**
+ * Below this many words, raw HTML is treated as a pre-JS shell rather than the
+ * page. Chosen from measurement: the shells observed return ~10 words, while
+ * the thinnest genuine page worth auditing is far above this. Shared with
+ * lib/steps.ts so "too thin to be real" means one thing across the platform.
+ */
+export const RENDER_THRESHOLD_WORDS = 100;
 
 // Fetch and parse the sitemap into a list of URLs.
 async function sitemapUrls(siteUrl: string): Promise<string[]> {
@@ -51,7 +60,10 @@ export type AuditedPage = {
  * in front of it. This is the fetch-and-extract the crawler already performs —
  * reused rather than reimplemented in lib/steps.
  */
-export async function inspectPage(url: string): Promise<AuditedPage | null> {
+export async function inspectPage(
+  url: string,
+  opts: { render?: boolean } = {}
+): Promise<AuditedPage | null> {
   try {
     const res = await fetch(url, { headers: { "User-Agent": "SEO-Platform-Auditor" } });
     if (!res.ok) return null;
@@ -77,14 +89,42 @@ export async function inspectPage(url: string): Promise<AuditedPage | null> {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    return { url, title, meta, h1, words: text.split(" ").length, status: res.status, canonical, robots, text };
+    let finalText = text;
+    let finalH1 = h1;
+
+    // Phase 8B: a client-rendered page returns its pre-JS shell here, so the
+    // text above is the loading skeleton rather than the page. Measured on
+    // junkfree.ca: 12 of 12 pages gave exactly 10 words and no H1, so every one
+    // of them looked like thin content. When the caller opts in and the raw
+    // HTML came back implausibly short, re-read the page with JavaScript
+    // executed.
+    //
+    // Only on opt-in, and only below the threshold, because each render is a
+    // metered call. A server-rendered site never crosses this branch and costs
+    // nothing extra. If the render fails we keep the raw-HTML result, so this
+    // can only add information, never fail a crawl.
+    if (opts.render && text.split(" ").length < RENDER_THRESHOLD_WORDS) {
+      const rendered = await renderedPageContent(url).catch(() => null);
+      if (rendered?.text) {
+        finalText = rendered.text;
+        // The shell rarely carries an H1; recover the first markdown heading
+        // so the "missing H1" check stops firing on pages that do have one.
+        finalH1 = h1 || rendered.markdown.match(/^#{1,2}\s+(.+)$/m)?.[1]?.trim() || "";
+      }
+    }
+
+    return {
+      url, title, meta, h1: finalH1,
+      words: finalText.split(" ").length,
+      status: res.status, canonical, robots, text: finalText,
+    };
   } catch {
     return null;
   }
 }
 
 // Audit a sample of the site's pages and return prioritised issues.
-export async function auditSite(brand: Brand, sampleSize = 12) {
+export async function auditSite(brand: Brand, sampleSize = 12, opts: { render?: boolean } = {}) {
   const urls = await sitemapUrls(brand.site_url);
   if (!urls.length) return { audited: 0, issues: [] };
 
@@ -92,7 +132,10 @@ export async function auditSite(brand: Brand, sampleSize = 12) {
   const step = Math.max(1, Math.floor(urls.length / sampleSize));
   const sample = urls.filter((_, i) => i % step === 0).slice(0, sampleSize);
 
-  const pages = (await Promise.all(sample.map(inspectPage))).filter(
+  // Phase 8B: `render` reaches inspectPage, which only spends a metered render
+  // on pages whose raw HTML is too short to be real. Without it every page of a
+  // client-rendered site is reported as ~10 words and flagged thin.
+  const pages = (await Promise.all(sample.map((u) => inspectPage(u, opts)))).filter(
     (p): p is AuditedPage => p !== null
   );
 
