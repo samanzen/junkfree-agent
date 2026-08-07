@@ -212,6 +212,44 @@ test("tokens and secrets are never returned to the browser", () => {
   }
 });
 
+// ── returning to where the customer started ─────────────────────────────────
+test("the callback returns to the Connections tab, not the page default", () => {
+  const src = read("app/api/portal/google/callback/route.ts");
+  expect(src).toMatch(/new URL\("\/portal\/settings", origin\)/);
+  expect(src).toMatch(/url\.searchParams\.set\("tab", "connections"\)/);
+});
+
+test("the settings page honours the tab in the URL", () => {
+  // The callback always sent tab=connections; the page hardcoded "business"
+  // and ignored it, so customers landed on the wrong tab having just
+  // connected something.
+  const src = read("app/portal/settings/page.tsx");
+  expect(src).toMatch(/new URLSearchParams\(window\.location\.search\)\.get\("tab"\)/);
+  expect(src).toMatch(/if \(isTab\(wanted\)\) setTab\(wanted\)/);
+});
+
+test("the tab is read in an effect, not during render", () => {
+  // This page is prerendered: touching window during render breaks the build,
+  // and seeding differently on server and client is a hydration mismatch.
+  const src = read("app/portal/settings/page.tsx");
+  expect(src).toMatch(/useState<Tab>\("business"\)/);
+  expect(src).not.toMatch(/useState<Tab>\(\(\) =>/);
+});
+
+test("switching tabs keeps the URL in step", () => {
+  const src = read("app/portal/settings/page.tsx");
+  expect(src).toMatch(/params\.set\("tab", next\)/);
+  expect(src).toMatch(/onChange=\{goToTab\}/);
+});
+
+test("clearing the Google result preserves the tab", () => {
+  // The panel strips its own params on mount; removing `tab` there would
+  // undo the fix on the very next render.
+  const src = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(src).toMatch(/params\.delete\("google"\)/);
+  expect(src).not.toMatch(/params\.delete\("tab"\)/);
+});
+
 test("the callback always returns the customer to the portal", () => {
   // They are in a browser tab; a JSON body would be the worst possible ending
   // to a sign-in.

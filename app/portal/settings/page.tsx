@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePortalAuth } from "@/lib/portalAuth";
 import PageHeader from "../_components/PageHeader";
 import SubNav from "../_components/SubNav";
@@ -18,9 +18,34 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "security", label: "Security" },
 ];
 
+const isTab = (v: string | null): v is Tab => TABS.some((t) => t.key === v);
+
 export default function SettingsPage() {
   const { brand } = usePortalAuth();
   const [tab, setTab] = useState<Tab>("business");
+
+  // Restore the tab from the URL.
+  //
+  // Returning from a Google sign-in lands on /portal/settings?tab=connections,
+  // but the tab used to be local state seeded with "business", so the customer
+  // was dropped on Business having just connected something on Connections.
+  //
+  // Read in an effect rather than in the initial state: this page is
+  // prerendered, so touching window during render would break the build, and
+  // seeding differently on server and client would be a hydration mismatch.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    if (isTab(wanted)) setTab(wanted);
+  }, []);
+
+  // Keep the URL in step when the customer switches tabs, so a refresh, a
+  // back button or a shared link all stay where they were.
+  const goToTab = useCallback((next: Tab) => {
+    setTab(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", next);
+    window.history.replaceState({}, "", `${window.location.pathname}?${params}`);
+  }, []);
 
   if (!brand) return null;
 
@@ -32,7 +57,7 @@ export default function SettingsPage() {
         sub="Your business details and the accounts powering your SEO."
       />
 
-      <SubNav items={TABS} value={tab} onChange={setTab} />
+      <SubNav items={TABS} value={tab} onChange={goToTab} />
 
       {tab === "business" && (
         <div className="p-stack">
