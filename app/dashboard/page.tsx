@@ -235,8 +235,19 @@ export default function Dashboard() {
     load();
   }
   async function processImages() {
+    if (!brandId) return;
     for (let i = 0; i < 12; i++) {
-      try { const r = await (await authedFetch("/api/images/process", { method: "POST" })).json(); load(); if (r.done) break; } catch { break; }
+      try {
+        const r = await (
+          await authedFetch("/api/images/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brand_id: brandId }),
+          })
+        ).json();
+        load();
+        if (r.done) break;
+      } catch { break; }
     }
   }
   async function runNow() {
