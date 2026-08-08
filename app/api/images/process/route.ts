@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { generatePostImages } from "@/lib/images";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { quotaFor } from "@/lib/capabilities";
 
 export const maxDuration = 60;
 
@@ -36,15 +37,26 @@ export async function POST(req: NextRequest) {
   const target = (drafts || []).find((d) => !String(d.body).includes("![header]"));
   if (!target) return NextResponse.json({ done: true });
 
-  // COST CAP: at most 1 image-post per day across all brands. Counts drafts that
-  // already have an image and were created today.
+  // COST CAP, per brand.
+  //
+  // This count was previously unscoped, so the first tenant to generate an
+  // image each day consumed the entire platform's allowance and every other
+  // tenant was silently told "capped" — a customer could be blocked all day by
+  // somebody else's usage. Each brand now has its own independent bucket.
+  //
+  // The limit itself comes from lib/capabilities.ts rather than being written
+  // here, so plan tiers change one function instead of this call site.
+  const limit = quotaFor({ id: brandId }, "images_per_day");
   const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
   const { data: todays } = await db
     .from("drafts")
     .select("body,created_at")
+    .eq("brand_id", brandId)
     .gte("created_at", startOfDay.toISOString());
   const doneToday = (todays || []).filter((d) => String(d.body).includes("![header](http")).length;
-  if (doneToday >= 1) return NextResponse.json({ done: true, capped: true });
+  if (doneToday >= limit) {
+    return NextResponse.json({ done: true, capped: true, used: doneToday, limit });
+  }
 
   const brand = await getBrandById(brandId!).catch(() => null);
   if (!brand) return NextResponse.json({ done: true });

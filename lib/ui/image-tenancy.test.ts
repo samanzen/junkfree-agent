@@ -47,14 +47,13 @@ test("the brand used for generation comes from the authorised id", () => {
 });
 
 test("no query in the route is left unscoped by brand", () => {
-  // Every drafts query must carry a brand filter. The remaining unscoped one
-  // is the daily cost cap, which is the next roadmap item and is deliberately
-  // left alone here — this test records that it is known, not overlooked.
+  // Item 1 closed the data queries and left exactly one unscoped — the daily
+  // cost cap — which this test recorded so it could not be forgotten. Item 2
+  // closed that one too, so the invariant is now simply: none.
   const src = read(ROUTE);
   const queries = [...src.matchAll(/\.from\("drafts"\)([\s\S]*?);/g)].map((m) => m[1]);
   const unscoped = queries.filter((q) => !/brand_id/.test(q));
-  expect(unscoped.length, "only the cost-cap query may remain unscoped").toBe(1);
-  expect(unscoped[0]).toMatch(/created_at/); // it is the cap query, not a data query
+  expect(unscoped, "every drafts query must be brand-scoped").toEqual([]);
 });
 
 test("the caller sends the brand it is operating on", () => {

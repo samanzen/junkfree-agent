@@ -34,3 +34,38 @@ export type CapabilityScope = { id?: string; slug?: string };
 export function canUse(_brand: CapabilityScope, _capability: Capability): boolean {
   return true;
 }
+
+// ── Metered quotas ──────────────────────────────────────────────────────────
+//
+// A capability answers "may this brand do X at all". A quota answers "how many
+// times per day". Both belong to the plan, so both are resolved here — one
+// place to change when Starter / Pro / Agency / Enterprise arrive, rather than
+// a limit hard-coded at each call site.
+
+export type Quota =
+  /**
+   * AI header/illustration images generated for content drafts. Metered
+   * because each one is a paid image-model call.
+   */
+  | "images_per_day";
+
+/** A quota with no ceiling. Compared with `>=`, so this can never be reached. */
+export const UNLIMITED = Number.POSITIVE_INFINITY;
+
+/**
+ * Today's per-brand allowance, per day, in the brand's own bucket.
+ *
+ * Every brand currently gets the same number — that is the honest present
+ * state, not a placeholder pretending to decide something. What matters is
+ * that the number is asked for PER BRAND: the count it is compared against is
+ * scoped by brand_id, so one tenant exhausting its allowance cannot affect
+ * another. Introducing plans means returning a different number here; no call
+ * site changes.
+ */
+const DEFAULT_QUOTAS: Record<Quota, number> = {
+  images_per_day: 1,
+};
+
+export function quotaFor(_brand: CapabilityScope, quota: Quota): number {
+  return DEFAULT_QUOTAS[quota];
+}
