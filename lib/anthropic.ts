@@ -31,9 +31,32 @@ type CallOpts = {
    * Optional, so existing callers are unaffected.
    */
   onMeta?: (meta: CallMeta) => void;
+  /**
+   * Non-sensitive tag for the log line — a brand slug and/or the step making
+   * the call, e.g. "acme-roofing/stepContent". Optional, so no existing caller
+   * changes; supplying it is what lets an operator attribute cost and latency
+   * to a tenant without any prompt content being recorded.
+   *
+   * Must never carry customer content. It is written to logs verbatim.
+   */
+  label?: string;
 };
 
-export async function callClaude({ user, system, search, maxTokens = 2000, thinking, onMeta }: CallOpts): Promise<string> {
+/**
+ * Verbose prompt/response logging. OFF unless explicitly switched on.
+ *
+ * The default MUST stay off: `body` carries brandBlock() — the customer's
+ * business name, services, service area and contact details — plus page
+ * content, keyword data and competitor intelligence, and `data` carries
+ * everything the model wrote back. Serialising either put every tenant's
+ * business data into the platform logs on every call, which is a data-
+ * processing liability as much as a cost.
+ *
+ * Opt in per environment with AI_DEBUG_LOGGING=1. Never set it in production.
+ */
+const DEBUG_AI_LOGGING = process.env.AI_DEBUG_LOGGING === "1";
+
+export async function callClaude({ user, system, search, maxTokens = 2000, thinking, onMeta, label }: CallOpts): Promise<string> {
   const body: Record<string, unknown> = {
     model: MODEL,
     max_tokens: maxTokens,
@@ -43,9 +66,20 @@ export async function callClaude({ user, system, search, maxTokens = 2000, think
   if (thinking) body.thinking = thinking;
   if (search) body.tools = [{ type: "web_search_20250305", name: "web_search" }];
 
-  console.log("[callClaude] provider=anthropic model=" + MODEL);
-  console.log("[callClaude] ANTHROPIC_API_KEY present:", !!process.env.ANTHROPIC_API_KEY);
-  console.log("[callClaude] request body:", JSON.stringify(body));
+  // Sizes, not contents: enough to spot a runaway prompt without recording it.
+  const promptChars = user.length + (system?.length ?? 0);
+  const tag = label ? ` label=${label}` : "";
+  const startedAt = Date.now();
+  // Set once the provider failure has already been logged with its type and
+  // status. The Error thrown from that branch carries Anthropic's own message,
+  // which CAN quote the offending part of the request — so the catch block
+  // must not print it a second time. Messages from genuine exceptions
+  // (network, JSON parse) are safe and still logged.
+  let providerErrorReported = false;
+
+  if (DEBUG_AI_LOGGING) {
+    console.warn("[callClaude] DEBUG request body:", JSON.stringify(body));
+  }
 
   try {
     const res = await fetch(API, {
@@ -59,13 +93,34 @@ export async function callClaude({ user, system, search, maxTokens = 2000, think
     });
 
     const data = await res.json();
-    console.log("[callClaude] response status:", res.status);
-    console.log("[callClaude] response body:", JSON.stringify(data));
+    const ms = Date.now() - startedAt;
+    // Anthropic returns this on every response; it is what support needs to
+    // trace a single call, and it identifies nothing about the customer.
+    const requestId = res.headers.get("request-id") ?? "-";
+
+    if (DEBUG_AI_LOGGING) {
+      console.warn("[callClaude] DEBUG response body:", JSON.stringify(data));
+    }
 
     if (!res.ok || data.error) {
-      console.log("[callClaude] Anthropic error payload:", JSON.stringify(data?.error) || `Anthropic ${res.status}`);
+      // The error TYPE and status, not the payload: provider validation errors
+      // can quote the offending part of the request back at you, which would
+      // reintroduce exactly what this change removes.
+      console.error(
+        `[callClaude] FAILED${tag} model=${MODEL} status=${res.status} ` +
+        `type=${data?.error?.type ?? "unknown"} request_id=${requestId} ` +
+        `prompt_chars=${promptChars} max_tokens=${maxTokens} ms=${ms}`
+      );
+      providerErrorReported = true;
       throw new Error(data?.error?.message || `Anthropic ${res.status}`);
     }
+
+    console.log(
+      `[callClaude] ok${tag} model=${MODEL} status=${res.status} request_id=${requestId} ` +
+      `in=${data.usage?.input_tokens ?? 0} out=${data.usage?.output_tokens ?? 0} ` +
+      `thinking=${data.usage?.output_tokens_details?.thinking_tokens ?? 0} ` +
+      `stop=${data.stop_reason ?? "-"} prompt_chars=${promptChars} max_tokens=${maxTokens} ms=${ms}`
+    );
     onMeta?.({
       stop_reason: data.stop_reason ?? null,
       input_tokens: data.usage?.input_tokens ?? 0,
@@ -94,7 +149,18 @@ export async function callClaude({ user, system, search, maxTokens = 2000, think
 
     return text;
   } catch (e) {
-    console.error("[callClaude] caught exception:", e instanceof Error ? e.stack : String(e));
+    // Name and message only. The stack is a code path, not customer data, but
+    // it is noisy in production and adds nothing the message doesn't — it is
+    // available under the debug flag when actually diagnosing something.
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error(
+      `[callClaude] EXCEPTION${tag} model=${MODEL} name=${err.name} ` +
+      `ms=${Date.now() - startedAt} ` +
+      // See providerErrorReported: the provider's own message can echo request
+      // content, and that failure has already been logged with its type.
+      (providerErrorReported ? "message=(provider error, reported above)" : `message=${err.message}`)
+    );
+    if (DEBUG_AI_LOGGING) console.error("[callClaude] DEBUG stack:", err.stack);
     throw e;
   }
 }
