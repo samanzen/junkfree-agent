@@ -16,23 +16,58 @@ export async function GET(req: NextRequest) {
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
 
-  const today = new Date().toISOString().slice(0, 10);
-  const sevenDaysAgo = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  // Use the most recent date this brand actually HAS, not today's date.
+  //
+  // This previously required captured_date to equal today. The sync that
+  // writes those rows runs at 06:00 UTC, so the page reported "No page data
+  // yet" every day between midnight UTC and the sync completing — about six
+  // and a half hours daily, with thousands of rows sitting in the table. It
+  // also meant any late or failed sync blanked the page instead of showing
+  // the previous day's numbers.
+  const { data: latestRow } = await db
+    .from("keyword_positions")
+    .select("captured_date")
+    .eq("brand_id", brandId)
+    .not("landing_page", "is", null)
+    .order("captured_date", { ascending: false })
+    .limit(1);
+
+  const latestDate = (latestRow as { captured_date: string }[] | null)?.[0]?.captured_date || null;
+  if (!latestDate) {
+    // Genuinely nothing collected yet — distinct from "today's sync is late".
+    return NextResponse.json({ pages: [], total: 0, data_date: null, comparison_date: null });
+  }
+
+  // Compare against the most recent date at least 7 days older than the
+  // current one. Anchoring to "7 days before TODAY" would silently compare
+  // against nothing whenever the data itself is a day or two behind.
+  const cutoff = new Date(Date.parse(latestDate) - 7 * 864e5).toISOString().slice(0, 10);
+  const { data: priorRow } = await db
+    .from("keyword_positions")
+    .select("captured_date")
+    .eq("brand_id", brandId)
+    .not("landing_page", "is", null)
+    .lte("captured_date", cutoff)
+    .order("captured_date", { ascending: false })
+    .limit(1);
+  const comparisonDate = (priorRow as { captured_date: string }[] | null)?.[0]?.captured_date || null;
 
   // Aggregate current positions by landing_page
   const { data: current } = await db
     .from("keyword_positions")
     .select("landing_page, keyword, position, clicks, impressions, ctr")
     .eq("brand_id", brandId)
-    .eq("captured_date", today)
+    .eq("captured_date", latestDate)
     .not("landing_page", "is", null);
 
-  const { data: previous } = await db
-    .from("keyword_positions")
-    .select("landing_page, position, clicks, impressions")
-    .eq("brand_id", brandId)
-    .eq("captured_date", sevenDaysAgo)
-    .not("landing_page", "is", null);
+  const { data: previous } = comparisonDate
+    ? await db
+        .from("keyword_positions")
+        .select("landing_page, position, clicks, impressions")
+        .eq("brand_id", brandId)
+        .eq("captured_date", comparisonDate)
+        .not("landing_page", "is", null)
+    : { data: [] };
 
   // Aggregate by page
   const pageMap = new Map<string, {
@@ -63,7 +98,12 @@ export async function GET(req: NextRequest) {
   const pages = [...pageMap.entries()].map(([page, d]) => {
     const prev = prevPageMap.get(page);
     const clickDelta = prev ? d.clicks - prev.clicks : null;
-    const status = clickDelta == null ? "new"
+    // "new" means the page was absent from a baseline that EXISTS. With no
+    // baseline at all — fewer than 7 days of history — nothing can be said
+    // about a trend, and labelling every page "new" would state something
+    // untrue about all of them.
+    const status = !comparisonDate ? "unknown"
+      : clickDelta == null ? "new"
       : clickDelta > 5 ? "growing"
       : clickDelta < -5 ? "declining"
       : "stable";
@@ -80,5 +120,12 @@ export async function GET(req: NextRequest) {
     };
   }).sort((a, b) => b.clicks - a.clicks);
 
-  return NextResponse.json({ pages, total: pages.length });
+  return NextResponse.json({
+    pages,
+    total: pages.length,
+    // Surfaced so the page can say how fresh the numbers are. Without this a
+    // stale sync looks identical to a healthy one.
+    data_date: latestDate,
+    comparison_date: comparisonDate,
+  });
 }

@@ -34,6 +34,7 @@ export default function WebsitePage() {
   const { summary } = usePortalSummary(brand?.id);
   const [tab, setTab] = useState<Tab>("pages");
   const [pages, setPages] = useState<PageRow[]>([]);
+  const [dataDate, setDataDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +43,12 @@ export default function WebsitePage() {
     setLoading(true);
     authedFetch(`/api/intelligence/content?brand=${brand.id}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) { setPages(d.pages || []); setLoading(false); } })
+      .then((d) => {
+        if (cancelled) return;
+        setPages(d.pages || []);
+        setDataDate(d.data_date || null);
+        setLoading(false);
+      })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [brand?.id]);
@@ -73,7 +79,17 @@ export default function WebsitePage() {
       {tab === "pages" && (
         <div className="p-stack">
           <Panel>
-            <PanelHead title="Page performance" sub="Every page of yours that Google sends traffic to, over the last 7 days." />
+            {/* The data date is shown rather than assumed to be today. Search
+                Console lags a couple of days and the sync runs each morning,
+                so "today" was never an honest label for these numbers. */}
+            <PanelHead
+              title="Page performance"
+              sub={
+                dataDate
+                  ? `Every page Google sends traffic to. Search Console data through ${formatDataDate(dataDate)}.`
+                  : "Every page of yours that Google sends traffic to, over the last 7 days."
+              }
+            />
             <Stagger className="p-stat-grid">
               <StatTile label="Pages ranking" value={pages.length || "—"} tone={pages.length ? "accent" : "muted"} />
               <StatTile label="Total clicks" value={totalClicks ? totalClicks.toLocaleString() : "—"} tone="green" />
@@ -239,5 +255,23 @@ function TrendChip({ status, delta }: { status: string; delta: number | null }) 
     return <span className="p-move-delta down"><IconArrowDown size={11} />{delta != null ? Math.abs(delta) : ""}</span>;
   }
   if (status === "new") return <span className="p-move-delta up">new</span>;
+  // No baseline to compare against yet — say so rather than claiming "stable",
+  // which would assert a trend we cannot actually see.
+  if (status === "unknown") {
+    return <span className="p-na" title="Needs 7 days of history to compare">—</span>;
+  }
   return <span className="p-move-delta flat">stable</span>;
+}
+
+/**
+ * "2026-08-07" -> "Aug 7, 2026".
+ *
+ * Parsed as UTC explicitly: a bare "YYYY-MM-DD" is treated as UTC midnight,
+ * which in any negative-offset timezone renders as the PREVIOUS day. That
+ * would report data as a day staler than it is.
+ */
+function formatDataDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-CA", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  });
 }
