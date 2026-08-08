@@ -77,6 +77,16 @@ export type ConnectionState = {
   actions: ConnectionAction[];
   /** Selectable accounts/properties when more than one exists. */
   accounts: ConnectionAccount[] | null;
+  /**
+   * The customer has signed in but has not yet chosen what to use.
+   *
+   * Exists because the UI previously inferred this from a URL parameter that
+   * it deleted moments later, so the picker vanished on the next render and
+   * the card said "choose which location to use" with nothing to choose from.
+   * Making it part of the state means the picker is driven by the connection
+   * itself and survives a refresh.
+   */
+  awaitingChoice?: boolean;
   /** For `unavailable` only: exactly what it would take to enable this. */
   requirement: string | null;
 };
@@ -458,6 +468,14 @@ async function googleProduct(brand: Brand, key: GoogleProductKey): Promise<Conne
         ? `You're signed in to Google — choose which ${product.resourceNoun} to use.`
         : `Connect your Google account to bring in ${product.name.replace("Google ", "").toLowerCase()} data.`,
       detail: null, lastSyncAt: null, lastSyncLabel: null, lastError: null,
+      // Signed in but nothing chosen: the portal must show the picker, and
+      // must keep showing it on a refresh. Saying so here is what makes that
+      // independent of how the customer arrived on the page.
+      awaitingChoice: signedIn,
+      // Connect stays available even once signed in: it is how a customer
+      // signs in with a DIFFERENT Google account, which is exactly what the
+      // picker's empty state tells them to do when an account has nothing to
+      // offer. Removing it would make that advice impossible to follow.
       actions: ["connect"],
     };
   }

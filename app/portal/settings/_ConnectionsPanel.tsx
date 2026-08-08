@@ -75,6 +75,19 @@ function GooglePicker({
       </div>
     );
   }
+  if (state.reason === "scope_missing") {
+    // Distinct from the message above on purpose: this one the customer can
+    // actually fix, and telling them to wait would mean waiting forever.
+    return (
+      <div className="p-conn-note">
+        <IconAlert size={13} />
+        <span>
+          This Google account was connected for something else and hasn&apos;t given us
+          permission for {noun}s yet. Press Connect to grant it.
+        </span>
+      </div>
+    );
+  }
   if (!state.items.length) {
     return (
       <div className="p-conn-note">
@@ -185,6 +198,21 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       }));
     }
   }, [brandId]);
+
+  // Any Google connection that is signed in but has nothing chosen must show
+  // its picker — every time the page is rendered, not only in the moment after
+  // returning from Google. This previously depended on a URL parameter that
+  // was deleted immediately afterwards, so a refresh left the customer being
+  // told to choose with nothing to choose from.
+  useEffect(() => {
+    if (!rows) return;
+    for (const row of rows) {
+      if (row.awaitingChoice && !googlePick[row.key]) void loadGoogleOptions(row.key);
+    }
+    // googlePick is deliberately not a dependency: loadGoogleOptions writes to
+    // it, so including it would re-run this on its own result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, loadGoogleOptions]);
 
   // Google sends the customer back here with a result code. Report it, then
   // strip it from the URL so a refresh doesn't replay the same message.

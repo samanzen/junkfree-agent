@@ -54,9 +54,25 @@ export async function GET(req: NextRequest) {
     if (err instanceof GoogleReauthRequired) {
       return NextResponse.json({ accounts: [], resources: [], reason: "reauth_required" }, { status: 200 });
     }
-    // Most commonly Business Profile at 0 quota pending Google's approval.
     console.warn(`[google/select] listing ${product} failed:`, err);
-    return NextResponse.json({ accounts: [], resources: [], reason: "unavailable" }, { status: 200 });
+
+    // These read alike in a log and mean opposite things to a customer:
+    //
+    //   429 / quota   Google has not approved this project's access yet.
+    //                 Nothing the customer can do — measured on Business
+    //                 Profile, which sits at 0 requests per minute until then.
+    //
+    //   403 scopes    The signed-in account never granted this permission,
+    //                 because it signed in for a different product. Fixed by
+    //                 reconnecting, which re-asks with the right scope.
+    //
+    // Reporting the second as "waiting on Google" would leave someone waiting
+    // for something that is never going to arrive.
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason = /insufficient authentication scopes|Insufficient Permission|ACCESS_TOKEN_SCOPE/i.test(msg)
+      ? "scope_missing"
+      : "unavailable";
+    return NextResponse.json({ accounts: [], resources: [], reason }, { status: 200 });
   }
 }
 

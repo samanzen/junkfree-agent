@@ -212,6 +212,39 @@ test("tokens and secrets are never returned to the browser", () => {
   }
 });
 
+// ── the picker must survive a refresh ───────────────────────────────────────
+test("a signed-in product with nothing chosen declares that it needs a choice", () => {
+  // The UI used to infer this from a URL parameter it deleted moments later,
+  // so the picker disappeared and the card said "choose which location to
+  // use" with nothing to choose from.
+  const src = read("lib/connections.ts");
+  expect(src).toMatch(/awaitingChoice\?: boolean;/);
+  expect(src).toMatch(/awaitingChoice: signedIn,/);
+});
+
+test("the picker loads from connection state, not from a URL parameter", () => {
+  const src = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(src).toMatch(/if \(row\.awaitingChoice && !googlePick\[row\.key\]\) void loadGoogleOptions\(row\.key\)/);
+});
+
+test("Connect stays available while a choice is pending", () => {
+  // It is how a customer signs in with a different Google account — which is
+  // exactly what the picker's empty state advises when an account has nothing
+  // to offer.
+  const src = read("lib/connections.ts");
+  expect(src).toMatch(/awaitingChoice: signedIn,[\s\S]{0,400}actions: \["connect"\]/);
+});
+
+test("the picker explains every outcome rather than rendering nothing", () => {
+  // Loading, needs re-auth, awaiting Google's approval, and genuinely empty
+  // are four different things and each gets its own words.
+  const src = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(src).toMatch(/if \(state\.loading\)/);
+  expect(src).toMatch(/state\.reason === "reauth_required"/);
+  expect(src).toMatch(/state\.reason === "unavailable"/);
+  expect(src).toMatch(/if \(!state\.items\.length\)/);
+});
+
 // ── returning to where the customer started ─────────────────────────────────
 test("the callback returns to the Connections tab, not the page default", () => {
   const src = read("app/api/portal/google/callback/route.ts");
