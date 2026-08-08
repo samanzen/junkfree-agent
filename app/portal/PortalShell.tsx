@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { LazyMotion, MotionConfig, domMax, m, AnimatePresence } from "framer-motion";
 import { usePortalAuth } from "@/lib/portalAuth";
 import { useDialog } from "@/lib/ui/useDialog";
+import { pageTitle } from "@/lib/ui/tokens";
 import { PORTAL_CSS } from "./portalTheme";
 import { EASE } from "./_components/motion";
 import BottomNav from "./_components/BottomNav";
@@ -64,6 +65,17 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const { theme, toggle } = usePortalTheme();
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
+
+  // The browser tab carries the SIGNED-IN tenant's own name.
+  //
+  // Set here rather than through generateMetadata because the portal resolves
+  // its brand client-side from a bearer token in localStorage — the server
+  // rendering this page has no idea which tenant is about to be shown. Falls
+  // back to the neutral platform name whenever no brand is resolved, so a
+  // customer never sees another tenant's name and never sees a blank title.
+  useEffect(() => {
+    document.title = pageTitle(brand?.name);
+  }, [brand?.name]);
 
   // Focus returns to whichever control opened the drawer — the topbar button or
   // the bottom bar's "More" — rather than to the top of the document.

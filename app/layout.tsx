@@ -1,5 +1,5 @@
 import { Inter } from "next/font/google";
-import { GLOBAL_CSS } from "@/lib/ui/tokens";
+import { GLOBAL_CSS, PLATFORM_NAME } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
 // Inter, self-hosted by next/font at build time. This replaces THREE separate
@@ -22,8 +22,12 @@ const inter = Inter({
   weight: ["400", "500", "600", "700", "800"],
 });
 
+// The platform's own identity, never a tenant's. A signed-in customer's
+// business name is applied on top of this per page (see PortalShell), and this
+// remains the title for everything outside a tenant context — the login page,
+// errors, and the first paint before a brand has resolved.
 export const metadata = {
-  title: "Junk Free — SEO Agent",
+  title: PLATFORM_NAME,
   description: "Autonomous SEO operations dashboard.",
 };
 

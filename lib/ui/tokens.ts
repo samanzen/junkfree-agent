@@ -11,6 +11,23 @@
 // -- breakpoints, the spacing scale, the touch-target floor, font stacks -- so
 // both can reference the same values. Each surface keeps its own component CSS.
 
+// ── Platform identity ───────────────────────────────────────────────────────
+//
+// The neutral, tenant-agnostic name of the product itself. It exists because
+// the root layout previously hardcoded one customer's business name in the
+// browser title, so EVERY tenant saw "Junk Free" in their tab.
+//
+// This is the PLATFORM's name, never a tenant's. A tenant's own name comes
+// from the database (brands.name) and is applied per page — see PortalShell.
+// Deliberately a placeholder label until a real product name is chosen; it
+// lives here so that decision is one edit, not a search across the codebase.
+export const PLATFORM_NAME = "SEO Platform";
+
+/** "Acme Roofing | SEO Platform", or just the platform name when no tenant is resolved. */
+export function pageTitle(tenantName?: string | null): string {
+  return tenantName ? `${tenantName} | ${PLATFORM_NAME}` : PLATFORM_NAME;
+}
+
 // ── Breakpoints ─────────────────────────────────────────────────────────────
 // Three, chosen from what the layouts actually need rather than device names:
 //   sm  the point below which multi-column layouts and wide tables stop working
