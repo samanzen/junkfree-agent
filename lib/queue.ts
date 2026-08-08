@@ -104,11 +104,18 @@ export async function finishJob(id: string, errorMsg?: string) {
 // cron/admin flows.
 export async function clearStale(brandId?: string) {
   const cutoff = new Date(Date.now() - 3600_000).toISOString();
+
+  // Staleness is about how long a job has been RUNNING, not how long ago it
+  // was enqueued. Filtering on created_at meant a job that sat queued for two
+  // days and then started thirty seconds ago was already eligible to be
+  // killed as a "1h timeout" — it would be reclaimed mid-execution and
+  // mislabelled. created_at remains the fallback for rows written before
+  // started_at existed (it is a best-effort column, see claimNext).
   let query = db
     .from("jobs")
     .select("id")
     .eq("status", "running")
-    .lt("created_at", cutoff);
+    .or(`started_at.lt.${cutoff},and(started_at.is.null,created_at.lt.${cutoff})`);
   if (brandId) query = query.eq("brand_id", brandId);
 
   const { data: stale } = await query;

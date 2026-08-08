@@ -14,12 +14,38 @@ import { renderedPageContent } from "./dataforseo";
  */
 export const RENDER_THRESHOLD_WORDS = 100;
 
+/**
+ * How long any single request to a customer's site may take.
+ *
+ * These fetches had no timeout at all. A customer site that accepts a
+ * connection and then never answers holds the request open for as long as the
+ * platform will allow — and this code runs inside a job step with a 60s
+ * function budget, so one unresponsive host consumed the ENTIRE budget. The
+ * function was then killed by the platform before it could mark its job
+ * finished, leaving the row stuck at "running".
+ *
+ * That is not hypothetical: pomobuild.ca stopped answering, and its content
+ * job sat "running" for 16+ hours as a result.
+ *
+ * 10s is well beyond a healthy response and well inside the budget, so a dead
+ * host costs a few seconds instead of the whole invocation.
+ */
+export const FETCH_TIMEOUT_MS = 10_000;
+
+/** A crawl request that cannot outlive its usefulness. */
+function crawlFetch(url: string): Promise<Response> {
+  return fetch(url, {
+    headers: { "User-Agent": "SEO-Platform-Auditor" },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+}
+
 // Fetch and parse the sitemap into a list of URLs.
 async function sitemapUrls(siteUrl: string): Promise<string[]> {
   const base = siteUrl.replace(/\/$/, "");
   for (const path of ["/sitemap.xml", "/sitemap_index.xml"]) {
     try {
-      const res = await fetch(base + path, { headers: { "User-Agent": "SEO-Platform-Auditor" } });
+      const res = await crawlFetch(base + path);
       if (!res.ok) continue;
       const xml = await res.text();
       const urls = [...xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)].map((m) => m[1].trim());
@@ -65,7 +91,7 @@ export async function inspectPage(
   opts: { render?: boolean } = {}
 ): Promise<AuditedPage | null> {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "SEO-Platform-Auditor" } });
+    const res = await crawlFetch(url);
     if (!res.ok) return null;
     const html = await res.text();
     const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "";

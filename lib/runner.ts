@@ -14,6 +14,7 @@ import type { Brand } from "./brands";
 import {
   enqueue,
   claimNext,
+  clearStale,
   finishJob,
   queuedCount,
   pendingCount,
@@ -94,6 +95,20 @@ export type StepResult = { done: boolean; kind?: JobKind; remaining?: number; er
 // that was claimed failed -- so a run can never get stuck at "running" just
 // because its last job errored.
 export async function processOneJob(brandId: string): Promise<StepResult> {
+  // Reclaim this brand's orphaned jobs BEFORE claiming a new one.
+  //
+  // A serverless invocation that is killed mid-job never reaches finishJob(),
+  // so its row is stranded at "running" with no process behind it. Reclamation
+  // used to happen only at the start of a cron tick, and the crons run daily —
+  // so a job orphaned three minutes into a tick stayed stuck until the next
+  // one. Measured: pomobuild's content job sat "running" for 16+ hours with a
+  // 21-hour gap before the next sweep could have touched it.
+  //
+  // Sweeping here means any drain attempt recovers it, so the window shrinks
+  // from a day to however often work is processed. Scoped to this brand, so a
+  // customer's request never touches another tenant's rows.
+  await clearStale(brandId);
+
   const job = await claimNext(brandId);
   if (!job) {
     const remaining = await queuedCount(brandId);
