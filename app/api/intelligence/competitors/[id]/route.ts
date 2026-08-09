@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { rankedKeywords, geoOf } from "@/lib/dataforseo";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -26,8 +27,13 @@ export async function GET(
 
   const competitorBrand = competitor.brands as { id: string; dataforseo_location_code: number | null; dataforseo_language_code: string };
   const brandId = competitorBrand.id;
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "external");
+  if (limited) return limited;
 
   // Brand's own keywords
   const { data: brandKws } = await db
@@ -84,8 +90,13 @@ export async function DELETE(
   const { id } = await params;
   const { data: competitor } = await db.from("competitors").select("brand_id").eq("id", id).single();
   if (!competitor) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const accessErr = requireBrandAccess(auth, competitor.brand_id);
+const accessErr = requireBrandAccess(auth, competitor.brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(competitor.brand_id!, "external");
+  if (limited) return limited;
 
   await db.from("competitors").update({ active: false }).eq("id", id);
   return NextResponse.json({ ok: true });

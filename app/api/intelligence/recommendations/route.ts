@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { callClaude, extractJSON, type CallMeta } from "@/lib/anthropic";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -14,8 +15,13 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "ai");
+  if (limited) return limited;
 
   const section = "intelligence_recommendations";
 

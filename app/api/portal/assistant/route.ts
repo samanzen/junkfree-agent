@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { callClaude } from "@/lib/anthropic";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -20,8 +21,13 @@ export async function POST(req: NextRequest) {
   if (!brand_id || typeof question !== "string" || !question.trim()) {
     return NextResponse.json({ error: "brand_id and question required" }, { status: 400 });
   }
-  const accessErr = requireBrandAccess(auth, brand_id);
+const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brand_id!, "ai");
+  if (limited) return limited;
 
   const [{ data: brand }, { data: snap }, { data: keywords }, { data: drafts }] = await Promise.all([
     db.from("brands").select("name, services, service_area, site_url").eq("id", brand_id).single(),

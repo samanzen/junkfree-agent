@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { enqueue } from "@/lib/queue";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 30;
 
@@ -15,8 +16,13 @@ export async function POST(req: NextRequest) {
   if (!body?.action || !body?.brand_id) {
     return NextResponse.json({ error: "action and brand_id required" }, { status: 400 });
   }
-  const accessErr = requireBrandAccess(auth, body.brand_id);
+const accessErr = requireBrandAccess(auth, body.brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(body.brand_id!, "dispatch");
+  if (limited) return limited;
 
   const { action, brand_id, payload = {} } = body;
 

@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { enqueue } from "@/lib/queue";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 import { resolvePublishTarget, executionLogReachable } from "@/lib/execution/engine";
 import { describeAdapters } from "@/lib/execution/registry";
 import { toSiteChange, type DraftLike } from "@/lib/execution/changes";
@@ -31,8 +32,13 @@ export async function GET(req: NextRequest) {
 
   const brandId = new URL(req.url).searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "dispatch");
+  if (limited) return limited;
 
   const [target, log] = await Promise.all([resolvePublishTarget(brandId), executionLogReachable()]);
 
@@ -73,8 +79,13 @@ export async function POST(req: NextRequest) {
   if (!brand_id || !draft_id) {
     return NextResponse.json({ error: "brand_id and draft_id required" }, { status: 400 });
   }
-  const accessErr = requireBrandAccess(auth, brand_id);
+const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brand_id!, "dispatch");
+  if (limited) return limited;
 
   const brand = await getBrandById(brand_id);
   if (!brand || !brand.active) return NextResponse.json({ error: "brand not found" }, { status: 404 });

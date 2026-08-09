@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { generatePostImages } from "@/lib/images";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 import { quotaFor } from "@/lib/capabilities";
 
 export const maxDuration = 60;
@@ -21,8 +22,13 @@ export async function POST(req: NextRequest) {
   if (isAuthError(auth)) return auth;
 
   const { brand_id: brandId } = (await req.json().catch(() => ({}))) as { brand_id?: string };
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "dispatch");
+  if (limited) return limited;
 
   // Find the newest content draft for THIS brand that has no image yet.
   const { data: drafts } = await db

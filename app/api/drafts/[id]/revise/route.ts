@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { reviseDraft } from "@/lib/agents";
 import type { Brand } from "@/lib/brands";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -18,8 +19,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: draft } = await db.from("drafts").select("*").eq("id", id).single();
   if (!draft) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const accessErr = requireBrandAccess(auth, draft.brand_id);
+const accessErr = requireBrandAccess(auth, draft.brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(draft.brand_id!, "ai");
+  if (limited) return limited;
 
   const { data: brand } = await db.from("brands").select("*").eq("id", draft.brand_id).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

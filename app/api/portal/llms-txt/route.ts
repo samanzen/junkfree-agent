@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getBrandById } from "@/lib/brands";
 import { buildLlmsTxt } from "@/lib/geo-agent";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 30;
 
@@ -26,8 +27,13 @@ export async function GET(req: NextRequest) {
 
   const brandId = new URL(req.url).searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "ai");
+  if (limited) return limited;
 
   const brand = await getBrandById(brandId);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

@@ -4,6 +4,7 @@ import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
 import { discoverCompetitors, geoOf } from "@/lib/dataforseo";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -19,8 +20,13 @@ export async function POST(req: NextRequest) {
 
   const { brand_id } = await req.json().catch(() => ({}));
   if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
-  const accessErr = requireBrandAccess(auth, brand_id);
+const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brand_id!, "external");
+  if (limited) return limited;
 
   const brand = await getBrandById(brand_id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

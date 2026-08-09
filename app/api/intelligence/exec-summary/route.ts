@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callClaude } from "@/lib/anthropic";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 30;
 
@@ -12,8 +13,13 @@ export async function POST(req: NextRequest) {
 
   const { brandId, section, brandName, recommendations, data } = await req.json().catch(() => ({}));
   if (!brandId) return NextResponse.json({ error: "brandId required" }, { status: 400 });
-  const accessErr = requireBrandAccess(auth, brandId);
+const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Rate limit AFTER authorisation, so an unauthorised caller can never
+  // consume a tenant's allowance.
+  const limited = await enforceRate(brandId!, "ai");
+  if (limited) return limited;
 
   const topRec = (recommendations || [])[0];
   const summary = await callClaude({
