@@ -41,41 +41,80 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
   });
 
   useEffect(() => {
+    // Every path below MUST end in setState. This block previously had no
+    // try/catch, so a single rejected await — a non-OK response, or .json() on
+    // an HTML error page — skipped setState entirely and left loading:true
+    // FOREVER. The portal then showed skeletons indefinitely with no error and
+    // no way out. Observed live as an admin with brand_id:null.
+    let cancelled = false;
+    const settle = (s: Omit<PortalAuthState, "signOut">) => { if (!cancelled) setState(s); };
+
+    /** Throws with a readable message rather than yielding undefined. */
+    async function getJson(url: string) {
+      const res = await authedFetch(url);
+      if (!res.ok) throw new Error(`${url} returned ${res.status}`);
+      return res.json();
+    }
+
     (async () => {
-      const { data } = await supabaseBrowser().auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) { router.push("/login"); return; }
+      try {
+        const { data } = await supabaseBrowser().auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) { router.push("/login"); return; }
 
-      const me = await (await authedFetch("/api/me")).json();
-      const isAdmin = me.role === "admin";
+        const me = await getJson("/api/me");
+        const isAdmin = me.role === "admin";
 
-      if (!me.brand_id && !isAdmin) {
-        setState({ loading: false, error: "No brand linked to your account. Please contact support.", isAdmin, brand: null });
-        return;
-      }
-
-      let brandId: string | null = me.brand_id || null;
-      if (!brandId) {
-        brandId = new URLSearchParams(window.location.search).get("brand");
-        if (!brandId) {
-          const platform = await (await authedFetch("/api/platform")).json();
-          brandId = platform.brands?.[0]?.id ?? null;
+        if (!me.brand_id && !isAdmin) {
+          settle({ loading: false, error: "No brand is linked to your account yet. Please contact your account manager.", isAdmin, brand: null });
+          return;
         }
-      }
-      if (!brandId) {
-        setState({ loading: false, error: "No active brands found.", isAdmin, brand: null });
-        return;
-      }
 
-      const platform = await (await authedFetch(`/api/platform?brand=${brandId}`)).json();
-      const brand = platform.brands?.[0] || null;
-      if (!brand) {
-        setState({ loading: false, error: "Brand not found.", isAdmin, brand: null });
-        return;
-      }
+        // Tenancy is NOT relaxed here. A customer is always pinned to their own
+        // brand_id. An admin may pass ?brand=, and otherwise falls back to the
+        // first brand /api/platform returns — that endpoint is server-side
+        // authorised, so the fallback is a permitted brand, never a guess.
+        let brandId: string | null = me.brand_id || null;
+        if (!brandId) {
+          brandId = new URLSearchParams(window.location.search).get("brand");
+          if (!brandId) {
+            const platform = await getJson("/api/platform");
+            brandId = platform.brands?.[0]?.id ?? null;
+          }
+        }
+        if (!brandId) {
+          settle({
+            loading: false, isAdmin, brand: null,
+            error: isAdmin
+              ? "No brand selected. Open a customer from the admin dashboard to preview their portal."
+              : "No active brands found.",
+          });
+          return;
+        }
 
-      setState({ loading: false, error: "", isAdmin, brand });
+        const platform = await getJson(`/api/platform?brand=${brandId}`);
+        const brand = platform.brands?.[0] || null;
+        if (!brand) {
+          settle({
+            loading: false, isAdmin, brand: null,
+            error: isAdmin
+              ? "That brand could not be loaded. It may be inactive, or you may not have access to it."
+              : "Brand not found.",
+          });
+          return;
+        }
+
+        settle({ loading: false, error: "", isAdmin, brand });
+      } catch (e) {
+        // The whole point of this catch: a failure now ENDS the loading state.
+        settle({
+          loading: false, isAdmin: false, brand: null,
+          error: `We couldn't load your portal. ${e instanceof Error ? e.message : "Please try again."}`,
+        });
+      }
     })();
+
+    return () => { cancelled = true; };
     /* eslint-disable-next-line */
   }, []);
 

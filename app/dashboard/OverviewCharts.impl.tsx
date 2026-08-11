@@ -4,6 +4,10 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { useChartTouch } from "@/lib/ui/useChartTouch";
+// A leaf module (it only reads lib/ui/tokens), so importing it here does not
+// pull Overview back into this chunk — the reason the constants below were
+// originally re-declared by hand.
+import { SYSTEM, POSITIVE, ATTENTION, AXIS, GRID } from "./intelligence/palette";
 
 // The three Recharts blocks that used to sit inline in Overview.tsx, moved
 // behind a lazy boundary (see OverviewCharts.tsx for the measurement).
@@ -11,12 +15,13 @@ import { useChartTouch } from "@/lib/ui/useChartTouch";
 // The JSX below is a verbatim move — same elements, same props, same colours,
 // same heights, same animation durations. Only two things changed, both
 // mechanical: useChartTouch() is called here rather than passed down, and the
-// colour constants are re-declared locally instead of imported, so this module
-// does not drag Overview back into the bundle it is trying to leave.
+// colour constants now alias the shared palette (previously hand-copied hex,
+// which is how this file drifted onto its own scheme).
 
-const ACCENT = "#6C5CE7";
-const GREEN = "#00B894";
-const AMBER = "#F5B461";
+// Shared palette — see app/dashboard/intelligence/palette.ts.
+const ACCENT = SYSTEM;
+const GREEN = POSITIVE;
+const AMBER = ATTENTION;
 
 type ChartRow = Record<string, string | number | null>;
 type ColorConfig = { key: string; name: string; color: string; gradient: string };
@@ -32,9 +37,9 @@ export function TrendArea({ data, cc }: { data: ChartRow[]; cc: ColorConfig }) {
             <stop offset="100%" stopColor={cc.color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-        <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
-        <YAxis tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+        <XAxis {...t.xAxis} dataKey="d" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} />
+        <YAxis tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} />
         <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12, boxShadow: "0 8px 24px rgba(0,0,0,.08)" }} />
         <Area type="monotone" dataKey={cc.key} stroke={cc.color} strokeWidth={2.5}
           fill={`url(#${cc.gradient})`} name={cc.name} animationDuration={900} />
@@ -48,7 +53,7 @@ export function WeeklyBars({ data }: { data: { week: string; count: number }[] }
   return (
     <ResponsiveContainer width="100%" height={80}>
       <BarChart data={data} margin={{ top: 8, right: 0, left: -20, bottom: 0 }}>
-        <XAxis {...t.xAxis} dataKey="week" tick={{ fill: "#B2BAC8", fontSize: 10 }} tickLine={false} axisLine={false} />
+        <XAxis {...t.xAxis} dataKey="week" tick={{ fill: AXIS, fontSize: 10 }} tickLine={false} axisLine={false} />
         <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
         <Bar dataKey="count" fill={ACCENT} radius={[4, 4, 0, 0]} name="Drafts" />
       </BarChart>
@@ -61,10 +66,10 @@ export function HealthVsPosition({ data }: { data: ChartRow[] }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 8, right: 16, left: -18, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-        <XAxis {...t.xAxis} dataKey="d" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "#EEF0F4" }} />
-        <YAxis yAxisId="left" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fill: "#9AA3B2", fontSize: 11 }} tickLine={false} axisLine={false} reversed />
+        <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+        <XAxis {...t.xAxis} dataKey="d" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={{ stroke: GRID }} />
+        <YAxis yAxisId="left" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} />
+        <YAxis yAxisId="right" orientation="right" tick={{ fill: AXIS, fontSize: 11 }} tickLine={false} axisLine={false} reversed />
         <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 10, fontSize: 12 }} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
         <Line yAxisId="left" type="monotone" dataKey="health" stroke={GREEN} strokeWidth={2} dot={false} name="Site health %" animationDuration={900} />

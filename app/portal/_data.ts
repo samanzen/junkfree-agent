@@ -56,6 +56,54 @@ export function usePlatformData(brandId: string | undefined) {
   return { data, loading };
 }
 
+// ── /api/portal/activity ────────────────────────────────────────────────────
+// What the agents have actually been doing. Read-only; see lib/agentActivity.
+export type AgentActivityItem = {
+  id: string; kind: string; status: "queued" | "running" | "done" | "failed";
+  created_at: string; started_at: string | null; finished_at: string | null;
+  duration_ms: number | null; error: string | null;
+};
+export type AgentActivity = {
+  items: AgentActivityItem[];
+  counts: Record<"queued" | "running" | "done" | "failed", number>;
+  active: boolean;
+};
+
+/**
+ * Polls only while work is actually in flight. A dashboard that re-fetches on a
+ * fixed timer forever is a battery cost with nothing to show; once the queue is
+ * idle this settles and stops, and resumes on the next visit or refresh.
+ */
+export function useAgentActivity(brandId: string | undefined, limit = 6) {
+  const [data, setData] = useState<AgentActivity | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      authedFetch(`/api/portal/activity?brand=${brandId}&limit=${limit}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: AgentActivity | null) => {
+          if (cancelled) return;
+          if (d) setData(d);
+          setLoading(false);
+          // Only keep watching while something is queued or running.
+          if (d?.active) timer = setTimeout(load, 15000);
+        })
+        .catch(() => { if (!cancelled) setLoading(false); });
+    };
+
+    setLoading(true);
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [brandId, limit]);
+
+  return { activity: data, loading };
+}
+
 // ── /api/portal/summary ─────────────────────────────────────────────────────
 export type PortalMetrics = {
   organic_traffic: number | null; organic_keywords: number | null;

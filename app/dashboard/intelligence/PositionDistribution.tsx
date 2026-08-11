@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { authedFetch } from "@/lib/authedFetch";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 import { useChartTouch } from "@/lib/ui/useChartTouch";
+import { SYSTEM, POSITIVE, ATTENTION, MUTED, AXIS } from "./palette";
 
 type Snap = { captured_date: string; top_3: number; top_10: number; top_20: number; top_50: number; top_100: number; not_ranked: number; total_clicks: number };
 
@@ -30,11 +31,11 @@ export default function PositionDistribution({ brandId }: { brandId: string }) {
 
   // Build breakdown from latest snapshot
   const breakdown = [
-    { label: "Top 3",    count: latest.top_3,                                            color: "#00B894" },
-    { label: "4–10",     count: Math.max(0, latest.top_10 - latest.top_3),               color: "#6C5CE7" },
-    { label: "11–20",    count: Math.max(0, latest.top_20 - latest.top_10),              color: "#F5B461" },
+    { label: "Top 3",    count: latest.top_3,                                            color: POSITIVE },
+    { label: "4–10",     count: Math.max(0, latest.top_10 - latest.top_3),               color: SYSTEM },
+    { label: "11–20",    count: Math.max(0, latest.top_20 - latest.top_10),              color: ATTENTION },
     { label: "21–50",    count: Math.max(0, latest.top_50 - latest.top_20),              color: "#E17055" },
-    { label: "51–100",   count: Math.max(0, latest.top_100 - latest.top_50),             color: "#B2BAC8" },
+    { label: "51–100",   count: Math.max(0, latest.top_100 - latest.top_50),             color: MUTED },
     { label: "Not ranked",count: latest.not_ranked,                                       color: "#E8ECF0" },
   ];
 
@@ -73,12 +74,12 @@ export default function PositionDistribution({ brandId }: { brandId: string }) {
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: AXIS, fontSize: 10 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: AXIS, fontSize: 10 }} tickLine={false} axisLine={false} />
               <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
-              <Bar dataKey="Top 3" fill="#00B894" radius={[3,3,0,0]} />
-              <Bar dataKey="Top 10" fill="#6C5CE7" radius={[3,3,0,0]} />
-              <Bar dataKey="Top 20" fill="#F5B461" radius={[3,3,0,0]} />
+              <Bar dataKey="Top 3" fill={POSITIVE} radius={[3,3,0,0]} />
+              <Bar dataKey="Top 10" fill={SYSTEM} radius={[3,3,0,0]} />
+              <Bar dataKey="Top 20" fill={ATTENTION} radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

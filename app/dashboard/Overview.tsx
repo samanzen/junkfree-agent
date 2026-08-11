@@ -6,6 +6,7 @@ import ResponsiveTable from "@/app/_components/ResponsiveTable";
 // lazy boundary (./OverviewCharts), which is what keeps it out of this route's
 // initial bundle.
 import { TrendArea, WeeklyBars, HealthVsPosition } from "./OverviewCharts";
+import { SYSTEM, POSITIVE, ATTENTION, NEGATIVE, ACCENT_ALT, BRAND } from "./intelligence/palette";
 
 type Snap = {
   organic_traffic: number | null; organic_keywords: number | null;
@@ -22,10 +23,12 @@ type Agent = {
   weekly_activity: { week: string; count: number }[];
 };
 
-const ACCENT = "#6C5CE7";
-const GREEN = "#00B894";
-const AMBER = "#F5B461";
-const CORAL = "#FF6B6B";
+// Chart colours come from the shared Intelligence palette, so the admin
+// Overview and the Intelligence tab can no longer drift apart.
+const ACCENT = SYSTEM;
+const GREEN = POSITIVE;
+const AMBER = ATTENTION;
+const CORAL = NEGATIVE;
 
 export default function Overview({ brandId, token }: { brandId: string; token?: string }) {
   // useChartTouch moved into OverviewCharts.impl with the charts themselves —
@@ -106,13 +109,13 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
         <KpiCard label="Ranking keywords" value={c.organic_keywords} d={delta("organic_keywords")}
           color={GREEN} hint="Keywords appearing in Google" />
         <KpiCard label="Backlinks" value={c.backlinks} d={delta("backlinks")}
-          color="#0984E3" hint="Total inbound links" />
+          color={ACCENT_ALT} hint="Total inbound links" />
         <KpiCard label="Referring domains" value={c.referring_domains} d={delta("referring_domains")}
           color="#E17055" hint="Unique sites linking to you" />
         <KpiCard label="Avg. position" value={c.avg_position} d={delta("avg_position")}
           color={AMBER} decimals={1} invert hint="Lower is better" />
         <KpiCard label="Striking distance" value={c.striking_distance} d={delta("striking_distance")}
-          color="#E84393" hint="Keywords in pos 5–20" />
+          color={BRAND} hint="Keywords in pos 5–20" />
         <KpiCard label="AI visibility" value={c.ai_visibility} suffix="%"
           color="#A29BFE" hint="Cited in ChatGPT / Gemini" />
         <KpiCard label="Site health" value={c.site_health} suffix="%"

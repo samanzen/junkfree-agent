@@ -6,7 +6,7 @@
 
 import fs from "fs";
 import { test, expect } from "vitest";
-import { GLOBAL_CSS, MOTION, touchTargetCSS } from "./tokens";
+import { GLOBAL_CSS, MOTION, touchTargetCSS, SEMANTIC, BRAND_COLOR } from "./tokens";
 import { PORTAL_CSS } from "@/app/portal/portalTheme";
 
 const ROOT = process.cwd();
@@ -155,16 +155,36 @@ function ratio(a: string, b: string): number {
   const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (l1 + 0.05) / (l2 + 0.05);
 }
+// Bounded by the block's own closing brace rather than a fixed character
+// count. The previous 3000-char window silently spilled into whichever rule
+// came next as soon as a block got shorter, so the DARK values overwrote the
+// light ones and the test then measured light text against a dark surface.
+// None of these blocks nest, so the first `}` is the real end.
 function varsIn(src: string, marker: string): Record<string, string> {
-  const block = src.slice(src.indexOf(marker), src.indexOf(marker) + 3000);
+  const start = src.indexOf(marker);
+  if (start < 0) throw new Error(`block not found: ${marker}`);
+  const end = src.indexOf("}", start);
+  const block = src.slice(start, end < 0 ? undefined : end);
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{6})/g)) out[m[1]] = m[2];
   return out;
 }
 
 const light = varsIn(PORTAL_CSS, ".portal {");
-const dark = varsIn(PORTAL_CSS, "color-scheme: dark");
-const admin = varsIn(DASH, ".sr {");
+// The explicit toggle rule, whose body is the same darkVars() emission.
+const dark = varsIn(PORTAL_CSS, '.portal[data-theme="dark"] {');
+// The admin's neutrals are still literal in its stylesheet, but its semantic
+// colour now comes from the shared palette in lib/ui/tokens.ts rather than
+// being declared here — so scraping the file would no longer find it. Reading
+// the two from their respective sources keeps this checking real values.
+const admin: Record<string, string> = {
+  ...varsIn(DASH, ".sr {"),
+  accent: BRAND_COLOR.light.base,
+  green: SEMANTIC.light.green,
+  amber: SEMANTIC.light.amber,
+  coral: SEMANTIC.light.red,
+  violet: SEMANTIC.light.blue,
+};
 
 test("portal light: every text colour clears 4.5:1 on surface", () => {
   const fails: string[] = [];

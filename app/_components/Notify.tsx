@@ -267,7 +267,7 @@ const NOTIFY_CSS = `
 .nt-detail { font-size:12.5px; line-height:1.5; color:#A8B0BD; margin-top:2px; overflow-wrap:anywhere; }
 
 .nt-close {
-  flex:none; background:none; border:0; cursor:pointer; color:#8A93A6;
+  flex:none; background:none; border:0; cursor:pointer; color:#616C82;
   width:26px; height:26px; border-radius:var(--radius-xs); display:grid; place-items:center;
   transition:color var(--dur-2), background var(--dur-2);
 }
@@ -296,19 +296,33 @@ const NOTIFY_CSS = `
   min-height:42px; transition:background var(--dur-2), border-color var(--dur-2), color var(--dur-2);
 }
 @media (pointer:coarse) { .nt-btn { min-height:44px; flex:1; } }
-.nt-btn:focus-visible { outline:2px solid #6C5CE7; outline-offset:2px; }
+/* This overlay is mounted at the document root, outside both scoped surfaces,
+   so it cannot read their custom properties and carries literal values. They
+   are the shared palette's values, kept in step by lib/ui/instrument.test.ts
+   rather than by memory — this file previously still held the retired indigo
+   (#6C5CE7 / #5B5FD6) and so rendered every confirm dialog off-brand. */
+.nt-btn:focus-visible { outline:2px solid #2563EB; outline-offset:2px; }
 .nt-btn-ghost { background:#fff; border-color:#E2E6EE; color:#4A5568; }
 .nt-btn-ghost:hover { border-color:#C6CEDA; color:#1A2030; }
-.nt-btn-primary { background:#5B5FD6; color:#fff; }
-.nt-btn-primary:hover { background:#4E52C4; }
-.nt-btn-danger { background:#D64545; color:#fff; }
-.nt-btn-danger:hover { background:#C13A3A; }
+.nt-btn-primary { background:#2563EB; color:#fff; }
+.nt-btn-primary:hover { background:#1D4FD8; }
+.nt-btn-primary:active { background:#1A45BE; }
+.nt-btn-danger { background:#B3261E; color:#fff; }
+.nt-btn-danger:hover { background:#951F18; }
 
 @media (prefers-color-scheme: dark) {
   .nt-confirm { background:#161A21; color:#E8ECF2; box-shadow:0 24px 64px rgba(0,0,0,.5); }
   .nt-confirm-body { color:#A3ACBA; }
   .nt-btn-ghost { background:transparent; border-color:#2C333E; color:#A3ACBA; }
   .nt-btn-ghost:hover { border-color:#3D4552; color:#E8ECF2; }
+  /* The brand inverts in dark, so the primary action has to invert with it —
+     a #1B1F24 fill on a #161A21 dialog is very nearly invisible. */
+  .nt-btn:focus-visible { outline-color:#EDF0F2; }
+  .nt-btn-primary { background:#EDF0F2; color:#14171A; }
+  .nt-btn-primary:hover { background:#FFFFFF; }
+  .nt-btn-primary:active { background:#D6DBDF; }
+  .nt-btn-danger { background:#F79189; color:#14171A; }
+  .nt-btn-danger:hover { background:#FBA9A2; }
 }
 
 /* No prefers-reduced-motion block here on purpose: GLOBAL_CSS in

@@ -200,7 +200,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                     </Link>
                   </div>
                 )}
-                {loading ? <ShellSkeleton /> : error ? <ShellError msg={error} /> : children}
+                {loading ? <ShellSkeleton /> : error ? <ShellError msg={error} isAdmin={isAdmin} /> : children}
               </main>
 
               {/* Thumb-reachable nav below md. "More" opens the same drawer,
@@ -229,11 +229,22 @@ function ShellSkeleton() {
   );
 }
 
-function ShellError({ msg }: { msg: string }) {
+// A failure state has to offer a way OUT, or it is just a nicer dead end.
+// An admin who lands here has no brand context, and the place that supplies
+// one is the dashboard — so say that and link there. Everyone gets retry,
+// because the most common cause is a transient network failure.
+function ShellError({ msg, isAdmin }: { msg: string; isAdmin: boolean }) {
   return (
     <div className="p-empty">
       <div className="p-empty-icon">!</div>
-      <div className="p-empty-title">{msg}</div>
+      <div className="p-empty-title">We couldn&apos;t open your portal</div>
+      <p className="p-empty-sub">{msg}</p>
+      <div style={{ marginTop: 20, display: "flex", gap: 9, justifyContent: "center", flexWrap: "wrap" }}>
+        {isAdmin && (
+          <Link href="/dashboard" className="p-btn primary">Choose a customer</Link>
+        )}
+        <button className="p-btn ghost" onClick={() => window.location.reload()}>Try again</button>
+      </div>
     </div>
   );
 }

@@ -44,31 +44,29 @@ const staggerParent = (stagger: number, delayChildren = 0.02): Variants => ({
  * Reveals its children with a staggered fade-up as soon as they mount.
  * Use for a grid or list of cards.
  */
-export function Stagger({ children, className, stagger = 0.055, style }: {
+/**
+ * Grid/list container. Deliberately NOT animated any more.
+ *
+ * The staggered fade-up made a grid of KPIs arrive over ~0.5s, during which the
+ * dashboard looked empty. Worse, Framer animates via requestAnimationFrame,
+ * which browsers pause in a background tab — so a page loaded unfocused left
+ * every card at opacity:0 until the user switched to it. Measured directly on
+ * the running product: rAF never fired and every card stayed at 0.
+ *
+ * Kept as a component (rather than deleted) because 17 files import it and the
+ * layout classes it carries are still needed. It is now a plain container.
+ */
+export function Stagger({ children, className, style }: {
   children: ReactNode; className?: string; stagger?: number; style?: React.CSSProperties;
 }) {
-  return (
-    <m.div
-      className={className}
-      style={style}
-      variants={staggerParent(stagger)}
-      initial="hidden"
-      animate="show"
-    >
-      {children}
-    </m.div>
-  );
+  return <div className={className} style={style}>{children}</div>;
 }
 
-/** A single item inside <Stagger>. */
+/** A single item inside <Stagger>. Present immediately, like its parent. */
 export function StaggerItem({ children, className, style }: {
   children: ReactNode; className?: string; style?: React.CSSProperties;
 }) {
-  return (
-    <m.div className={className} style={style} variants={fadeUp}>
-      {children}
-    </m.div>
-  );
+  return <div className={className} style={style}>{children}</div>;
 }
 
 /** One-off reveal for a standalone block. */

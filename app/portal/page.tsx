@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { usePortalAuth } from "@/lib/portalAuth";
 import {
-  usePlatformData, usePortalSummary,
+  usePlatformData, usePortalSummary, useAgentActivity,
   computeSeoScore, computeLocalScore, computeOverallHealth, greeting,
   type PortalSummary, type PlatformData,
 } from "./_data";
+import AgentActivity from "./_components/AgentActivity";
 import ScoreRing from "./_components/ScoreRing";
 import MetricCard from "./_components/MetricCard";
 import TrendChart from "./_components/TrendChart";
@@ -73,6 +74,9 @@ export default function PortalDashboard() {
   const { brand } = usePortalAuth();
   const { summary, loading: sLoading } = usePortalSummary(brand?.id);
   const { data: platform, loading: pLoading } = usePlatformData(brand?.id);
+  // Agent activity loads independently of the metrics: it is the fastest query
+  // on the page and should not wait behind Search Console.
+  const { activity, loading: aLoading } = useAgentActivity(brand?.id);
 
   if (!brand) return null;
   if (sLoading || pLoading || !summary) return <DashboardSkeleton />;
@@ -148,25 +152,55 @@ export default function PortalDashboard() {
       {/* Health scores */}
       <section>
         <SectionLabel title="Health scores" sub="Each score is built from the data we hold today." />
-        <Stagger className="p-score-grid">
-          <ScoreCard label="SEO Score" value={seoScore} hint="Needs ranking data" />
-          <ScoreCard label="Local SEO" value={localScore} hint="Needs citation data" />
-          <ScoreCard label="Website Health" value={websiteHealth} hint="Runs with your next audit" />
-          {/* 100 or 0 is a yes/no, not a percentage — the hint says which, so
-              the number is never read as a score it isn't. */}
-          <ScoreCard
-            label="AI Visibility"
-            value={aiVisibility}
-            hint={
-              aiVisibility == null
+        {/* Five equal cards gave the same visual weight to a measured score and
+            to a source that isn't connected — so two thirds of the row was
+            placeholder, and it read as the emptiest part of the page.
+            Measured scores keep their cards; unavailable ones collapse into a
+            single quiet line that says what would unlock them. Nothing is
+            hidden and no value is invented — absence is just no longer
+            occupying the same space as data. */}
+        {(() => {
+          const scores = [
+            { label: "SEO Score", value: seoScore, hint: "Needs ranking data" },
+            { label: "Local SEO", value: localScore, hint: "Needs citation data" },
+            { label: "Website Health", value: websiteHealth, hint: "Runs with your next audit" },
+            // 100 or 0 is a yes/no, not a percentage — the hint says which, so
+            // the number is never read as a score it isn't.
+            {
+              label: "AI Visibility", value: aiVisibility,
+              hint: aiVisibility == null
                 ? "Checked on your next agent run"
                 : aiVisibility >= 100
                 ? "AI assistants recommend you for your main service search"
-                : "Not yet named when AI assistants are asked for your service"
-            }
-          />
-          <ScoreCard label="Google Business Profile" value={gbpScore} hint="Connect your profile" />
-        </Stagger>
+                : "Not yet named when AI assistants are asked for your service",
+            },
+            { label: "Google Business Profile", value: gbpScore, hint: "Connect your profile" },
+          ];
+          const measured = scores.filter((s) => s.value != null);
+          const pending = scores.filter((s) => s.value == null);
+          return (
+            <>
+              {measured.length > 0 && (
+                <div className="p-score-grid">
+                  {measured.map((s) => (
+                    <ScoreCard key={s.label} label={s.label} value={s.value} hint={s.hint} />
+                  ))}
+                </div>
+              )}
+              {pending.length > 0 && (
+                <div className="p-score-pending">
+                  <IconLock size={12} />
+                  <span className="p-score-pending-lead">Not measured yet</span>
+                  {pending.map((s) => (
+                    <span key={s.label} className="p-score-pending-item">
+                      <b>{s.label}</b> — {s.hint}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       {/* Performance + what needs attention */}
@@ -174,8 +208,11 @@ export default function PortalDashboard() {
         <div className="p-stack">
           <Panel>
             <PanelHead title="Organic traffic" sub="Estimated visitors arriving from Google over time." />
+            {/* The one large data moment on this screen. At 264px the chart was
+                just another card; at 380 it reads as the page's subject and the
+                trend is actually legible. */}
             {hasChart ? (
-              <TrendChart data={summary.chart} dataKey="traffic" name="Est. traffic" gradientId="pHomeTraffic" height={264} />
+              <TrendChart data={summary.chart} dataKey="traffic" name="Est. traffic" gradientId="pHomeTraffic" height={380} />
             ) : (
               <EmptyState
                 icon={<IconTraffic size={22} />}
@@ -188,11 +225,13 @@ export default function PortalDashboard() {
           <Panel>
             <PanelHead title="Business metrics" sub="Live numbers from Search Console and your ranking data." />
             <Stagger className="p-kpi-grid" stagger={0.045}>
-              <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} tone="accent" icon={<IconTraffic size={16} />} hint="Est. monthly visitors" series={trafficSeries} />
-              <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} tone="green" icon={<IconKey size={16} />} hint="Keywords you appear for" series={keywordSeries} />
-              <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} tone="amber" icon={<IconTarget size={16} />} decimals={1} invert hint="Lower is better" />
-              <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} tone="blue" icon={<IconLink size={16} />} hint="Sites linking to you" />
-              <MetricCard label="Reviews" value={reviewCount} tone="pink" icon={<IconReviews size={16} />} hint="Drafted replies" />
+              {/* Each metric declares its DIMENSION, which fixes its colour
+                  across the whole product — the grid is scannable by hue. */}
+              <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} dimension="traffic" icon={<IconTraffic size={16} />} hint="Est. monthly visitors" series={trafficSeries} />
+              <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} dimension="keywords" icon={<IconKey size={16} />} hint="Keywords you appear for" series={keywordSeries} />
+              <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} dimension="position" icon={<IconTarget size={16} />} decimals={1} invert hint="Lower is better" />
+              <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} dimension="backlinks" icon={<IconLink size={16} />} hint="Sites linking to you" />
+              <MetricCard label="Reviews" value={reviewCount} dimension="reviews" icon={<IconReviews size={16} />} hint="Drafted replies" />
               <MetricCard label="Leads" locked lockedHint="Connect lead tracking" icon={<IconLeads size={16} />} />
               <MetricCard label="Calls" locked lockedHint="Connect call tracking" icon={<IconPhone size={16} />} />
               <MetricCard label="Conversions" locked lockedHint="Connect analytics" icon={<IconTarget size={16} />} />
@@ -234,6 +273,29 @@ export default function PortalDashboard() {
             )}
           </Panel>
 
+          {/* What the platform is doing on its own. Sits directly under the
+              priorities because between them they answer the two questions a
+              customer actually has: what needs me, and what is the system
+              doing without me. */}
+          <Panel>
+            <PanelHead
+              title="Agent activity"
+              sub="Every job your agents have run, newest first."
+              action={
+                activity?.active ? (
+                  <span className="p-live">
+                    <i />
+                    <span className="p-live-count">
+                      {activity.counts.running + activity.counts.queued}
+                    </span>
+                    {activity.counts.running > 0 ? "running" : "queued"}
+                  </span>
+                ) : undefined
+              }
+            />
+            <AgentActivity activity={activity} loading={aLoading} />
+          </Panel>
+
           <Panel>
             <PanelHead title="This month" />
             <div className="p-ministat-row">
@@ -249,7 +311,10 @@ export default function PortalDashboard() {
               <div className="p-feed">
                 {summary.activity.recent_content.slice(0, 6).map((c, i) => (
                   <div key={i} className="p-feed-item">
-                    <span className="p-feed-icon" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                    {/* Azure, because every item here was written by the
+                        platform's own content agent (lib/steps.ts stepContent)
+                        — not a stylistic choice, an accurate one. */}
+                    <span className="p-feed-icon" style={{ background: "var(--system-soft)", color: "var(--system)" }}>
                       <IconContent size={13} />
                     </span>
                     <div style={{ minWidth: 0 }}>
@@ -291,11 +356,19 @@ function SectionLabel({ title, sub }: { title: string; sub?: string }) {
 }
 
 function ScoreCard({ label, value, hint }: { label: string; value: number | null; hint: string }) {
+  // A ring at 0 is indistinguishable from a ring that never loaded: both are an
+  // empty circle. "Local SEO" rendered exactly that — no arc, no explanation —
+  // which reads as broken rather than as "nothing measured yet".
+  //
+  // The number is NEVER altered (a real 0 stays 0). What changes is that a card
+  // at the bottom of its range now always carries the line explaining what the
+  // score is waiting on, so an empty ring is never unexplained.
+  const needsContext = value == null || value === 0;
   return (
     <StaggerItem className="p-score-card">
       <ScoreRing value={value} size={68} strokeWidth={7} />
       <div className="p-score-label">{label}</div>
-      {value == null && (
+      {needsContext && (
         <div className="p-score-locked"><IconLock size={11} /> {hint}</div>
       )}
     </StaggerItem>

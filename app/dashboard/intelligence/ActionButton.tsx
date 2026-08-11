@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
+import { BRAND, ON_BRAND, POSITIVE, NEGATIVE, tint } from "./palette";
 
 export type ActionType =
   | "improve_content" | "fix_meta" | "rewrite_page"
@@ -46,11 +47,14 @@ export default function ActionButton({ action, brandId, payload = {}, label, var
     alignItems: "center", gap: 5, whiteSpace: "nowrap" as const,
   };
   const styles: Record<string, React.CSSProperties> = {
-    primary: { ...base, background: "#6C5CE7", color: "#fff" },
-    ghost:   { ...base, background: "transparent", color: "#6C5CE7", border: "1px solid rgba(108,92,231,.3)" },
-    teal:    { ...base, background: "#00B894", color: "#fff" },
-    done:    { ...base, background: "#00B894", color: "#fff" },
-    error:   { ...base, background: "#FF6B6B", color: "#fff" },
+    // Ordinary actions carry the brand ink; success and failure carry the data
+    // states. Azure is deliberately absent — these are the operator's actions,
+    // not the machine's.
+    primary: { ...base, background: BRAND, color: ON_BRAND },
+    ghost:   { ...base, background: "transparent", color: BRAND, border: `1px solid ${tint(BRAND, 0.24)}` },
+    teal:    { ...base, background: POSITIVE, color: "#fff" },
+    done:    { ...base, background: POSITIVE, color: "#fff" },
+    error:   { ...base, background: NEGATIVE, color: "#fff" },
   };
 
   const s = state === "done" ? "done" : state === "error" ? "error" : variant;

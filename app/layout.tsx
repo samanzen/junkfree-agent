@@ -22,6 +22,7 @@ const inter = Inter({
   weight: ["400", "500", "600", "700", "800"],
 });
 
+
 // The platform's own identity, never a tenant's. A signed-in customer's
 // business name is applied on top of this per page (see PortalShell), and this
 // remains the title for everything outside a tenant context — the login page,
@@ -37,7 +38,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>
-      <body style={{ margin: 0, fontFamily: "var(--font-sans)", background: "#0b0f14", color: "#e6edf3" }}>
+      {/* Background and colour-scheme now live on <html> in GLOBAL_CSS so the
+          correct ground is painted at first paint. This element previously
+          hardcoded a dark navy that belonged to neither surface. */}
+      <body style={{ margin: 0, fontFamily: "var(--font-sans)" }}>
         {/* Mounted once at the root so /dashboard and /portal share one toast
             stack and one confirm dialog, and shared components can raise either
             without knowing which tree they are rendering in. */}

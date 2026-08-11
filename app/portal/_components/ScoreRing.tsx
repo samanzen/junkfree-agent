@@ -29,17 +29,25 @@ export default function ScoreRing({
     value >= 80 ? "var(--green)" :
     value >= 60 ? "var(--accent)" :
     value >= 40 ? "var(--amber)" : "var(--red)";
+  const below =
+    value == null ? "var(--muted2)" :
+    value >= 80 ? "var(--series-3)" :
+    value >= 60 ? "var(--series-1)" :
+    value >= 40 ? "var(--series-4)" : "var(--series-2)";
   const stroke = gradient && value != null ? `url(#ring-${gid})` : flat;
 
   return (
     <div className="p-ring-wrap" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        {/* The sweep runs from the band BELOW this score to the band itself, so
+            the ring reads as "arrived here" rather than as decoration. Stops
+            are real palette values; --accent2/3 are mesh washes and would have
+            rendered this nearly invisible. */}
         {gradient && (
           <defs>
             <linearGradient id={`ring-${gid}`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="var(--accent3)" />
-              <stop offset="52%" stopColor="var(--accent)" />
-              <stop offset="100%" stopColor="var(--accent2)" />
+              <stop offset="0%" stopColor={below} />
+              <stop offset="100%" stopColor={flat} />
             </linearGradient>
           </defs>
         )}

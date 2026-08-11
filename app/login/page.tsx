@@ -94,24 +94,33 @@ export default function Login() {
 }
 
 const CSS = `
-.lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#F6F8FB,#EEF1FF); font-family:var(--font-sans); color:#1A2030; padding:20px; }
+/* This surface carried a third palette: its own indigo (#6C5CE7), its own red
+   (#E14B4B) and a #8A93A6 grey that measured 3.02:1 on white — below AA for
+   the 11-13px copy it was used on. All three now come from the shared
+   semantic palette in lib/ui/tokens.ts. */
+.lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#F6F8FB,#ECEFF2); font-family:var(--font-sans); color:#1A2030; padding:20px; }
 .lg .card { width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-lg); padding:36px; box-shadow:var(--shadow-4); }
-.lg .brand { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#8A93A6; margin-bottom:22px; }
-.lg .dot { width:8px; height:8px; border-radius:50%; background:#6C5CE7; box-shadow:0 0 0 4px rgba(108,92,231,.15); }
+.lg .brand { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#616C82; margin-bottom:22px; }
+.lg .dot { width:8px; height:8px; border-radius:50%; background:#2563EB; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
 .lg h1 { font-size:26px; margin:0 0 4px; color:#12172A; }
-.lg .sub { color:#8A93A6; font-size:13px; margin:0 0 24px; }
+.lg .sub { color:#616C82; font-size:13px; margin:0 0 24px; }
 /* Input styling now comes from the shared fieldCSS below. The old bare
    ".lg input" rule carried its own margin, which would have fought the
    field layout's gap. */
 .lg-fields { display:flex; flex-direction:column; gap:16px; margin-bottom:16px; }
-.lg button { width:100%; background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:14px; border-radius:var(--radius-sm); font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; }
+/* Was a purple gradient carrying white text; white on its light stop (#8B5CF6)
+   measured 3.53:1. A solid brand fill is 6.14:1, and the button now
+   acknowledges being pressed — the only feedback a touch user ever gets. */
+.lg button { width:100%; background:#2563EB; color:#fff; border:0; padding:14px; border-radius:var(--radius-sm); font-weight:600; font-size:14px; cursor:pointer; font-family:inherit; margin-top:6px; transition:background var(--dur-2) var(--ease-out), transform var(--dur-1); }
+.lg button:hover:not(:disabled) { background:#1D4FD8; }
+.lg button:active:not(:disabled) { background:#1A45BE; transform:translateY(1px); }
 .lg button:disabled { opacity:.6; cursor:default; }
-.lg .err { color:#E14B4B; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(225,75,75,.08); border-radius:var(--radius-sm); border:1px solid rgba(225,75,75,.2); }
+.lg .err { color:#B3261E; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(179,38,30,.08); border-radius:var(--radius-sm); border:1px solid rgba(179,38,30,.2); }
 
 /* ══ Phase 4: shared form fields ══════════════════════════════════════════ */
 ${fieldCSS(".lg", {
-  surface: "#F6F8FB", line: "#E7EAF0", lineStrong: "#C6CEDA", muted: "#8A93A6",
-  text: "#1A2030", accent: "#6C5CE7", danger: "#E14B4B", radius: "var(--radius-sm)",
+  surface: "#F6F8FB", line: "#E7EAF0", lineStrong: "#C6CEDA", muted: "#616C82",
+  text: "#1A2030", accent: "#2563EB", danger: "#B3261E", radius: "var(--radius-sm)",
 })}
 ${touchTargetCSS(".lg")}
 ${down.sm} {

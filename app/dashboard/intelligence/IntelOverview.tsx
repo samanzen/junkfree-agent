@@ -5,6 +5,7 @@ import CountUp from "@/app/dashboard/CountUp";
 import MetricExplainer from "./MetricExplainer";
 import ExecSummary from "./ExecSummary";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
+import { SYSTEM, POSITIVE, ATTENTION, NEGATIVE, ACCENT_ALT, BRAND, MUTED } from "./palette";
 
 type Overview = {
   top_3: number|null; top_10: number|null; top_20: number|null;
@@ -16,16 +17,16 @@ type Overview = {
 };
 
 const CARDS = [
-  { key: "avg_position",    label: "Avg. Position",   suffix: "",  decimals: 1, invert: true,  color: "#6C5CE7", explainer: "avg_position" as const },
-  { key: "total_keywords",  label: "Total Keywords",  suffix: "",  decimals: 0, invert: false, color: "#0984E3", explainer: "top_10" as const },
-  { key: "top_3",           label: "Top 3",           suffix: "",  decimals: 0, invert: false, color: "#00B894", explainer: "top_3" as const },
-  { key: "top_10",          label: "Top 10 (Page 1)", suffix: "",  decimals: 0, invert: false, color: "#00B894", explainer: "top_10" as const },
-  { key: "top_20",          label: "Top 20",          suffix: "",  decimals: 0, invert: false, color: "#F5B461", explainer: "striking_dist" as const },
+  { key: "avg_position",    label: "Avg. Position",   suffix: "",  decimals: 1, invert: true,  color: SYSTEM, explainer: "avg_position" as const },
+  { key: "total_keywords",  label: "Total Keywords",  suffix: "",  decimals: 0, invert: false, color: ACCENT_ALT, explainer: "top_10" as const },
+  { key: "top_3",           label: "Top 3",           suffix: "",  decimals: 0, invert: false, color: POSITIVE, explainer: "top_3" as const },
+  { key: "top_10",          label: "Top 10 (Page 1)", suffix: "",  decimals: 0, invert: false, color: POSITIVE, explainer: "top_10" as const },
+  { key: "top_20",          label: "Top 20",          suffix: "",  decimals: 0, invert: false, color: ATTENTION, explainer: "striking_dist" as const },
   { key: "top_100",         label: "Top 100",         suffix: "",  decimals: 0, invert: false, color: "#A29BFE", explainer: "top_10" as const },
   { key: "total_clicks",    label: "Total Clicks",    suffix: "",  decimals: 0, invert: false, color: "#E17055", explainer: "ctr" as const },
   { key: "total_impressions",label: "Impressions",   suffix: "",  decimals: 0, invert: false, color: "#74B9FF", explainer: "top_10" as const },
-  { key: "avg_ctr",         label: "Avg. CTR",        suffix: "%", decimals: 2, invert: false, color: "#E84393", explainer: "ctr" as const },
-  { key: "not_ranked",      label: "Not Ranked",      suffix: "",  decimals: 0, invert: true,  color: "#B2BAC8", explainer: "top_10" as const },
+  { key: "avg_ctr",         label: "Avg. CTR",        suffix: "%", decimals: 2, invert: false, color: BRAND, explainer: "ctr" as const },
+  { key: "not_ranked",      label: "Not Ranked",      suffix: "",  decimals: 0, invert: true,  color: MUTED, explainer: "top_10" as const },
 ];
 
 export default function IntelOverview({ brandId, brandName }: { brandId: string; brandName?: string }) {
@@ -76,19 +77,19 @@ export default function IntelOverview({ brandId, brandName }: { brandId: string;
       {Object.keys(data.by_status).length > 0 && (
         <div className="io-status-row">
           {[
-            { key: "improving", label: "Improving", color: "#00B894" },
-            { key: "stable",    label: "Stable",    color: "#F5B461" },
-            { key: "declining", label: "Declining", color: "#FF6B6B" },
-            { key: "new",       label: "New",       color: "#6C5CE7" },
-            { key: "lost",      label: "Lost",      color: "#B2BAC8" },
+            { key: "improving", label: "Improving", color: POSITIVE },
+            { key: "stable",    label: "Stable",    color: ATTENTION },
+            { key: "declining", label: "Declining", color: NEGATIVE },
+            { key: "new",       label: "New",       color: SYSTEM },
+            { key: "lost",      label: "Lost",      color: MUTED },
           ].filter((s) => data.by_status[s.key]).map((s) => (
             <div key={s.key} className="io-status-chip" style={{ borderColor: s.color, color: s.color }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.color, display: "inline-block", marginRight: 5 }} />
               {data.by_status[s.key]} {s.label}
             </div>
           ))}
-          {data.deltas.new_this_week ? <div className="io-status-chip" style={{ borderColor: "#6C5CE7", color: "#6C5CE7" }}>+{data.deltas.new_this_week} new this week</div> : null}
-          {data.deltas.lost_this_week ? <div className="io-status-chip" style={{ borderColor: "#FF6B6B", color: "#FF6B6B" }}>−{data.deltas.lost_this_week} lost this week</div> : null}
+          {data.deltas.new_this_week ? <div className="io-status-chip" style={{ borderColor: SYSTEM, color: SYSTEM }}>+{data.deltas.new_this_week} new this week</div> : null}
+          {data.deltas.lost_this_week ? <div className="io-status-chip" style={{ borderColor: NEGATIVE, color: NEGATIVE }}>−{data.deltas.lost_this_week} lost this week</div> : null}
         </div>
       )}
     </div>

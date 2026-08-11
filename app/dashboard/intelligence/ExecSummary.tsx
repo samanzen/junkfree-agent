@@ -50,10 +50,10 @@ export default function ExecSummary({ brandId, section, data, brandName }: Props
   }, [brandId, section]);
 
   if (loading) return (
-    <div style={{ background: "linear-gradient(135deg,#F8F7FF,#EEF2FF)", border: "1px solid #E0E7FF", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+    <div style={{ background: "var(--blue-soft)", border: "1px solid var(--blue-line)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <span style={{ fontSize: 14 }}>✦</span>
-        <div style={{ height: 12, background: "#E0E7FF", borderRadius: 6, width: "60%", animation: "shimmer 1.4s infinite" }} />
+        <div style={{ height: 12, background: "var(--blue-line)", borderRadius: 6, width: "60%", animation: "shimmer 1.4s infinite" }} />
       </div>
     </div>
   );
@@ -61,12 +61,13 @@ export default function ExecSummary({ brandId, section, data, brandName }: Props
   if (!text) return null;
 
   return (
-    <div style={{ background: "linear-gradient(135deg,#F8F7FF,#EEF2FF)", border: "1px solid #E0E7FF", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
+    <div style={{ background: "var(--blue-soft)", border: "1px solid var(--blue-line)", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
         <span style={{ fontSize: 14, marginTop: 1, flexShrink: 0 }}>✦</span>
         <div>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "#6C5CE7", letterSpacing: ".06em", textTransform: "uppercase" as const, marginRight: 8 }}>AI Analysis</span>
-          <span style={{ fontSize: 13.5, color: "#3730A3", lineHeight: 1.65 }}>{text}</span>
+          {/* This whole block is the model's own analysis, so it is azure. */}
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--blue)", letterSpacing: ".06em", textTransform: "uppercase" as const, marginRight: 8 }}>AI Analysis</span>
+          <span style={{ fontSize: 13.5, color: "var(--text)", lineHeight: 1.65 }}>{text}</span>
         </div>
       </div>
     </div>

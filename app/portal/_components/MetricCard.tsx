@@ -5,19 +5,26 @@ import AnimatedNumber from "./AnimatedNumber";
 import Sparkline from "./Sparkline";
 import { fadeUp, EASE } from "./motion";
 import { IconArrowUp, IconArrowDown, IconLock } from "../icons";
+import { dimensionSlot } from "@/lib/ui/tokens";
 
 // A single KPI tile. Three distinct states, never blurred together:
 //  - a real value (optionally with a period-over-period delta)
 //  - "—" because the source is connected but has no value yet
 //  - locked, because that data source isn't wired up for this business yet
 export default function MetricCard({
-  label, value, delta, tone = "accent", icon, hint, series,
+  label, value, delta, tone = "accent", dimension, icon, hint, series,
   decimals = 0, suffix = "", invert = false, locked = false, lockedHint = "Connect to unlock",
 }: {
   label: string;
   value?: number | null;
   delta?: number | null;
-  /** Colour family for the icon chip and hover glow. */
+  /**
+   * What this metric IS — "traffic", "keywords", "backlinks", "reviews"…
+   * Resolves to a fixed slot in the categorical palette. Prefer this over
+   * `tone`: it keeps a dimension's colour stable everywhere it appears.
+   */
+  dimension?: string;
+  /** Legacy colour family, used only when no `dimension` is given. */
   tone?: "accent" | "green" | "amber" | "red" | "blue" | "pink";
   icon?: ReactNode;
   hint?: string;
@@ -31,16 +38,23 @@ export default function MetricCard({
 }) {
   const up = delta != null && delta > 0;
   const good = invert ? !up : up;
-  const color = locked ? "var(--muted2)" : `var(--${tone})`;
-  const soft = locked ? "var(--surface2)" : `var(--${tone}-soft)`;
+  // `dimension` names WHAT this metric is, and resolves to a fixed slot in the
+  // categorical palette — so "backlinks" is the same hue here, in a chart
+  // legend and on a table chip, and reordering the grid never repaints it.
+  const slot = dimension ? dimensionSlot(dimension) : null;
+  const color = locked
+    ? "var(--muted2)"
+    : slot != null
+    ? `var(--series-${slot})`
+    : `var(--${tone})`;
 
   return (
     <m.div
-      className="p-kpi"
+      className={`p-kpi${locked ? " is-locked" : ""}`}
       style={{
         ["--kpi-color" as string]: color,
-        ["--kpi-soft" as string]: soft,
-        ["--kpi-tint" as string]: locked ? "transparent" : `var(--${tone}-soft)`,
+        ["--kpi-tint" as string]: locked ? "transparent" : color,
+        ["--kpi-shadow" as string]: locked ? "transparent" : "rgba(12,18,32,.16)",
       }}
       variants={fadeUp}
       whileHover={{ y: -3, transition: { duration: 0.18, ease: EASE } }}

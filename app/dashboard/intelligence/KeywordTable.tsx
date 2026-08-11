@@ -9,6 +9,10 @@ import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import { useChartTouch } from "@/lib/ui/useChartTouch";
 import { useDialog } from "@/lib/ui/useDialog";
 import Field from "@/app/_components/Field";
+import {
+  STATUS_COLOR, INTENT_COLOR, SYSTEM, POSITIVE, ATTENTION, NEGATIVE,
+  ACCENT_ALT, MUTED, AXIS, tint,
+} from "./palette";
 
 type Kw = {
   id: string; keyword: string; status: string;
@@ -21,12 +25,8 @@ type Kw = {
   first_seen_date: string|null; enriched_at: string|null;
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  improving: "#00B894", stable: "#F5B461", declining: "#FF6B6B", new: "#6C5CE7", lost: "#B2BAC8", recovered: "#00CEC9",
-};
-const INTENT_COLOR: Record<string, string> = {
-  commercial: "#6C5CE7", transactional: "#00B894", informational: "#0984E3", navigational: "#9AA3B2",
-};
+// Status and intent colours come from the shared Intelligence palette so the
+// charts stay in step with the rest of the product.
 
 export default function KeywordTable({ brandId }: { brandId: string }) {
   const [keywords, setKeywords] = useState<Kw[]>([]);
@@ -169,11 +169,15 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
               >
                 <td className="kt-td kt-kw">{kw.keyword}</td>
                 <td className="kt-td kt-center">
-                  {kw.position != null ? <span className="kt-pos-badge" style={{ background: (kw.position || 0) <= 3 ? "rgba(0,184,148,.12)" : (kw.position || 0) <= 10 ? "rgba(108,92,231,.1)" : "rgba(245,180,97,.12)", color: (kw.position || 0) <= 3 ? "#00B894" : (kw.position || 0) <= 10 ? "#6C5CE7" : "#E1A100" }}>{kw.position}</span> : <span className="kt-dash">–</span>}
+                  {kw.position != null ? (() => {
+                    // Rank bands: top 3, page 1, everything else.
+                    const band = (kw.position || 0) <= 3 ? POSITIVE : (kw.position || 0) <= 10 ? SYSTEM : ATTENTION;
+                    return <span className="kt-pos-badge" style={{ background: tint(band), color: band }}>{kw.position}</span>;
+                  })() : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">
                   {kw.best_position != null && kw.position != null && kw.position !== kw.best_position
-                    ? <span style={{ color: kw.position < kw.best_position ? "#00B894" : "#FF6B6B", fontSize: 12, fontWeight: 600 }}>{kw.position < kw.best_position ? "▲" : "▼"} {Math.abs(kw.position - kw.best_position)}</span>
+                    ? <span style={{ color: kw.position < kw.best_position ? POSITIVE : NEGATIVE, fontSize: 12, fontWeight: 600 }}>{kw.position < kw.best_position ? "▲" : "▼"} {Math.abs(kw.position - kw.best_position)}</span>
                     : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.search_volume?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>
@@ -181,23 +185,23 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                   {kw.keyword_difficulty != null ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <div style={{ width: 40, height: 5, background: "#EEF0F4", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{ width: `${kw.keyword_difficulty}%`, height: "100%", background: kw.keyword_difficulty <= 30 ? "#00B894" : kw.keyword_difficulty <= 60 ? "#F5B461" : "#FF6B6B", borderRadius: 3 }} />
+                        <div style={{ width: `${kw.keyword_difficulty}%`, height: "100%", background: kw.keyword_difficulty <= 30 ? POSITIVE : kw.keyword_difficulty <= 60 ? ATTENTION : NEGATIVE, borderRadius: 3 }} />
                       </div>
                       <span style={{ fontSize: 11.5, color: "#6A7280" }}>{kw.keyword_difficulty}</span>
                     </div>
                   ) : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td">
-                  {kw.search_intent ? <span className="kt-intent-badge" style={{ background: `${INTENT_COLOR[kw.search_intent] || "#9AA3B2"}18`, color: INTENT_COLOR[kw.search_intent] || "#9AA3B2" }}>{kw.search_intent}</span> : <span className="kt-dash">–</span>}
+                  {kw.search_intent ? <span className="kt-intent-badge" style={{ background: tint(INTENT_COLOR[kw.search_intent] || MUTED), color: INTENT_COLOR[kw.search_intent] || MUTED }}>{kw.search_intent}</span> : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">
                   {kw.ai_opportunity_score != null ? (
-                    <span style={{ fontWeight: 700, color: kw.ai_opportunity_score >= 70 ? "#00B894" : kw.ai_opportunity_score >= 40 ? "#F5B461" : "#B2BAC8", fontSize: 13 }}>{kw.ai_opportunity_score}</span>
+                    <span style={{ fontWeight: 700, color: kw.ai_opportunity_score >= 70 ? POSITIVE : kw.ai_opportunity_score >= 40 ? ATTENTION : MUTED, fontSize: 13 }}>{kw.ai_opportunity_score}</span>
                   ) : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.clicks?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>
                 <td className="kt-td">
-                  <span className="kt-status" style={{ background: `${STATUS_COLOR[kw.status] || "#B2BAC8"}18`, color: STATUS_COLOR[kw.status] || "#B2BAC8" }}>{kw.status}</span>
+                  <span className="kt-status" style={{ background: tint(STATUS_COLOR[kw.status] || MUTED), color: STATUS_COLOR[kw.status] || MUTED }}>{kw.status}</span>
                 </td>
               </tr>
             ))}
@@ -251,7 +255,7 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
     };
   });
 
-  const metricColor = { position: "#6C5CE7", clicks: "#00B894", impressions: "#0984E3", ctr: "#E84393" };
+  const metricColor = { position: SYSTEM, clicks: POSITIVE, impressions: ACCENT_ALT, ctr: ATTENTION };
 
   return (
     <>
@@ -302,8 +306,8 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
-              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} reversed={metric === "position"} />
+              <XAxis {...t.xAxis} dataKey="date" tick={{ fill: AXIS, fontSize: 10 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: AXIS, fontSize: 10 }} tickLine={false} axisLine={false} reversed={metric === "position"} />
               <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }}
                 formatter={(v: unknown) => { const n = v as number; return [metric === "ctr" ? `${n}%` : metric === "position" ? `#${n}` : n.toLocaleString()]; }} />
               <Line type="monotone" dataKey="value" stroke={metricColor[metric]} strokeWidth={2.5} dot={false} animationDuration={600} />
@@ -330,7 +334,7 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
           </div>
           {kw.ai_opportunity_reason && (
             <div className="kd-ai-reason">
-              <span style={{ color: "#6C5CE7", fontWeight: 700, fontSize: 11 }}>✦ AI</span> {kw.ai_opportunity_reason}
+              <span style={{ color: SYSTEM, fontWeight: 700, fontSize: 11 }}>✦ AI</span> {kw.ai_opportunity_reason}
             </div>
           )}
         </div>
