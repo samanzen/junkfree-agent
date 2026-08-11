@@ -1,0 +1,15 @@
+{
+  "name": "Junk Free — Autonomous SEO Agent",
+  "user": "ubuntu",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "next-dev",
+      "command": "npm run dev",
+      "description": "Next.js dev server for the dashboard/portal UI and API routes (http://localhost:3000). Reads secrets from .env.local; without them, pages render but API routes that call Supabase/Anthropic/GSC throw at request time."
+    }
+  ],
+  "ports": [
+    { "name": "next-dev", "port": 3000 }
+  ]
+}
