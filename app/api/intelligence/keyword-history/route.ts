@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { keywordDailyHistory } from "@/lib/gsc";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -20,6 +21,10 @@ export async function GET(req: NextRequest) {
   }
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // May fall through to a live GSC read on the shared service account.
+  const limited = await enforceRate(brandId, "external");
+  if (limited) return limited;
 
   const days = range === "7" ? 7 : range === "90" ? 90 : range === "180" ? 180 : range === "365" ? 365 : range === "all" ? 1095 : 30;
   const since = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);

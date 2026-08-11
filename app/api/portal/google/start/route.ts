@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
     product,
     origin,
     nonce: randomBytes(12).toString("base64url"),
+    iat: Math.floor(Date.now() / 1000),
   });
 
   // Ask only for what this product needs. Google merges previously granted

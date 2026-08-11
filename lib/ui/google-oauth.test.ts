@@ -7,7 +7,7 @@
 
 import fs from "fs";
 import { test, expect } from "vitest";
-import { signState, verifyState, authUrl, IDENTITY_SCOPES } from "../google/oauth";
+import { signState, verifyState, authUrl, IDENTITY_SCOPES, OAUTH_STATE_TTL_SECONDS } from "../google/oauth";
 import { GOOGLE_PRODUCTS, GOOGLE_PRODUCT_KEYS, isGoogleProduct } from "../google/registry";
 
 const ROOT = process.cwd();
@@ -16,24 +16,54 @@ const read = (p: string) => fs.readFileSync(`${ROOT}/${p}`, "utf8");
 // signState/verifyState HMAC with GOOGLE_CLIENT_SECRET.
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "test-secret-for-hmac";
 
+const fresh = (overrides: Record<string, unknown> = {}) => ({
+  brandId: "brand-1",
+  product: "search_console",
+  origin: "https://x.test",
+  nonce: "n1",
+  iat: Math.floor(Date.now() / 1000),
+  ...overrides,
+});
+
 // ── the callback is public, so state is the only thing standing guard ───────
 test("a valid state round-trips", () => {
-  const state = { brandId: "brand-1", product: "search_console", origin: "https://x.test", nonce: "n1" };
+  const state = fresh();
   expect(verifyState(signState(state))).toEqual(state);
 });
 
 test("a tampered state is rejected", () => {
   // The attack this prevents: swapping brandId to attach an attacker's Google
   // account to somebody else's brand.
-  const signed = signState({ brandId: "victim", product: "search_console", origin: "https://x.test", nonce: "n" });
+  const signed = signState(fresh({ brandId: "victim", nonce: "n" }));
   const [payload, mac] = signed.split(".");
   const forged = Buffer.from(
-    JSON.stringify({ brandId: "attacker", product: "search_console", origin: "https://x.test", nonce: "n" })
+    JSON.stringify(fresh({ brandId: "attacker", nonce: "n" }))
   ).toString("base64url");
   expect(verifyState(`${forged}.${mac}`)).toBeNull();
   expect(verifyState(`${payload}.deadbeef`)).toBeNull();
   expect(verifyState("garbage")).toBeNull();
   expect(verifyState("")).toBeNull();
+});
+
+test("an expired state is rejected", () => {
+  // A leaked start URL must not be replayable days later.
+  const expired = fresh({ iat: Math.floor(Date.now() / 1000) - OAUTH_STATE_TTL_SECONDS - 1 });
+  expect(verifyState(signState(expired))).toBeNull();
+});
+
+test("a state without iat is rejected", async () => {
+  // Old tokens minted before expiry existed must not keep working forever.
+  const { createHmac } = await import("crypto");
+  const payload = Buffer.from(
+    JSON.stringify({ brandId: "b", product: "search_console", origin: "https://x.test", nonce: "n" })
+  ).toString("base64url");
+  const mac = createHmac("sha256", process.env.GOOGLE_CLIENT_SECRET!).update(payload).digest("base64url");
+  expect(verifyState(`${payload}.${mac}`)).toBeNull();
+});
+
+test("start seals iat into the signed state", () => {
+  const src = read("app/api/portal/google/start/route.ts");
+  expect(src).toMatch(/iat:\s*Math\.floor\(Date\.now\(\) \/ 1000\)/);
 });
 
 test("the callback refuses to act on an unverified state", () => {

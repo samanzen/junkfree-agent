@@ -3,6 +3,7 @@ import { getActiveBrands, getBrandById } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerRankEnrich, drainBrand } from "@/lib/runner";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
+import { requireCronSecret } from "@/lib/cronAuth";
 import { orderByLastCompletedJob, PER_BRAND_BUDGET_MS, TICK_BUDGET_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
@@ -13,7 +14,8 @@ export const maxDuration = 60;
 // independently — one brand failing (or running out of this tick's time
 // budget) never blocks the rest.
 //
-// GET  = Vercel Cron, authenticated via `Authorization: Bearer ${CRON_SECRET}`.
+// GET  = Vercel Cron, authenticated via requireCronSecret (fails closed when
+//        CRON_SECRET is unset — see lib/cronAuth.ts).
 // POST = admin-only manual trigger for ONE brand (the brand currently
 //        selected in the dashboard) -- e.g. to enrich a brand's keywords
 //        without waiting for Monday. Deliberately NOT folded into
@@ -45,10 +47,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const cronErr = requireCronSecret(req);
+  if (cronErr) return cronErr;
 
   await clearStale();
   const brands = await getActiveBrands();
