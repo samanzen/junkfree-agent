@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerRankSync, drainBrand } from "@/lib/runner";
+import { requireCronSecret } from "@/lib/cronAuth";
 import { orderByLastCompletedJob, PER_BRAND_BUDGET_MS, TICK_BUDGET_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
@@ -11,11 +12,11 @@ export const maxDuration = 60;
 // is fresh when the agent plans its work. Each brand is processed
 // independently — one brand failing (or running out of this tick's time
 // budget) never blocks the rest.
+//
+// Authenticated via requireCronSecret (fails closed when CRON_SECRET is unset).
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const cronErr = requireCronSecret(req);
+  if (cronErr) return cronErr;
 
   await clearStale();
   const brands = await getActiveBrands();

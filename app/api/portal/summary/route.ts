@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { latestWithDelta, series } from "@/lib/metrics";
 import { strikingDistance } from "@/lib/gsc";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 // Customer-facing data API. Returns plain-English summaries — no agent
 // terminology, no raw markdown, no admin fields. Safe to expose to customers.
@@ -14,6 +15,10 @@ export async function GET(req: NextRequest) {
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Live GSC read via the shared service account — meter as external.
+  const limited = await enforceRate(brandId, "external");
+  if (limited) return limited;
 
   const { data: brand } = await db.from("brands").select("*").eq("id", brandId).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });

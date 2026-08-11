@@ -4,6 +4,7 @@ import { clearStale } from "@/lib/queue";
 import { triggerBrandRun } from "@/lib/runner";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { lastCompletedRunMap, MANUAL_RUN_COOLDOWN_MS } from "@/lib/scheduling";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest) {
   if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
   const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
+
+  // Enqueues work that spends money later. The per-brand cooldown below is a
+  // product guard ("don't re-run immediately"); this is the platform budget
+  // guard ("don't enqueue forever"). Both stay.
+  const limited = await enforceRate(brand_id, "dispatch");
+  if (limited) return limited;
 
   const brand = await getBrandById(brand_id);
   if (!brand || !brand.active) return NextResponse.json({ error: "brand not found" }, { status: 404 });

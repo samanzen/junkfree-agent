@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { enqueue, pendingCount, type JobKind } from "@/lib/queue";
-import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { requireAuth, isAuthError, requireBrandAccess, requireAdmin } from "@/lib/auth";
 import { describeConnections, toPublic, type ConnectionKey } from "@/lib/connections";
 import { disconnectIntegration } from "@/lib/integrations";
 import type { SitePlatform } from "@/lib/execution/types";
 import { listProperties } from "@/lib/gsc";
+import { googleConfigured } from "@/lib/google/oauth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -45,10 +47,13 @@ type Action = "connect" | "disconnect" | "reconnect" | "sync_now";
 
 // Which job kind a "Sync now" maps to. Reuses the existing queue and steps —
 // this never runs agent work inline, it only asks for it.
+//
+// keyword_data deliberately omitted: rank_enrich is the weekly DataForSEO +
+// AI scoring job, kept off customer-reachable paths (see
+// app/api/cron/rank-enrich). website_publishing omitted: stepPublish needs a
+// draftId and a bare enqueue would only fail.
 const SYNC_JOBS: Partial<Record<ConnectionKey, JobKind[]>> = {
   search_console: ["rank_sync"],
-  keyword_data: ["rank_enrich"],
-  website_publishing: ["publish"],
 };
 
 // POST — act on a connection.
@@ -78,6 +83,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    // Enqueues work that spends money later — same dispatch bucket as /api/run.
+    const limited = await enforceRate(brandId, "dispatch");
+    if (limited) return limited;
     // Don't stack duplicate work if a sync is already waiting.
     const pending = await pendingCount(brandId, kinds);
     if (pending > 0) {
@@ -106,6 +114,24 @@ export async function POST(req: NextRequest) {
         message: "Search Console disconnected. Ranking and traffic data will stop updating.",
       });
     }
+
+    // Once Google OAuth is configured, connect/reconnect MUST go through
+    // /api/portal/google/* — the service-account property list is shared
+    // across every tenant, so accepting `account` here would let Tenant A
+    // attach Tenant B's Search Console property and pull B's rankings.
+    // lib/connections.ts already hides the legacy picker when OAuth is on;
+    // this closes the crafted-POST hole that the UI no longer offers.
+    if (googleConfigured()) {
+      return NextResponse.json(
+        { error: "Sign in with Google to connect Search Console." },
+        { status: 400 }
+      );
+    }
+
+    // Legacy path (no OAuth client): only admins may bind a SA-shared
+    // property. A customer must never choose from the platform-wide inventory.
+    const adminErr = requireAdmin(auth);
+    if (adminErr) return adminErr;
 
     // connect / reconnect both mean: prove we can read the property, then record it.
     // There is no OAuth redirect — access is granted by adding our service

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { strikingDistance, lowCtrPages } from "@/lib/gsc";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
@@ -13,6 +14,11 @@ export async function GET(req: NextRequest) {
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
+
+  // Shared platform GSC service-account quota — one tenant hammering these
+  // live reads exhausts Search Console for everybody.
+  const limited = await enforceRate(brandId, "external");
+  if (limited) return limited;
 
   const { data: brand } = await db.from("brands").select("*").eq("id", brandId).single();
 
