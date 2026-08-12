@@ -66,7 +66,9 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
         const isAdmin = me.role === "admin";
 
         if (!me.brand_id && !isAdmin) {
-          settle({ loading: false, error: "No brand is linked to your account yet. Please contact your account manager.", isAdmin, brand: null });
+          // Self-serve customers create their brand in /onboarding. Leaving them
+          // on a permanent error screen was the old managed-account assumption.
+          router.replace("/onboarding");
           return;
         }
 

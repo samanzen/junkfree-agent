@@ -17,7 +17,11 @@ async function destinationForSession(token?: string): Promise<string> {
     const res = await fetch("/api/me", token ? { headers: { authorization: `Bearer ${token}` } } : {});
     if (!res.ok) return "/portal";
     const me = await res.json();
-    return me.role === "admin" ? "/dashboard" : "/portal";
+    if (me.role === "admin") return "/dashboard";
+    // Brand-new customers finish workspace setup before the portal has anything
+    // to scope to — without this they hit a permanent "no brand linked" wall.
+    if (!me.brand_id) return "/onboarding";
+    return "/portal";
   } catch {
     return "/portal";
   }
@@ -84,6 +88,9 @@ export default function Login() {
         <button onClick={signIn} disabled={busy} data-busy={busy || undefined} aria-live="polite">
           <span>{busy ? "Signing in…" : "Sign in"}</span>
         </button>
+        <p className="signup-link">
+          New here? <a href="/signup">Create an account</a>
+        </p>
         {/* Debug: show whether env vars are loaded */}
         {!process.env.NEXT_PUBLIC_SUPABASE_URL && (
           <div className="err">Missing NEXT_PUBLIC_SUPABASE_URL — check Vercel env vars.</div>
@@ -116,6 +123,9 @@ const CSS = `
 .lg button:active:not(:disabled) { background:#1A45BE; transform:translateY(1px); }
 .lg button:disabled { opacity:.6; cursor:default; }
 .lg .err { color:#B3261E; font-size:13px; margin-bottom:10px; padding:10px 12px; background:rgba(179,38,30,.08); border-radius:var(--radius-sm); border:1px solid rgba(179,38,30,.2); }
+.lg .signup-link { margin:18px 0 0; text-align:center; font-size:13.5px; color:#616C82; }
+.lg .signup-link a { color:#2563EB; font-weight:600; text-decoration:none; }
+.lg .signup-link a:hover { text-decoration:underline; }
 
 /* ══ Phase 4: shared form fields ══════════════════════════════════════════ */
 ${fieldCSS(".lg", {

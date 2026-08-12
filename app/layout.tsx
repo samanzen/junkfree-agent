@@ -1,4 +1,4 @@
-import { Inter } from "next/font/google";
+import { Inter, Syne, DM_Sans } from "next/font/google";
 import { GLOBAL_CSS, PLATFORM_NAME, PLATFORM_DESCRIPTION } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
@@ -22,6 +22,22 @@ const inter = Inter({
   weight: ["400", "500", "600", "700", "800"],
 });
 
+// Marketing-only faces. Product UI keeps Inter via --font-sans; landing /
+// pricing / signup read these variables under the .mk scope. Loading them at
+// the root means client marketing pages get the faces without a second layout
+// tree or a render-blocking <link>.
+const syne = Syne({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-syne",
+  weight: ["500", "600", "700", "800"],
+});
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-dm-sans",
+  weight: ["400", "500", "600", "700"],
+});
 
 // The platform's own identity, never a tenant's. A signed-in customer's
 // business name is applied on top of this per page (see PortalShell), and this
@@ -34,7 +50,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${syne.variable} ${dmSans.variable}`}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>
