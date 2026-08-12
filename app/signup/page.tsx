@@ -9,6 +9,8 @@ import { PLATFORM_NAME, TRIAL_DAYS } from "@/lib/ui/tokens";
 // The pure shape module, never lib/audit/url: that one imports dns/promises and
 // would drag a Node built-in into the browser bundle.
 import { checkUrlShape } from "@/lib/audit/url-shape";
+import SocialAuthButtons from "@/app/_components/SocialAuthButtons";
+import { destinationForSession } from "@/lib/authDestination";
 
 export default function SignupPage() {
   // useSearchParams needs a Suspense boundary to keep this page prerenderable.
@@ -38,10 +40,6 @@ function SignupInner() {
     if (checked.ok) setSite(checked.url.toString());
   }, []);
 
-  function nextStep(): string {
-    return site ? `/onboarding?site=${encodeURIComponent(site)}` : "/onboarding";
-  }
-
   async function signUp() {
     if (!email || !pw) {
       setErr("Please enter your email and password.");
@@ -67,7 +65,13 @@ function SignupInner() {
       // Some projects require email confirmation before a session exists.
       // Only then do we keep the user on this page with a clear next step.
       if (data.session) {
-        router.push(nextStep());
+        // Always land new self-serve accounts on customer onboarding — never the
+        // admin console. destinationForSession enforces role → route.
+        const dest = await destinationForSession(data.session.access_token, {
+          next: "/onboarding",
+          site: site || null,
+        });
+        router.push(dest);
         return;
       }
       setInfo("Check your email to confirm your account, then sign in to continue setup.");
@@ -93,6 +97,7 @@ function SignupInner() {
               Report for <b>{site.replace(/^https?:\/\//, "").replace(/\/$/, "")}</b>
             </p>
           )}
+
           <div className="mk-auth-fields">
             <Field
               label="Email"
@@ -149,6 +154,14 @@ function SignupInner() {
               {busy ? "Creating account…" : site ? "Unlock my full report" : "Start free trial"}
             </span>
           </button>
+
+          <SocialAuthButtons
+            next="/onboarding"
+            site={site || null}
+            onError={setErr}
+            disabled={busy}
+            variant="signup"
+          />
           <p className="mk-auth-trust">
             {TRIAL_DAYS}-day trial · No credit card · Cancel anytime
           </p>

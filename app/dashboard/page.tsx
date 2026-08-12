@@ -190,6 +190,11 @@ export default function Dashboard() {
       const res = await authedFetch("/api/me");
       if (!res.ok) { router.push("/login"); return; }
       const me = await res.json();
+      // Admin console only — customers belong in onboarding/portal.
+      if (me.role !== "admin") {
+        router.replace(me.brand_id ? "/portal" : "/onboarding");
+        return;
+      }
       setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
     })();
     /* eslint-disable-next-line */

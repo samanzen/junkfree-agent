@@ -59,8 +59,17 @@ test("onboard API enforces auth, rejects admins, and activates self-serve brands
 
 test("customers without a brand are guided to onboarding", () => {
   expect(read("lib/portalAuth.tsx")).toMatch(/\/onboarding/);
-  expect(read("app/login/page.tsx")).toMatch(/\/onboarding/);
+  expect(read("app/login/page.tsx")).toMatch(/\/onboarding|destinationForSession|Create an account/);
   expect(read("app/login/page.tsx")).toMatch(/Create an account/);
+});
+
+test("login and signup offer social providers and route via /auth/callback", () => {
+  expect(fs.existsSync(`${ROOT}/app/auth/callback/page.tsx`)).toBe(true);
+  expect(read("app/login/page.tsx")).toMatch(/SocialAuthButtons/);
+  expect(read("app/signup/page.tsx")).toMatch(/SocialAuthButtons/);
+  expect(read("app/_components/SocialAuthButtons.tsx")).toMatch(/signInWithOAuth/);
+  expect(read("app/_components/SocialAuthButtons.tsx")).toMatch(/google/);
+  expect(read("app/signup/page.tsx")).toMatch(/destinationForSession/);
 });
 
 test("Shopify adapter is registered in the execution layer", () => {

@@ -103,7 +103,11 @@ test("the audited URL survives signup and reaches onboarding", () => {
 
   const signup = read("app/signup/page.tsx");
   expect(signup).toMatch(/checkUrlShape/); // re-validated, never trusted
-  expect(signup).toMatch(/\/onboarding\?site=/);
+  // Site rides through destinationForSession → /onboarding?site=
+  expect(signup).toMatch(/destinationForSession/);
+  expect(signup).toMatch(/site:\s*site/);
+  expect(read("lib/authDestination.ts")).toMatch(/withSiteParam/);
+  expect(read("lib/authDestination.ts")).toMatch(/\/onboarding/);
 
   const onboarding = read("app/onboarding/page.tsx");
   expect(onboarding).toMatch(/get\("site"\)/);
