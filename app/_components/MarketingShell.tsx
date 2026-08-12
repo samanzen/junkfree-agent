@@ -225,13 +225,22 @@ export const MARKETING_CSS = `
     linear-gradient(165deg, #EEF2F8 0%, #F7F8FB 42%, #E7EDF7 100%);
 }
 .mk-hero::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background-image:
-    linear-gradient(rgba(15,23,42,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15,23,42,.035) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 80% 70% at 60% 40%, #000 20%, transparent 75%);
-  animation: mkGridDrift 28s linear infinite;
+    linear-gradient(rgba(37,99,235,.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,99,235,.09) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 95% 85% at 50% 40%, #000 35%, transparent 88%);
+  animation: mkGridDrift 18s linear infinite;
+  opacity: .85;
+}
+.mk-hero::after {
+  content: ""; position: absolute; inset: -20% -10%; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 42% 34% at 78% 18%, rgba(37,99,235,.22), transparent 70%),
+    radial-gradient(ellipse 38% 32% at 12% 78%, rgba(232,121,58,.16), transparent 68%),
+    radial-gradient(ellipse 30% 28% at 52% 8%, rgba(37,99,235,.10), transparent 70%);
+  animation: mkAurora 12s var(--ease-inout) infinite alternate;
 }
 .mk-hero-inner {
   position: relative; z-index: 1;
@@ -269,58 +278,96 @@ ${up.md} {
   margin-inline: auto;
 }
 .mk-hero-audit .mk-hero-copy:has(.ad-result) .mk-hero-support { max-width: 52ch; }
+.mk-hero-audit .mk-hero-copy:has(.ad-result) .mk-loop,
+.mk-hero-audit .mk-hero-copy:has(.ad-result) .mk-hero-alt { display: none; }
 .mk-hero-audit .ad-form { text-align: left; max-width: 36rem; margin-inline: auto; }
 .mk-hero-audit .ad-prompt { text-align: center; }
 .mk-hero-audit .ad-micro { text-align: center; }
 
 /* Soft depth layers behind the hero CTA — parallax-ish drift, not card chrome */
 .mk-hero-depth {
-  position: absolute; inset: -8% -4%; pointer-events: none; z-index: 0;
-  perspective: 900px; transform-style: preserve-3d; overflow: hidden;
+  position: absolute; inset: -10% -6%; pointer-events: none; z-index: 0;
+  perspective: 1100px; transform-style: preserve-3d; overflow: hidden;
 }
 .mk-depth-orb {
   position: absolute; border-radius: 50%;
-  filter: blur(2px);
-  will-change: transform;
+  filter: blur(0.5px);
+  will-change: transform, opacity;
+  mix-blend-mode: multiply;
 }
 .mk-depth-orb-a {
-  width: min(42vw, 420px); height: min(42vw, 420px);
-  left: -6%; top: 12%;
-  background: radial-gradient(circle at 35% 35%, rgba(37,99,235,.28), rgba(37,99,235,.04) 62%, transparent 72%);
-  animation: mkDepthFloatA 14s var(--ease-inout) infinite;
+  width: min(48vw, 480px); height: min(48vw, 480px);
+  left: -8%; top: 6%;
+  background: radial-gradient(circle at 35% 35%, rgba(37,99,235,.42), rgba(37,99,235,.12) 48%, transparent 70%);
+  animation: mkDepthFloatA 10s var(--ease-inout) infinite;
+  opacity: .95;
 }
 .mk-depth-orb-b {
-  width: min(36vw, 340px); height: min(36vw, 340px);
-  right: -4%; bottom: 8%;
-  background: radial-gradient(circle at 60% 40%, rgba(232,121,58,.22), rgba(232,121,58,.03) 60%, transparent 72%);
-  animation: mkDepthFloatB 18s var(--ease-inout) infinite;
+  width: min(42vw, 400px); height: min(42vw, 400px);
+  right: -6%; bottom: 2%;
+  background: radial-gradient(circle at 60% 40%, rgba(232,121,58,.38), rgba(232,121,58,.10) 50%, transparent 72%);
+  animation: mkDepthFloatB 13s var(--ease-inout) infinite;
+  opacity: .95;
 }
 .mk-depth-orb-c {
-  width: min(28vw, 260px); height: min(28vw, 260px);
-  left: 42%; top: -4%;
-  background: radial-gradient(circle at 50% 50%, rgba(15,23,42,.08), transparent 70%);
-  animation: mkDepthFloatC 22s var(--ease-inout) infinite;
+  width: min(34vw, 320px); height: min(34vw, 320px);
+  left: 38%; top: -6%;
+  background: radial-gradient(circle at 50% 50%, rgba(15,23,42,.16), rgba(37,99,235,.10) 55%, transparent 72%);
+  animation: mkDepthFloatC 16s var(--ease-inout) infinite;
 }
 .mk-depth-ring {
   position: absolute; border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--mk-accent) 22%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 40%, transparent);
-  transform: rotateX(62deg) rotateZ(-18deg);
-  animation: mkDepthSpin 26s linear infinite;
+  border: 2px solid color-mix(in srgb, var(--mk-accent) 42%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 55%, transparent),
+    0 0 0 8px color-mix(in srgb, var(--mk-accent) 6%, transparent);
+  transform: rotateX(58deg) rotateZ(-18deg);
+  animation: mkDepthSpin 20s linear infinite;
 }
 .mk-depth-ring-a {
-  width: min(58vw, 520px); height: min(58vw, 520px);
-  right: 4%; top: 18%;
-  opacity: .55;
+  width: min(62vw, 560px); height: min(62vw, 560px);
+  right: 2%; top: 12%;
+  opacity: .72;
 }
 .mk-depth-ring-b {
-  width: min(40vw, 360px); height: min(40vw, 360px);
-  left: 6%; bottom: 10%;
-  opacity: .4;
-  animation-duration: 34s;
+  width: min(44vw, 400px); height: min(44vw, 400px);
+  left: 4%; bottom: 6%;
+  opacity: .58;
+  animation-duration: 28s;
   animation-direction: reverse;
-  border-color: color-mix(in srgb, var(--mk-cta) 28%, transparent);
+  border-color: color-mix(in srgb, var(--mk-cta) 48%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 45%, transparent),
+    0 0 0 8px color-mix(in srgb, var(--mk-cta) 7%, transparent);
 }
+/* Orbiting nodes + light beams — readable motion without fighting the CTA */
+.mk-depth-beam {
+  position: absolute; height: 2px; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mk-accent) 55%, transparent), transparent);
+  transform-origin: left center;
+  opacity: .55;
+  animation: mkBeamSweep 7s var(--ease-inout) infinite;
+}
+.mk-depth-beam-a {
+  width: min(46vw, 420px); left: 8%; top: 28%;
+  transform: rotate(-18deg);
+}
+.mk-depth-beam-b {
+  width: min(38vw, 340px); right: 10%; bottom: 30%;
+  transform: rotate(14deg);
+  animation-delay: 1.4s;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mk-cta) 50%, transparent), transparent);
+}
+.mk-depth-node {
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--mk-accent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--mk-accent) 16%, transparent);
+  animation: mkNodePulse 2.8s var(--ease-inout) infinite;
+}
+.mk-depth-node-a { left: 14%; top: 22%; }
+.mk-depth-node-b { right: 18%; top: 34%; animation-delay: .7s; background: var(--mk-cta); box-shadow: 0 0 0 6px color-mix(in srgb, var(--mk-cta) 18%, transparent); }
+.mk-depth-node-c { left: 28%; bottom: 18%; animation-delay: 1.3s; }
+.mk-depth-node-d { right: 26%; bottom: 24%; animation-delay: 1.9s; background: var(--mk-cta); box-shadow: 0 0 0 6px color-mix(in srgb, var(--mk-cta) 18%, transparent); }
 /* The CTA block is the one part of the report that SHOULD stay centred. */
 .ad-cta { text-align: center; }
 .mk-hero-kicker {
@@ -1087,19 +1134,31 @@ ${up.sm} {
 }
 @keyframes mkDepthFloatA {
   0%, 100% { transform: translate3d(0, 0, 40px) scale(1); }
-  50% { transform: translate3d(18px, -22px, 80px) scale(1.06); }
+  50% { transform: translate3d(36px, -40px, 110px) scale(1.12); }
 }
 @keyframes mkDepthFloatB {
   0%, 100% { transform: translate3d(0, 0, 20px) scale(1); }
-  50% { transform: translate3d(-24px, 16px, 60px) scale(1.08); }
+  50% { transform: translate3d(-42px, 28px, 90px) scale(1.14); }
 }
 @keyframes mkDepthFloatC {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  50% { transform: translate3d(12px, 18px, 30px) scale(1.04); }
+  50% { transform: translate3d(24px, 30px, 50px) scale(1.1); }
 }
 @keyframes mkDepthSpin {
-  from { transform: rotateX(62deg) rotateZ(-18deg); }
-  to { transform: rotateX(62deg) rotateZ(342deg); }
+  from { transform: rotateX(58deg) rotateZ(-18deg); }
+  to { transform: rotateX(58deg) rotateZ(342deg); }
+}
+@keyframes mkAurora {
+  from { transform: translate3d(-3%, 1%, 0) scale(1); opacity: .85; }
+  to { transform: translate3d(4%, -2%, 0) scale(1.08); opacity: 1; }
+}
+@keyframes mkBeamSweep {
+  0%, 100% { opacity: .25; filter: saturate(.9); }
+  50% { opacity: .75; filter: saturate(1.15); }
+}
+@keyframes mkNodePulse {
+  0%, 100% { transform: scale(1); opacity: .7; }
+  50% { transform: scale(1.35); opacity: 1; }
 }
 
 @keyframes mkRise {
@@ -1108,7 +1167,7 @@ ${up.sm} {
 }
 @keyframes mkGridDrift {
   from { background-position: 0 0, 0 0; }
-  to { background-position: 48px 48px, 48px 48px; }
+  to { background-position: 56px 56px, 56px 56px; }
 }
 @keyframes mkPulse {
   0%, 100% { transform: scale(1); opacity: .85; }
@@ -1372,9 +1431,9 @@ ${up.md} {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mk-hero::before, .mk-hero-title, .mk-hero-support,
+  .mk-hero::before, .mk-hero::after, .mk-hero-title, .mk-hero-support,
   .ad-scan-dot, .ad-result, .ad-cue, .mk .ad.is-cue .ad-input.fld-input,
-  .mk-depth-orb, .mk-depth-ring {
+  .mk-depth-orb, .mk-depth-ring, .mk-depth-beam, .mk-depth-node {
     animation: none !important;
   }
   .mkc-panel { opacity: 1; transform: none; transition: none; }
@@ -1405,6 +1464,8 @@ ${down.sm} {
   .mk .ad-input.fld-input,
   .mk .ad-submit { height: 46px; min-height: 46px; max-height: 46px; font-size: 15px; }
   .mk .ad-submit { width: 100%; }
+  .mk-depth-beam, .mk-depth-node-c, .mk-depth-node-d { display: none; }
+  .mk-depth-orb-a, .mk-depth-orb-b { opacity: .8; }
 }
 
 /* Shared field + touch guarantees for marketing auth forms */

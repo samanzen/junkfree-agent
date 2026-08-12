@@ -24,6 +24,12 @@ export default function Home() {
             <span className="mk-depth-orb mk-depth-orb-c" />
             <span className="mk-depth-ring mk-depth-ring-a" />
             <span className="mk-depth-ring mk-depth-ring-b" />
+            <span className="mk-depth-beam mk-depth-beam-a" />
+            <span className="mk-depth-beam mk-depth-beam-b" />
+            <span className="mk-depth-node mk-depth-node-a" />
+            <span className="mk-depth-node mk-depth-node-b" />
+            <span className="mk-depth-node mk-depth-node-c" />
+            <span className="mk-depth-node mk-depth-node-d" />
           </div>
           <div className="mk-hero-inner">
             <div className="mk-hero-copy">
