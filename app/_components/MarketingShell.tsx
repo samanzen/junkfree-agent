@@ -249,8 +249,10 @@ ${up.md} {
 .mk-hero-audit .mk-hero-inner { grid-template-columns: minmax(0, 1fr); }
 .mk-hero-audit .mk-hero-copy { max-width: 46rem; margin-inline: auto; text-align: center; }
 .mk-hero-audit .ad-form { text-align: left; max-width: 40rem; margin-inline: auto; }
-.mk-hero-audit .ad-label { text-align: center; display: block; }
+.mk-hero-audit .ad-field .fld-label { justify-content: center; }
 .mk-hero-audit .ad-micro { text-align: center; }
+/* The CTA block is the one part of the report that SHOULD stay centred. */
+.ad-cta { text-align: center; }
 .mk-hero-kicker {
   font-family: var(--mk-font-display);
   font-size: 13px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
@@ -640,6 +642,9 @@ ${up.sm} { .ad-input-row { grid-template-columns: minmax(0, 1fr) auto; } }
   padding: clamp(20px, 4vw, 32px);
   box-shadow: 0 18px 48px rgba(18,33,47,.10);
   animation: mkRise .5s var(--ease-out) both;
+  /* The audit-led hero centres its copy; the report is dense multi-line reading
+     and must not inherit that. Centred body text in a card is hard to scan. */
+  text-align: left;
 }
 .ad-result:focus { outline: none; }
 .ad-result-head { display: grid; gap: 20px; align-items: center; }
@@ -821,9 +826,14 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 ${down.sm} {
-  .mk-nav-inner { width: calc(100% - 28px); }
+  .mk-nav-inner { width: calc(100% - 28px); gap: 8px; }
   .mk-wrap { width: calc(100% - 28px); }
-  .mk-nav-links > a:not(.mk-btn) { padding: 10px 8px; }
+  .mk-nav-links > a:not(.mk-btn) { padding: 10px 6px; font-size: 13.5px; }
+  /* At 390px the mark was wrapping to two lines and the links were crushing
+     against the trial button. Keep the two conversion actions (Login, Start
+     trial) and drop "Product", which the page itself scrolls to anyway. */
+  .mk-mark-name { white-space: nowrap; font-size: .98rem; }
+  .mk-nav-links > a[href="/#how"] { display: none; }
   .mk-hero { align-items: center; min-height: auto; padding-top: 48px; }
   .mk-auth-card { padding: 28px 22px; border-radius: var(--radius-md); }
 }
