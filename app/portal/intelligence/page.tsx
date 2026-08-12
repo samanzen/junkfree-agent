@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePortalAuth } from "@/lib/portalAuth";
 import PageHeader from "../_components/PageHeader";
 import SubNav from "../_components/SubNav";
@@ -22,9 +22,25 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "timeline", label: "Timeline" },
 ];
 
+const isTab = (v: string | null): v is Tab => TABS.some((t) => t.key === v);
+
 export default function IntelligencePage() {
   const { brand } = usePortalAuth();
   const [tab, setTab] = useState<Tab>("overview");
+
+  // Mirror Settings: restore tab from ?tab= after mount so SSR/prerender never
+  // touches window, and keep the URL in step so Back/refresh/share work.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    if (isTab(wanted)) setTab(wanted);
+  }, []);
+
+  const goToTab = useCallback((next: Tab) => {
+    setTab(next);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", next);
+    window.history.replaceState({}, "", `${window.location.pathname}?${params}`);
+  }, []);
 
   if (!brand) return null;
 
@@ -38,7 +54,7 @@ export default function IntelligencePage() {
 
       <AiSummary brandId={brand.id} section="search intelligence" brandName={brand.name} />
 
-      <SubNav items={TABS} value={tab} onChange={setTab} />
+      <SubNav items={TABS} value={tab} onChange={goToTab} />
 
       {tab === "overview" && <OverviewTab brandId={brand.id} />}
       {tab === "keywords" && <KeywordsTab brandId={brand.id} />}

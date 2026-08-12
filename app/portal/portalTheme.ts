@@ -130,8 +130,19 @@ export const PORTAL_CSS = `
   background:linear-gradient(90deg,var(--accent-soft),transparent 82%);
   border:1px solid var(--accent-line); border-left:2px solid var(--accent);
 }
-.p-nav-text { position:relative; z-index:1; }
-.p-side-foot { padding:12px 12px 12px; border-top:1px solid var(--line-soft); display:flex; align-items:center; gap:8px; }
+.p-nav-text { position:relative; z-index:1; flex:1; min-width:0; }
+.p-nav-count {
+  position:relative; z-index:1; margin-left:auto; min-width:18px; height:18px; padding:0 5px;
+  border-radius:var(--radius-full); display:inline-flex; align-items:center; justify-content:center;
+  background:var(--amber); color:#fff; font-size:10px; font-weight:700;
+  font-variant-numeric:tabular-nums; line-height:1;
+}
+.p-side-foot {
+  padding:8px 8px 12px; border-top:1px solid var(--line-soft);
+  display:flex; flex-direction:column; gap:4px; flex-shrink:0;
+}
+.p-side-pin { display:flex; flex-direction:column; gap:1px; }
+.p-side-foot-row { display:flex; align-items:center; gap:8px; padding:4px 4px 0; }
 .p-icon-btn {
   background:var(--surface); border:1px solid var(--line); color:var(--muted); width:32px; height:32px;
   border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
@@ -144,6 +155,42 @@ export const PORTAL_CSS = `
   transition:color var(--dur-2), border-color var(--dur-2);
 }
 .p-signout-btn:hover { color:var(--text); border-color:var(--line-strong); }
+
+/* ══ Command palette (⌘K) ═══════════════════════════════════════════ */
+.p-cmd-root { position:fixed; inset:0; z-index:400; display:flex; align-items:flex-start; justify-content:center; padding:12vh 16px 24px; }
+.p-cmd-scrim { position:absolute; inset:0; background:rgba(8,11,17,.46); }
+.p-cmd {
+  position:relative; width:min(520px,100%); background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--r-lg); box-shadow:var(--sh-4); overflow:hidden; display:flex; flex-direction:column; max-height:min(420px,70vh);
+}
+.p-cmd-bar { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line-soft); }
+.p-cmd-field { flex:1; min-width:0; margin:0; }
+.p-cmd-field .fld-control { margin:0; }
+.p-cmd-input {
+  width:100%; border:0 !important; background:transparent !important; box-shadow:none !important;
+  color:var(--text); font:inherit; font-size:15px; letter-spacing:-.014em; outline:none; min-width:0;
+  padding:0 !important;
+}
+.p-cmd-input::placeholder { color:var(--muted2); }
+.p-cmd-kbd {
+  font-family:var(--font-mono); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted2); background:var(--surface2); border:1px solid var(--line); border-radius:var(--r-xs); padding:3px 6px;
+}
+.p-cmd-list { list-style:none; margin:0; padding:8px; overflow-y:auto; }
+.p-cmd-empty { padding:18px 12px; font-size:13px; color:var(--muted); text-align:center; }
+.p-cmd-item {
+  width:100%; display:flex; align-items:center; gap:10px; padding:10px 12px; border:0; border-radius:var(--r-sm);
+  background:transparent; color:var(--text); font:inherit; font-size:13.5px; font-weight:500; text-align:left; cursor:pointer;
+  transition:background var(--dur-1) var(--ease-out);
+}
+.p-cmd-item:hover, .p-cmd-item.on { background:var(--accent-soft); }
+.p-cmd-ico {
+  width:26px; height:26px; border-radius:var(--r-xs); display:flex; align-items:center; justify-content:center;
+  background:var(--surface2); color:var(--muted); flex-shrink:0;
+}
+.p-cmd-item.on .p-cmd-ico { background:var(--accent); color:var(--on-accent); }
+.p-cmd-label { flex:1; min-width:0; }
+.p-cmd-group { font-size:11px; color:var(--muted2); font-weight:600; letter-spacing:.02em; }
 
 .p-main-col { flex:1; min-width:0; display:flex; flex-direction:column; }
 .p-topbar {
@@ -1099,6 +1146,12 @@ ${down.md} {
   .p-bnav-pill {
     position:absolute; inset:0; border-radius:var(--r-xs); z-index:0;
     background:var(--accent-soft); border:1px solid var(--accent-line);
+  }
+  .p-bnav-count {
+    position:absolute; top:-4px; right:2px; z-index:2; min-width:15px; height:15px; padding:0 4px;
+    border-radius:var(--radius-full); display:inline-flex; align-items:center; justify-content:center;
+    background:var(--amber); color:#fff; font-size:9px; font-weight:700;
+    font-variant-numeric:tabular-nums; line-height:1; border:1.5px solid var(--surface);
   }
   .p-bnav-label { font-size:10.5px; font-weight:600; letter-spacing:-.005em; line-height:1; }
 

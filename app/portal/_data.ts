@@ -30,17 +30,22 @@ export type PlatformData = {
 };
 
 // Single brand-scoped read of /api/platform. Reused by Dashboard, Content,
-// Reviews and Local SEO instead of each page rolling its own fetch.
+// Reviews, Approvals and Local SEO instead of each page rolling its own fetch.
 export function usePlatformData(brandId: string | undefined) {
   const [data, setData] = useState<PlatformData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
     setLoading(true);
+    setError(null);
     authedFetch(`/api/platform?brand=${brandId}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error("platform");
+        return r.json();
+      })
       .then((d) => {
         if (cancelled) return;
         setData({
@@ -49,11 +54,51 @@ export function usePlatformData(brandId: string | undefined) {
         });
         setLoading(false);
       })
-      .catch(() => { if (!cancelled) setLoading(false); });
+      .catch(() => {
+        if (!cancelled) {
+          setError("We couldn't load items waiting on you.");
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [brandId]);
 
-  return { data, loading };
+  return { data, loading, error };
+}
+
+export type ApprovalCounts = { drafts: number; reviews: number; total: number };
+
+/**
+ * Lightweight pending-approval counts for nav badges.
+ *
+ * Hits /api/platform once per brandId/refreshKey. Kept separate from
+ * usePlatformData so the shell can show a badge without every page also
+ * re-subscribing to the full payload — and so Approvals can still own its
+ * own fuller read without a shared cache storm.
+ */
+export function useApprovalCounts(brandId: string | undefined, refreshKey?: string): ApprovalCounts {
+  const [counts, setCounts] = useState<ApprovalCounts>({ drafts: 0, reviews: 0, total: 0 });
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/platform?brand=${brandId}`)
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        const drafts = (d.drafts || []).filter(
+          (x: { status: string }) => x.status === "pending_review",
+        ).length;
+        const reviews = (d.reviews || []).filter(
+          (x: { status: string }) => x.status === "pending_review",
+        ).length;
+        setCounts({ drafts, reviews, total: drafts + reviews });
+      })
+      .catch(() => { /* badge stays at last known */ });
+    return () => { cancelled = true; };
+  }, [brandId, refreshKey]);
+
+  return counts;
 }
 
 // ── /api/portal/activity ────────────────────────────────────────────────────

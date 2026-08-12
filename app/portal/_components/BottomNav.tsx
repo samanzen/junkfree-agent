@@ -3,35 +3,37 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { m } from "framer-motion";
 import { EASE } from "./motion";
-import { IconDashboard, IconTarget, IconIntelligence, IconAssistant, IconMenu } from "../icons";
+import { IconDashboard, IconCheck, IconIntelligence, IconAssistant, IconMenu } from "../icons";
 
 // Mobile bottom navigation. Appears below the `md` breakpoint, where the
 // sidebar is replaced by a drawer.
 //
 // This SUPPLEMENTS the drawer, it does not replace it: four destinations get a
 // permanent thumb-reachable home, and "More" opens the same drawer that already
-// holds all thirteen. No destination becomes unreachable, and nothing here is a
-// second implementation of the nav -- the drawer remains the single source for
-// the full list.
-//
-// The four were chosen from what a business owner does on a phone: check how
-// they're doing, see what needs them, look at the numbers, ask a question.
-// Content approvals stay one tap away through the dashboard's priority cards.
+// holds the full intent-grouped list. Approvals sits on the bar so pending
+// decisions stay one tap away; everything else remains reachable via More.
 
 const ITEMS = [
   { href: "/portal", label: "Home", Icon: IconDashboard, exact: true },
-  { href: "/portal/opportunities", label: "Actions", Icon: IconTarget },
+  { href: "/portal/approvals", label: "Approvals", Icon: IconCheck, badge: "approvals" as const },
   { href: "/portal/intelligence", label: "Rankings", Icon: IconIntelligence },
   { href: "/portal/assistant", label: "Ask", Icon: IconAssistant },
 ];
 
-export default function BottomNav({ onMore, moreOpen }: { onMore: () => void; moreOpen: boolean }) {
+export default function BottomNav({
+  onMore, moreOpen, approvalCount = 0,
+}: {
+  onMore: () => void;
+  moreOpen: boolean;
+  approvalCount?: number;
+}) {
   const pathname = usePathname();
 
   return (
     <nav className="p-bnav" aria-label="Primary">
       {ITEMS.map((item) => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+        const badge = item.badge === "approvals" && approvalCount > 0 ? approvalCount : null;
         return (
           <Link
             key={item.href}
@@ -48,6 +50,11 @@ export default function BottomNav({ onMore, moreOpen }: { onMore: () => void; mo
                 />
               )}
               <item.Icon size={19} />
+              {badge != null && (
+                <span className="p-bnav-count" aria-label={`${badge} waiting`}>
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
             </span>
             <span className="p-bnav-label">{item.label}</span>
           </Link>

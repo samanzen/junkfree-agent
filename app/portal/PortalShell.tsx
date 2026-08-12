@@ -9,31 +9,12 @@ import { pageTitle, PLATFORM_TAGLINE } from "@/lib/ui/tokens";
 import { PORTAL_CSS } from "./portalTheme";
 import { EASE } from "./_components/motion";
 import BottomNav from "./_components/BottomNav";
+import CommandPalette from "./_components/CommandPalette";
+import { useApprovalCounts } from "./_data";
+import { NAV_GROUPS, type NavItem } from "./nav";
 import {
-  IconDashboard, IconIntelligence, IconLocalSeo, IconWebsite, IconContent,
-  IconReviews, IconReports, IconBilling, IconSettings, IconAssistant,
-  IconSun, IconMoon, IconMenu, IconClose, IconTarget, IconCompetitors, IconTechnical,
+  IconSun, IconMoon, IconMenu, IconClose,
 } from "./icons";
-
-const NAV_MAIN = [
-  { href: "/portal", label: "Dashboard", Icon: IconDashboard, exact: true },
-  { href: "/portal/opportunities", label: "Opportunities", Icon: IconTarget },
-  { href: "/portal/intelligence", label: "Intelligence", Icon: IconIntelligence },
-  { href: "/portal/competitors", label: "Competitors", Icon: IconCompetitors },
-  { href: "/portal/local-seo", label: "Local SEO", Icon: IconLocalSeo },
-  { href: "/portal/website", label: "Website", Icon: IconWebsite },
-  { href: "/portal/technical", label: "Technical SEO", Icon: IconTechnical },
-  { href: "/portal/content", label: "Content", Icon: IconContent },
-  { href: "/portal/reviews", label: "Reviews", Icon: IconReviews },
-];
-const NAV_MANAGE = [
-  { href: "/portal/reports", label: "Reports", Icon: IconReports },
-  { href: "/portal/billing", label: "Billing", Icon: IconBilling },
-  { href: "/portal/settings", label: "Settings", Icon: IconSettings },
-];
-const NAV_AI = [
-  { href: "/portal/assistant", label: "AI Assistant", Icon: IconAssistant },
-];
 
 type Theme = "light" | "dark";
 
@@ -60,11 +41,16 @@ function initials(name?: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 }
 
+function isActive(item: NavItem, pathname: string) {
+  return item.exact ? pathname === item.href : pathname.startsWith(item.href);
+}
+
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const { loading, error, isAdmin, brand, signOut } = usePortalAuth();
   const { theme, toggle } = usePortalTheme();
   const [navOpen, setNavOpen] = useState(false);
   const pathname = usePathname();
+  const approvalCounts = useApprovalCounts(brand?.id, pathname);
 
   // The browser tab carries the SIGNED-IN tenant's own name.
   //
@@ -89,11 +75,34 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
-  const groups: { label?: string; items: typeof NAV_MAIN }[] = [
-    { items: NAV_MAIN },
-    { label: "Manage", items: NAV_MANAGE },
-    { label: "Assistant", items: NAV_AI },
-  ];
+  const scrollGroups = NAV_GROUPS.filter((g) => g.pin !== "footer");
+  const footerGroups = NAV_GROUPS.filter((g) => g.pin === "footer");
+
+  const renderItem = (item: NavItem, navId: string) => {
+    const active = isActive(item, pathname);
+    const badge = item.badge === "approvals" && approvalCounts.total > 0
+      ? approvalCounts.total
+      : null;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`p-nav-item ${active ? "on" : ""}`}
+        aria-current={active ? "page" : undefined}
+      >
+        {active && (
+          <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.28, ease: EASE }} />
+        )}
+        <span className="p-nav-ico"><item.Icon size={16} /></span>
+        <span className="p-nav-text">{item.label}</span>
+        {badge != null && (
+          <span className="p-nav-count" aria-label={`${badge} waiting`}>
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </Link>
+    );
+  };
 
   // `navId` scopes the sliding active-pill: the desktop and mobile sidebars can
   // both be mounted at once, and a shared layoutId across the two would make
@@ -108,34 +117,25 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         </span>
       </div>
       <nav className="p-side-nav">
-        {groups.map((g, gi) => (
-          <div key={gi}>
-            {g.label && <div className="p-nav-label">{g.label}</div>}
-            {g.items.map((item) => {
-              const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`p-nav-item ${active ? "on" : ""}`}
-                  aria-current={active ? "page" : undefined}
-                >
-                  {active && (
-                    <m.span layoutId={navId} className="p-nav-hl" transition={{ duration: 0.28, ease: EASE }} />
-                  )}
-                  <span className="p-nav-ico"><item.Icon size={16} /></span>
-                  <span className="p-nav-text">{item.label}</span>
-                </Link>
-              );
-            })}
+        {scrollGroups.map((g) => (
+          <div key={g.label}>
+            <div className="p-nav-label">{g.label}</div>
+            {g.items.map((item) => renderItem(item, navId))}
           </div>
         ))}
       </nav>
       <div className="p-side-foot">
-        <button className="p-icon-btn" onClick={toggle} aria-label="Toggle colour theme">
-          {theme === "dark" ? <IconSun size={15} /> : <IconMoon size={15} />}
-        </button>
-        <button className="p-signout-btn" onClick={signOut}>Sign out</button>
+        {footerGroups.map((g) => (
+          <div key={g.label} className="p-side-pin">
+            {g.items.map((item) => renderItem(item, navId))}
+          </div>
+        ))}
+        <div className="p-side-foot-row">
+          <button className="p-icon-btn" onClick={toggle} aria-label="Toggle colour theme">
+            {theme === "dark" ? <IconSun size={15} /> : <IconMoon size={15} />}
+          </button>
+          <button className="p-signout-btn" onClick={signOut}>Sign out</button>
+        </div>
       </div>
     </div>
   );
@@ -205,9 +205,14 @@ export default function PortalShell({ children }: { children: React.ReactNode })
 
               {/* Thumb-reachable nav below md. "More" opens the same drawer,
                   so every section stays reachable — nothing is mobile-only. */}
-              <BottomNav onMore={() => setNavOpen((o) => !o)} moreOpen={navOpen} />
+              <BottomNav
+                onMore={() => setNavOpen((o) => !o)}
+                moreOpen={navOpen}
+                approvalCount={approvalCounts.total}
+              />
             </div>
           </div>
+          <CommandPalette />
         </div>
       </MotionConfig>
     </LazyMotion>
