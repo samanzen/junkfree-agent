@@ -1171,6 +1171,104 @@ ${down.md} {
   .p-scrim { z-index:190; }
 }
 
+/* ── Activation journey (/portal/setup) ─────────────────────────── */
+.p-journey {
+  list-style:none; margin:0; padding:0;
+  display:flex; gap:6px; flex-wrap:wrap;
+}
+.p-journey-step {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:8px 12px; border-radius:var(--radius-sm);
+  border:1px solid var(--line); background:var(--surface);
+  color:var(--text2); font-size:12.5px; font-weight:600;
+  cursor:pointer; transition:border-color var(--dur-2) var(--ease-out),
+    background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out);
+}
+.p-journey-step:hover { border-color:var(--line-strong); color:var(--text); }
+.p-journey-step.active {
+  border-color:var(--accent-line); background:var(--accent-soft); color:var(--accent);
+}
+.p-journey-step.done { color:var(--green); }
+.p-journey-mark {
+  width:20px; height:20px; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--sunken); border:1px solid var(--line);
+  font-size:10.5px; font-variant-numeric:tabular-nums; flex-shrink:0;
+}
+.p-journey-step.active .p-journey-mark {
+  background:var(--accent); border-color:var(--accent); color:var(--on-accent);
+}
+.p-journey-step.done .p-journey-mark {
+  background:var(--green-soft); border-color:var(--green-line); color:var(--green);
+}
+.p-journey-label { white-space:nowrap; }
+.p-setup-body { display:flex; flex-direction:column; gap:14px; }
+.p-setup-copy {
+  margin:0; font-size:14px; line-height:1.55; color:var(--text2); max-width:52ch;
+}
+.p-setup-copy b { color:var(--text); font-weight:600; }
+.p-setup-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.p-setup-skip {
+  margin:0; font-size:12.5px; color:var(--muted); text-align:center;
+}
+.p-setup-skip a { color:var(--accent); font-weight:600; text-decoration:none; }
+.p-setup-skip a:hover { text-decoration:underline; }
+.p-setup-continue {
+  display:inline-flex; align-items:center; gap:6px; margin-top:12px;
+  font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none;
+}
+.p-setup-continue:hover { text-decoration:underline; }
+.p-conn-embedded .p-conn-list { margin-top:4px; }
+
+/* ── Outcome trails (/portal/results + home strip) ──────────────── */
+.p-outcome-summary {
+  display:flex; flex-wrap:wrap; gap:8px;
+}
+.p-outcome-summary.home { padding: 2px 0 6px; }
+.p-outcome-pill {
+  display:inline-flex; align-items:baseline; gap:8px;
+  padding:10px 14px; border-radius:var(--radius-sm);
+  border:1px solid var(--line); background:var(--surface2);
+  min-width:108px;
+}
+.p-outcome-pill b {
+  font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--text);
+}
+.p-outcome-pill span { font-size:12px; color:var(--muted); font-weight:600; }
+.p-outcome-pill.tone-green { border-color:var(--green-line); background:var(--green-soft); }
+.p-outcome-pill.tone-green b { color:var(--green); }
+.p-outcome-pill.tone-red { border-color:var(--red-line); background:var(--red-soft); }
+.p-outcome-pill.tone-red b { color:var(--red); }
+.p-outcome-pill.tone-amber { border-color:var(--amber-line); background:var(--amber-soft); }
+.p-outcome-pill.tone-amber b { color:var(--amber); }
+.p-outcome-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; }
+.p-outcome-row {
+  display:flex; gap:16px; align-items:flex-start; justify-content:space-between;
+  padding:16px 0; border-top:1px solid var(--line-soft);
+}
+.p-outcome-row:first-child { border-top:0; padding-top:4px; }
+.p-outcome-main { min-width:0; flex:1; }
+.p-outcome-title { font-size:14.5px; font-weight:660; color:var(--text); }
+.p-outcome-meta {
+  display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;
+  font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums;
+}
+.p-outcome-url { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:36ch; }
+.p-outcome-explain {
+  margin:8px 0 0; font-size:13px; line-height:1.5; color:var(--text2); max-width:62ch;
+}
+.p-outcome-deltas {
+  display:flex; flex-wrap:wrap; gap:14px; margin-top:10px;
+  font-size:12.5px; color:var(--muted);
+}
+.p-outcome-deltas b { color:var(--text); font-variant-numeric:tabular-nums; }
+.p-outcome-deltas em { font-style:normal; color:var(--muted2); margin-left:4px; font-size:11.5px; }
+${down.sm} {
+  .p-outcome-row { flex-direction:column; gap:10px; }
+  .p-journey-label { display:none; }
+  .p-journey-step.active .p-journey-label { display:inline; }
+}
+
 /* Printing a report should never include navigation chrome. */
 @media print { .p-bnav { display:none !important; } }
 `;

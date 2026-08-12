@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePortalAuth } from "@/lib/portalAuth";
 import {
   usePlatformData, usePortalSummary, useAgentActivity,
+  useSetupProgress, useOutcomeSummary,
   computeSeoScore, computeLocalScore, computeOverallHealth, greeting,
   type PortalSummary, type PlatformData,
 } from "./_data";
@@ -39,7 +40,7 @@ function buildPriorities(
     out.push({
       text: "Connect Google Search Console",
       sub: "This is how rankings, clicks and opportunities reach your dashboard",
-      tone: "accent", href: "/portal/settings",
+      tone: "accent", href: "/portal/setup?step=search_console",
     });
   }
 
@@ -47,7 +48,7 @@ function buildPriorities(
     out.push({
       text: "Add your website address",
       sub: "Needed before we can publish approved work to your site",
-      tone: "amber", href: "/portal/settings",
+      tone: "amber", href: "/portal/setup",
     });
   }
 
@@ -90,13 +91,6 @@ function buildPriorities(
   return out.slice(0, 5);
 }
 
-function pendingDraftsReady(platform: PlatformData | null): boolean {
-  if (!platform) return false;
-  return platform.drafts.some((d) =>
-    d.status === "pending_review" || d.status === "approved" || d.status === "published"
-  );
-}
-
 export default function PortalDashboard() {
   const { brand } = usePortalAuth();
   const { summary, loading: sLoading } = usePortalSummary(brand?.id);
@@ -104,6 +98,8 @@ export default function PortalDashboard() {
   // Agent activity loads independently of the metrics: it is the fastest query
   // on the page and should not wait behind Search Console.
   const { activity, loading: aLoading } = useAgentActivity(brand?.id);
+  const setup = useSetupProgress(brand?.id);
+  const outcomes = useOutcomeSummary(brand?.id);
 
   if (!brand) return null;
   if (sLoading || pLoading || !summary) return <DashboardSkeleton />;
@@ -119,13 +115,14 @@ export default function PortalDashboard() {
   const priorities = buildPriorities(summary, platform, brand);
   const reviewCount = platform?.reviews.length ?? null;
   const hasChart = (summary.chart?.length || 0) > 1;
-  const setupSteps = [
-    { done: !!brand.site_url, label: "Website", href: "/portal/settings" },
-    { done: !!brand.gsc_property, label: "Search Console", href: "/portal/settings" },
-    { done: pendingDraftsReady(platform), label: "First draft ready", href: "/portal/content" },
-  ];
-  const setupDone = setupSteps.filter((s) => s.done).length;
-  const setupComplete = setupDone === setupSteps.length;
+  const setupSteps = (setup?.steps || []).filter((s) => s.key !== "operating").map((s) => ({
+    done: s.done,
+    label: s.label,
+    href: s.href,
+  }));
+  const setupDone = setup?.doneCount ?? setupSteps.filter((s) => s.done).length;
+  const setupTotal = setup ? Math.max(1, setup.total - 1) : setupSteps.length || 1;
+  const setupComplete = setup?.complete ?? false;
 
   // ── Presentation-only views of data already loaded above. Nothing here
   // fetches, computes a score, or invents a figure; each line is a count or a
@@ -222,14 +219,14 @@ export default function PortalDashboard() {
               sub="Nothing needs a decision from you right now. Your AI team keeps working and new priorities appear here automatically."
             />
           )}
-          {!setupComplete && (
+          {!setupComplete && setupSteps.length > 0 && (
             <div className="p-setup">
               <div className="p-setup-head">
-                <span>Setup progress</span>
-                <b>{setupDone} of {setupSteps.length}</b>
+                <span>Activation progress</span>
+                <b>{Math.min(setupDone, setupTotal)} of {setupTotal}</b>
               </div>
               <div className="p-setup-track" aria-hidden="true">
-                <i style={{ width: `${(setupDone / setupSteps.length) * 100}%` }} />
+                <i style={{ width: `${(Math.min(setupDone, setupTotal) / setupTotal) * 100}%` }} />
               </div>
               <div className="p-setup-steps">
                 {setupSteps.map((s) => (
@@ -239,6 +236,9 @@ export default function PortalDashboard() {
                   </Link>
                 ))}
               </div>
+              <Link href="/portal/setup" className="p-setup-continue">
+                Continue guided setup <IconChevron size={12} />
+              </Link>
             </div>
           )}
         </Panel>
@@ -262,6 +262,48 @@ export default function PortalDashboard() {
           <AgentActivity activity={activity} loading={aLoading} />
         </Panel>
       </div>
+
+      {/* Results — learning edge of the operating loop */}
+      <Panel>
+        <PanelHead
+          title="Results"
+          sub="Honest movement after published work — Search Console lag respected."
+          action={
+            <Link href="/portal/results" className="p-btn ghost">
+              <span>Outcome trails</span>
+              <IconChevron size={13} />
+            </Link>
+          }
+        />
+        {outcomes == null ? (
+          <div className="p-skel" style={{ height: 56 }} />
+        ) : !outcomes.available || outcomes.total === 0 ? (
+          <EmptyState
+            icon={<IconTraffic size={20} />}
+            title="No measured outcomes yet"
+            sub="After you approve and publish, trails appear here once Search Console has a fair before/after window."
+          />
+        ) : (
+          <div className="p-outcome-summary home">
+            <div className="p-outcome-pill tone-green">
+              <b>{outcomes.improved}</b>
+              <span>Improved</span>
+            </div>
+            <div className="p-outcome-pill tone-red">
+              <b>{outcomes.declined}</b>
+              <span>Declined</span>
+            </div>
+            <div className="p-outcome-pill tone-amber">
+              <b>{outcomes.too_early}</b>
+              <span>Too early</span>
+            </div>
+            <div className="p-outcome-pill tone-neutral">
+              <b>{outcomes.total}</b>
+              <span>Trails</span>
+            </div>
+          </div>
+        )}
+      </Panel>
 
       {/* Health scores */}
       <section>

@@ -278,7 +278,9 @@ test("the picker explains every outcome rather than rendering nothing", () => {
 // ── returning to where the customer started ─────────────────────────────────
 test("the callback returns to the Connections tab, not the page default", () => {
   const src = read("app/api/portal/google/callback/route.ts");
-  expect(src).toMatch(/new URL\("\/portal\/settings", origin\)/);
+  // Default resume is Settings → Connections; guided setup may override via
+  // sealed returnPath, but the settings fallback must remain.
+  expect(src).toMatch(/\/portal\/settings/);
   expect(src).toMatch(/url\.searchParams\.set\("tab", "connections"\)/);
 });
 

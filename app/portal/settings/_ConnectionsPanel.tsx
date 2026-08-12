@@ -291,7 +291,26 @@ function PublishingSetup({
   );
 }
 
-export default function ConnectionsPanel({ brandId }: { brandId: string }) {
+export default function ConnectionsPanel({
+  brandId,
+  focusKeys,
+  returnPath,
+  title = "Connected accounts",
+  sub = "Where your data comes from, whether each connection is healthy, and what to do when it isn't.",
+  onChanged,
+  embedded = false,
+}: {
+  brandId: string;
+  /** When set, only these connection cards are shown (guided setup). */
+  focusKeys?: string[];
+  /** Resume path after Google OAuth — sealed into signed state. */
+  returnPath?: string;
+  title?: string;
+  sub?: string;
+  onChanged?: () => void;
+  /** Skip the outer Panel when nested inside another panel (setup journey). */
+  embedded?: boolean;
+}) {
   const toast = useToast();
   const confirm = useConfirm();
   const [rows, setRows] = useState<PublicConnectionState[] | null>(null);
@@ -301,6 +320,9 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm);
+
+  // Join for dependency stability — callers often pass inline arrays.
+  const focusKey = focusKeys?.length ? focusKeys.join("|") : "";
 
   const load = useCallback(async () => {
     try {
@@ -312,12 +334,14 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       }
       const data = await res.json();
       setFailed(null);
-      setRows(data.connections || []);
+      const all = (data.connections || []) as PublicConnectionState[];
+      const keys = focusKey ? focusKey.split("|") : null;
+      setRows(keys ? all.filter((c) => keys.includes(c.key)) : all);
     } catch {
       setFailed("We couldn't check your connections just now.");
       setRows([]);
     }
-  }, [brandId]);
+  }, [brandId, focusKey]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -419,6 +443,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
         return next;
       });
       await load();
+      onChanged?.();
     } catch {
       toast.error("We couldn't save that", "Check your connection and try again.");
     } finally {
@@ -429,9 +454,9 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   async function startGoogle(row: PublicConnectionState) {
     setBusy(`${row.key}:connect`);
     try {
-      const res = await authedFetch(
-        `/api/portal/google/start?brand=${brandId}&product=${row.key}`
-      );
+      const qs = new URLSearchParams({ brand: brandId, product: row.key });
+      if (returnPath) qs.set("return", returnPath);
+      const res = await authedFetch(`/api/portal/google/start?${qs}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) {
         toast.error(data.error || "We couldn't start the connection", "Please try again in a moment.");
@@ -483,6 +508,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       setPublishOpen(false);
       setPublishForm(emptyPublishForm());
       await load();
+      onChanged?.();
     } catch {
       toast.error("We couldn't connect that website", "Check your connection and try again.");
     } finally {
@@ -552,6 +578,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       if (row.key === "website_publishing") setPublishOpen(false);
       toast.success(ACTION_LABEL[action], data.message || undefined);
       await load();
+      onChanged?.();
     } catch {
       toast.error("That didn't work", "Check your connection and try again.");
     } finally {
@@ -559,23 +586,9 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
   }
 
-  if (rows === null) {
-    return (
-      <Panel>
-        <PanelHead title="Connected accounts" sub="Checking your connections…" />
-        <div className="p-conn-list">
-          {[0, 1, 2].map((i) => <div key={i} className="p-conn"><div className="p-skel" style={{ height: 44, width: "100%" }} /></div>)}
-        </div>
-      </Panel>
-    );
-  }
-
-  return (
-    <Panel>
-      <PanelHead
-        title="Connected accounts"
-        sub="Where your data comes from, whether each connection is healthy, and what to do when it isn't."
-      />
+  const body = (
+    <>
+      {!embedded && <PanelHead title={title} sub={rows === null ? "Checking your connections…" : sub} />}
 
       {failed && (
         <div className="p-conn-note error" role="status">
@@ -585,7 +598,13 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       )}
 
       <div className="p-conn-list">
-        {rows.map((row) => {
+        {rows === null
+          ? [0, 1, 2].map((i) => (
+              <div key={i} className="p-conn">
+                <div className="p-skel" style={{ height: 44, width: "100%" }} />
+              </div>
+            ))
+          : rows.map((row) => {
           const badge = BADGE[row.status];
           const on = row.status === "connected";
           const needsChoice =
@@ -717,8 +736,11 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
           );
         })}
       </div>
-    </Panel>
+    </>
   );
+
+  if (embedded) return <div className="p-conn-embedded">{body}</div>;
+  return <Panel>{body}</Panel>;
 }
 
 

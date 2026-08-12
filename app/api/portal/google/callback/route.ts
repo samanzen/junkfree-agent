@@ -19,9 +19,23 @@ export const maxDuration = 60;
 // customer is in a browser tab, and a wall of JSON would be the least
 // polished possible end to a sign-in.
 
-function back(origin: string, params: Record<string, string>): NextResponse {
-  const url = new URL("/portal/settings", origin);
-  url.searchParams.set("tab", "connections");
+function back(
+  origin: string,
+  params: Record<string, string>,
+  returnPath?: string,
+): NextResponse {
+  // Resume the guided setup journey when OAuth was started from there;
+  // otherwise land on Connections as before.
+  const path =
+    returnPath && returnPath.startsWith("/portal")
+      ? returnPath.split("?")[0]
+      : "/portal/settings";
+  const url = new URL(path, origin);
+  if (path === "/portal/settings") url.searchParams.set("tab", "connections");
+  if (returnPath?.includes("?")) {
+    const qs = new URLSearchParams(returnPath.split("?")[1]);
+    qs.forEach((v, k) => url.searchParams.set(k, v));
+  }
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return NextResponse.redirect(url.toString());
 }
@@ -38,15 +52,18 @@ export async function GET(req: NextRequest) {
     // Nothing trustworthy to return to, so keep it generic.
     return back(origin, { google: "failed", reason: "invalid" });
   }
+  const resume = state.returnPath;
 
   // The customer pressed Cancel on Google's screen. Not an error.
   if (googleError) {
     return back(state.origin || origin, {
       google: googleError === "access_denied" ? "cancelled" : "failed",
       product: state.product,
-    });
+    }, resume);
   }
-  if (!code) return back(state.origin || origin, { google: "failed", product: state.product });
+  if (!code) {
+    return back(state.origin || origin, { google: "failed", product: state.product }, resume);
+  }
 
   try {
     const tokens = await exchangeCode(code, redirectUriFor(state.origin || origin));
@@ -56,7 +73,11 @@ export async function GET(req: NextRequest) {
       // die. Google only returns one when consent is forced, which authUrl()
       // does — so this means something is wrong rather than merely unlucky.
       console.error("[google/callback] no refresh token returned; check access_type/prompt.");
-      return back(state.origin || origin, { google: "failed", product: state.product, reason: "norefresh" });
+      return back(
+        state.origin || origin,
+        { google: "failed", product: state.product, reason: "norefresh" },
+        resume,
+      );
     }
 
     const identity = await fetchIdentity(tokens.accessToken);
@@ -77,21 +98,29 @@ export async function GET(req: NextRequest) {
           resourceId: resources[0].id,
           label: resources[0].label,
         });
-        return back(state.origin || origin, { google: "connected", product: state.product });
+        return back(
+          state.origin || origin,
+          { google: "connected", product: state.product },
+          resume,
+        );
       }
       return back(state.origin || origin, {
         google: resources.length ? "choose" : "empty",
         product: state.product,
-      });
+      }, resume);
     } catch (listErr) {
       // The account linked fine but its resources could not be read — most
       // often Business Profile at 0 quota pending Google's approval. The
       // account is kept so the customer does not have to sign in again.
       console.warn(`[google/callback] ${state.product} resource listing failed:`, listErr);
-      return back(state.origin || origin, { google: "linked_no_access", product: state.product });
+      return back(
+        state.origin || origin,
+        { google: "linked_no_access", product: state.product },
+        resume,
+      );
     }
   } catch (err) {
     console.error("[google/callback] exchange failed:", err);
-    return back(state.origin || origin, { google: "failed", product: state.product });
+    return back(state.origin || origin, { google: "failed", product: state.product }, resume);
   }
 }

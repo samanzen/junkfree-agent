@@ -191,6 +191,74 @@ export function usePortalSummary(brandId: string | undefined) {
   return { summary, loading };
 }
 
+// ── /api/portal/setup ───────────────────────────────────────────────────────
+export type SetupSnapshot = {
+  complete: boolean;
+  doneCount: number;
+  total: number;
+  next: string | null;
+  steps: { key: string; label: string; done: boolean; href: string }[];
+};
+
+export function useSetupProgress(brandId: string | undefined) {
+  const [setup, setSetup] = useState<SetupSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/portal/setup?brand=${brandId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.progress) return;
+        setSetup({
+          complete: !!d.progress.complete,
+          doneCount: d.progress.doneCount,
+          total: d.progress.total,
+          next: d.progress.next,
+          steps: d.progress.steps || [],
+        });
+      })
+      .catch(() => { /* home keeps working without setup strip */ });
+    return () => { cancelled = true; };
+  }, [brandId]);
+
+  return setup;
+}
+
+// ── /api/portal/outcomes ────────────────────────────────────────────────────
+export type OutcomeSnapshot = {
+  available: boolean;
+  improved: number;
+  declined: number;
+  too_early: number;
+  total: number;
+};
+
+export function useOutcomeSummary(brandId: string | undefined) {
+  const [outcomes, setOutcomes] = useState<OutcomeSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/portal/outcomes?brand=${brandId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        setOutcomes({
+          available: d.available !== false,
+          improved: d.summary?.improved ?? 0,
+          declined: d.summary?.declined ?? 0,
+          too_early: d.summary?.too_early ?? 0,
+          total: d.summary?.total ?? 0,
+        });
+      })
+      .catch(() => { /* optional strip */ });
+    return () => { cancelled = true; };
+  }, [brandId]);
+
+  return outcomes;
+}
+
 // ── Mutations ───────────────────────────────────────────────────────────────
 // Thin wrappers over the EXISTING brand-scoped endpoints the admin dashboard
 // already uses. Every one of these enforces requireBrandAccess server-side,

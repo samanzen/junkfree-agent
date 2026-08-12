@@ -66,7 +66,21 @@ export type OAuthState = {
   nonce: string;
   /** Unix seconds when the state was issued. Required for expiry. */
   iat: number;
+  /**
+   * Optional in-portal path to resume after Google returns (e.g. setup journey).
+   * Must be a relative `/portal/...` path — never an external URL.
+   */
+  returnPath?: string;
 };
+
+/** Allow only relative portal paths so OAuth state cannot open-redirect. */
+export function safePortalReturnPath(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  if (!raw.startsWith("/portal")) return undefined;
+  if (raw.includes("://") || raw.includes("\\") || raw.includes("..")) return undefined;
+  if (raw.length > 200) return undefined;
+  return raw;
+}
 
 /** How long a signed start URL remains usable. Past this, verifyState rejects. */
 export const OAUTH_STATE_TTL_SECONDS = 15 * 60;
@@ -105,6 +119,11 @@ export function verifyState(raw: string): OAuthState | null {
     }
     const age = Math.floor(Date.now() / 1000) - state.iat;
     if (age < 0 || age > OAUTH_STATE_TTL_SECONDS) return null;
+    if (state.returnPath !== undefined) {
+      const safe = safePortalReturnPath(state.returnPath);
+      if (!safe) return null;
+      state.returnPath = safe;
+    }
     return state as OAuthState;
   } catch {
     return null;

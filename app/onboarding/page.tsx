@@ -44,7 +44,8 @@ export default function OnboardingPage() {
             return;
           }
           if (body.brand_id) {
-            router.replace("/portal");
+            // Resume activation rather than dumping onto a dense dashboard.
+            router.replace("/portal/setup");
             return;
           }
         }
@@ -86,7 +87,7 @@ export default function OnboardingPage() {
         setBusy(false);
         return;
       }
-      router.push("/portal");
+      router.push("/portal/setup");
     } catch (e) {
       setErr("Connection error: " + String(e));
       setBusy(false);
@@ -111,7 +112,7 @@ export default function OnboardingPage() {
         <div className="mk-auth-card" style={{ maxWidth: 480 }}>
           <h1>Set up your brand</h1>
           <p className="mk-auth-sub">
-            Tell {PLATFORM_NAME} which business to run SEO for. You can connect Search Console next.
+            Tell {PLATFORM_NAME} which business to run SEO for. Next you&apos;ll connect Search Console and prove the first publish loop.
           </p>
           <div className="mk-auth-fields">
             <Field
@@ -175,7 +176,7 @@ export default function OnboardingPage() {
             data-busy={busy || undefined}
             aria-live="polite"
           >
-            <span>{busy ? "Creating workspace…" : "Continue to portal"}</span>
+            <span>{busy ? "Creating workspace…" : "Continue setup"}</span>
           </button>
         </div>
       </main>
