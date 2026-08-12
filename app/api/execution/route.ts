@@ -54,6 +54,27 @@ const accessErr = requireBrandAccess(auth, brandId);
       : { ok: false, detail: "Brand not found." };
   }
 
+  // Recent live publishes for the Results strip. Best-effort: if migration 011
+  // is not applied, return [] rather than failing the status endpoint.
+  let recent: {
+    id: string;
+    status: string;
+    provider: string | null;
+    target: string | null;
+    result_url: string | null;
+    error: string | null;
+    executed_at: string;
+  }[] = [];
+  if (log.ok) {
+    const { data } = await db
+      .from("publish_executions")
+      .select("id, status, provider, target, result_url, error, executed_at")
+      .eq("brand_id", brandId)
+      .order("executed_at", { ascending: false })
+      .limit(8);
+    recent = (data as typeof recent) || [];
+  }
+
   return NextResponse.json({
     configured: target.ok,
     platform: target.ok ? target.platform : null,
@@ -66,6 +87,7 @@ const accessErr = requireBrandAccess(auth, brandId);
     // product rather than only discoverable by querying Postgres by hand.
     execution_log: { available: log.ok, reason: log.reason },
     available_platforms: describeAdapters(),
+    recent,
   });
 }
 

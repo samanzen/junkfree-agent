@@ -187,9 +187,9 @@ export const MARKETING_CSS = `
 /* ── Hero ── */
 .mk-hero {
   position: relative; overflow: hidden;
-  min-height: min(92vh, 880px);
+  min-height: min(78vh, 760px);
   display: flex; align-items: flex-end;
-  padding: clamp(72px, 12vh, 120px) 0 clamp(48px, 8vh, 80px);
+  padding: clamp(64px, 10vh, 96px) 0 clamp(40px, 7vh, 72px);
   /* Atmospheric plane — brand blue depth + cool slate, not purple SaaS wash */
   background:
     radial-gradient(1200px 640px at 78% 18%, rgba(37,99,235,.18), transparent 58%),

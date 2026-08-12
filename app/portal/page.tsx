@@ -56,7 +56,7 @@ function buildPriorities(
     out.push({
       text: `Review ${pendingDrafts} piece${pendingDrafts > 1 ? "s" : ""} of content`,
       sub: "Drafted by your AI team and waiting for approval",
-      tone: "accent", href: "/portal/content",
+      tone: "accent", href: "/portal/approvals",
     });
   }
 
@@ -65,7 +65,7 @@ function buildPriorities(
     out.push({
       text: `Respond to ${pendingReviews} review${pendingReviews > 1 ? "s" : ""}`,
       sub: "Replies are already drafted for you",
-      tone: "pink", href: "/portal/reviews",
+      tone: "pink", href: "/portal/approvals",
     });
   }
 

@@ -1,5 +1,7 @@
 "use client";
+import { useEffect, useState } from "react";
 import { usePortalAuth } from "@/lib/portalAuth";
+import { authedFetch } from "@/lib/authedFetch";
 import {
   usePlatformData, approveDraft, dismissDraft, setRowStatus,
   type Draft, type ReviewResponse,
@@ -8,8 +10,19 @@ import PageHeader from "../_components/PageHeader";
 import EmptyState from "../_components/EmptyState";
 import ApprovalCard from "../_components/ApprovalCard";
 import StatTile from "../_components/StatTile";
-import { Panel } from "../_components/Panel";
+import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger } from "../_components/motion";
+import { IconExternal, IconCheck, IconAlert } from "../icons";
+
+type RecentPublish = {
+  id: string;
+  status: string;
+  provider: string | null;
+  target: string | null;
+  result_url: string | null;
+  error: string | null;
+  executed_at: string;
+};
 
 const TYPE_LABEL: Record<string, string> = {
   new_blog: "Blog post",
@@ -26,6 +39,27 @@ type InboxItem =
 export default function ApprovalsPage() {
   const { brand } = usePortalAuth();
   const { data, loading, error } = usePlatformData(brand?.id);
+  const [recent, setRecent] = useState<RecentPublish[] | null>(null);
+  const [siteConnected, setSiteConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!brand?.id) return;
+    let cancelled = false;
+    authedFetch(`/api/execution?brand=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        setSiteConnected(!!d.configured);
+        setRecent(Array.isArray(d.recent) ? d.recent : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSiteConnected(null);
+          setRecent([]);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [brand?.id]);
 
   if (!brand) return null;
 
@@ -42,7 +76,11 @@ export default function ApprovalsPage() {
       <PageHeader
         eyebrow="Approvals"
         title="Waiting on you"
-        sub="Content drafts and review replies ready for your yes — approve them here and they go live."
+        sub={
+          siteConnected
+            ? "Approve drafts here — connected sites receive the publish after your yes."
+            : "Approve drafts here. Connect WordPress in Settings to publish to your live site."
+        }
       />
 
       <Panel>
@@ -95,6 +133,55 @@ export default function ApprovalsPage() {
           )}
         </Stagger>
       )}
+
+      <Panel>
+        <PanelHead
+          title="Recently published to your site"
+          sub="Live execution history — only changes that reached WordPress or your webhook."
+        />
+        {recent === null ? (
+          <div className="p-skel" style={{ height: 72 }} />
+        ) : recent.length === 0 ? (
+          <EmptyState
+            icon="—"
+            title="No live publishes yet"
+            sub={
+              siteConnected
+                ? "After you approve a page or post, successful publishes appear here with a link when the site reports one."
+                : "Connect website publishing in Settings, then approve a draft to see live results here."
+            }
+          />
+        ) : (
+          <ul className="p-exec-list">
+            {recent.map((row) => (
+              <li key={row.id} className="p-exec-row">
+                <span className={`p-exec-mark ${row.status === "succeeded" ? "ok" : "bad"}`}>
+                  {row.status === "succeeded" ? <IconCheck size={12} /> : <IconAlert size={12} />}
+                </span>
+                <div className="p-exec-body">
+                  <div className="p-exec-title">
+                    {row.target || "Site change"}
+                    {row.provider ? <span className="p-exec-provider">{row.provider}</span> : null}
+                  </div>
+                  <div className="p-exec-meta">
+                    {row.status === "succeeded" ? "Published" : "Failed"}
+                    {" · "}
+                    {new Date(row.executed_at).toLocaleString(undefined, {
+                      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+                    })}
+                    {row.error ? ` · ${row.error}` : null}
+                  </div>
+                </div>
+                {row.result_url ? (
+                  <a href={row.result_url} target="_blank" rel="noreferrer" className="p-btn ghost">
+                    <span>View</span> <IconExternal size={13} />
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
 }
