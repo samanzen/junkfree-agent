@@ -6,7 +6,7 @@ import type { ComponentType } from "react";
 import {
   IconDashboard, IconTarget, IconIntelligence, IconCompetitors, IconLocalSeo,
   IconWebsite, IconTechnical, IconContent, IconReviews, IconReports,
-  IconBilling, IconSettings, IconAssistant, IconCheck, IconTraffic,
+  IconBilling, IconSettings, IconAssistant, IconCheck, IconTraffic, IconSparkle,
 } from "./icons";
 
 type Icon = ComponentType<{ size?: number; className?: string }>;
@@ -47,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Analyse",
     items: [
       { href: "/portal/intelligence", label: "Intelligence", Icon: IconIntelligence },
+      { href: "/portal/ai-visibility", label: "AI Visibility", Icon: IconSparkle },
       { href: "/portal/results", label: "Results", Icon: IconTraffic },
       { href: "/portal/competitors", label: "Competitors", Icon: IconCompetitors },
       { href: "/portal/reports", label: "Reports", Icon: IconReports },

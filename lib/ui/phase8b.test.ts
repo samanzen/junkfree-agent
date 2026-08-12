@@ -64,14 +64,17 @@ test("both call sites ask the capability gate rather than hardcoding true", () =
   expect(asks.length).toBe(2); // stepAudit + improve_content
 });
 
-test("the capability gate is a decision point, not billing logic", () => {
-  // Deliberately no plans or prices yet — only the seam. Checked against the
-  // code with comments stripped, since the file's own prose says "no prices".
+test("the capability gate decides by plan capacity", () => {
+  // Plans are capacity packages (runs / keywords / prompts), not Stripe logic.
+  // Stripe IDs live on the brand row; this module only maps plan → entitlements.
   const code = read("lib/capabilities.ts")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
-  expect(code).not.toMatch(/stripe|price|invoice|subscription_id/i);
+  expect(code).toMatch(/PLAN_CAPACITY/);
+  expect(code).toMatch(/resolvePlan/);
+  expect(code).not.toMatch(/stripe_customer_id|createCheckoutSession|invoice/i);
   expect(canUse({ slug: "any-brand" }, "js_rendering")).toBe(true);
+  expect(canUse({ plan: "growth" }, "ai_visibility_tracking")).toBe(true);
 });
 
 // ── the shared threshold ────────────────────────────────────────────────────

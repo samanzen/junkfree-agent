@@ -6,8 +6,9 @@ import { brandBlock, getBrandById, isLocalBusiness, type Brand } from "./brands"
 import { db, TaskType } from "./supabase";
 import { strikingDistance, lowCtrPages, pagesByIntentSignal, fullKeywordSync } from "./gsc";
 import { writeContent, rewriteMeta, auditPage } from "./agents";
-import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
+import { draftGbpPost, draftReviewResponse, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
+import { listGbpReviews } from "./google/gbp";
 import { keywordStrategy, competitorGaps } from "./intelligence";
 import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
 import { activeLessons, analysePerformance } from "./learning";
@@ -157,6 +158,9 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
   if (isLocalBusiness(brand)) {
     await enqueue(brand.id, "gbp", { runId });
     await enqueue(brand.id, "citations", { runId });
+    if (canUse(brand, "review_automation")) {
+      await enqueue(brand.id, "reviews", { runId });
+    }
   }
   await enqueue(brand.id, "audit", { runId });
   await enqueue(brand.id, "performance", { runId });
@@ -254,6 +258,51 @@ export async function stepGeo(brand: Brand) {
 export async function stepGbp(brand: Brand) {
   const post = await draftGbpPost(brand);
   if (post) await db.from("gbp_posts").insert({ brand_id: brand.id, title: post.title, body: post.body, cta: post.cta, status: "pending_review" });
+}
+
+/** Import GBP reviews and draft replies into the approval queue. */
+export async function stepReviews(brand: Brand) {
+  if (!canUse(brand, "review_automation")) return;
+  if (!brand.gbp_location_id) return;
+
+  const listed = await listGbpReviews({
+    brandId: brand.id,
+    locationId: brand.gbp_location_id,
+    pageSize: 15,
+  });
+  if (!listed.ok) {
+    console.warn(`[stepReviews] ${brand.slug}: ${listed.error}`);
+    return;
+  }
+
+  for (const review of listed.reviews.slice(0, 8)) {
+    if (!review.text && !review.rating) continue;
+
+    const { data: existing } = await db
+      .from("review_responses")
+      .select("id")
+      .eq("brand_id", brand.id)
+      .eq("google_review_name", review.name)
+      .limit(1);
+    if (existing?.length) continue;
+
+    const draft = await draftReviewResponse(brand, {
+      reviewer: review.reviewer,
+      rating: review.rating || 5,
+      text: review.text || "(no written review)",
+    });
+    if (!draft) continue;
+
+    await db.from("review_responses").insert({
+      brand_id: brand.id,
+      reviewer_name: review.reviewer,
+      rating: review.rating || null,
+      review_text: review.text || null,
+      draft_response: draft,
+      status: "pending_review",
+      google_review_name: review.name,
+    });
+  }
 }
 
 export async function stepCitations(brand: Brand) {
@@ -366,6 +415,7 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
     case "geo": return void (await stepGeo(b));
     case "gbp": return void (await stepGbp(b));
     case "citations": return void (await stepCitations(b));
+    case "reviews": return void (await stepReviews(b));
     case "audit": return void (await stepAudit(b, (job.payload.runId as string) || ""));
     case "performance": return void (await stepPerformance(b));
     case "rank_sync": return void (await stepRankSync(b));

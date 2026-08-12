@@ -17,7 +17,7 @@
 
 import { NextResponse } from "next/server";
 import { db } from "./supabase";
-import type { CapabilityScope } from "./capabilities";
+import { resolvePlan, type CapabilityScope } from "./capabilities";
 
 /** Cost class of a route. Routes in one bucket share a tenant's budget. */
 export type RateBucket =
@@ -31,21 +31,29 @@ export type RateBucket =
 export type RateWindow = { limit: number; windowSeconds: number };
 
 /**
- * Per-tenant allowances. Deliberately generous: this exists to stop runaway
- * loops and abuse, not to shape normal product usage — a limit a real customer
- * hits during ordinary work is a bug, not a safeguard.
- *
- * Resolved through the same seam as every other plan-dependent number, so
- * Starter / Pro / Agency differ by changing lib/capabilities.ts, not this file.
+ * Per-tenant allowances by plan. Execution capacity — not toolkit SKUs.
+ * Founding is generous for normal use; Growth/Managed raise the ceiling.
  */
-const DEFAULT_LIMITS: Record<RateBucket, RateWindow> = {
-  ai: { limit: 60, windowSeconds: 3600 },        // 60 Claude-backed requests/hour
-  external: { limit: 300, windowSeconds: 3600 }, // 300 DataForSEO-backed/hour
-  dispatch: { limit: 120, windowSeconds: 3600 }, // 120 job dispatches/hour
+const PLAN_LIMITS: Record<"founding" | "growth" | "managed", Record<RateBucket, RateWindow>> = {
+  founding: {
+    ai: { limit: 60, windowSeconds: 3600 },
+    external: { limit: 300, windowSeconds: 3600 },
+    dispatch: { limit: 120, windowSeconds: 3600 },
+  },
+  growth: {
+    ai: { limit: 180, windowSeconds: 3600 },
+    external: { limit: 900, windowSeconds: 3600 },
+    dispatch: { limit: 360, windowSeconds: 3600 },
+  },
+  managed: {
+    ai: { limit: 600, windowSeconds: 3600 },
+    external: { limit: 3000, windowSeconds: 3600 },
+    dispatch: { limit: 1200, windowSeconds: 3600 },
+  },
 };
 
-export function rateWindowFor(_brand: CapabilityScope, bucket: RateBucket): RateWindow {
-  return DEFAULT_LIMITS[bucket];
+export function rateWindowFor(brand: CapabilityScope, bucket: RateBucket): RateWindow {
+  return PLAN_LIMITS[resolvePlan(brand)][bucket];
 }
 
 export type RateResult = {

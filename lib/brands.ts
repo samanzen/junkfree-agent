@@ -34,6 +34,11 @@ export type Brand = {
   business_model: BusinessModel;
   dataforseo_location_code: number | null;
   dataforseo_language_code: string;
+  /** founding | growth | managed — null/empty means trial → founding capacity */
+  plan?: string | null;
+  billing_status?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
 };
 
 // Single source of truth for "does this brand get local-only pipeline work

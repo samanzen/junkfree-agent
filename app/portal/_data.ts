@@ -161,6 +161,13 @@ export type PortalMetrics = {
 export type PortalSummary = {
   brand: { name: string; site_url: string; service_area: string; business_model?: string };
   metrics: PortalMetrics;
+  conversions?: {
+    leads: number | null;
+    calls: number | null;
+    conversions: number | null;
+    source: string | null;
+    connected: boolean;
+  };
   chart: { date: string; traffic: number; keywords: number }[];
   activity: {
     published_this_month: number;

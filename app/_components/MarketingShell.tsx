@@ -661,6 +661,28 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 .mk-price-note {
   margin: 28px 0 0; color: var(--mk-muted); font-size: 13.5px; max-width: 62ch;
 }
+.mk-price-compare {
+  margin: clamp(28px, 5vw, 48px) 0 8px;
+  padding: clamp(22px, 4vw, 32px);
+  border-radius: 16px;
+  border: 1px solid var(--mk-line);
+  background: color-mix(in srgb, var(--mk-surface) 80%, var(--mk-bg));
+}
+.mk-check-list {
+  list-style: none; margin: 16px 0 0; padding: 0;
+  display: grid; gap: 12px;
+}
+.mk-check-list li {
+  position: relative; padding-left: 28px;
+  color: var(--mk-ink-soft); font-size: 15px; line-height: 1.5;
+}
+.mk-check-list li::before {
+  content: ""; position: absolute; left: 0; top: .45em;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: color-mix(in srgb, var(--mk-good) 22%, transparent);
+  box-shadow: inset 0 0 0 2px var(--mk-good);
+}
+.mk-check-list b { color: var(--mk-ink); font-weight: 600; }
 
 /* ── Auth forms on marketing ground ── */
 .mk-auth {

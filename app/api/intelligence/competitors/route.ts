@@ -69,6 +69,21 @@ const accessErr = requireBrandAccess(auth, brand_id);
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
 
+  const { data: brandRow } = await db.from("brands").select("plan,billing_status").eq("id", brand_id).single();
+  const { count } = await db
+    .from("competitors")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brand_id)
+    .eq("active", true);
+  const { quotaFor } = await import("@/lib/capabilities");
+  const cap = quotaFor(brandRow || {}, "competitors");
+  if ((count || 0) >= cap) {
+    return NextResponse.json(
+      { error: `Your plan tracks up to ${cap} competitors. Upgrade for more execution capacity.` },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await db.from("competitors").upsert({
     brand_id,
     domain: cleanDomain,

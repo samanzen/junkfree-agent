@@ -15,11 +15,12 @@ type Row = {
 };
 
 const SORTS = [
-  { key: "ai_opportunity_score", label: "Opportunity" },
+  { key: "keyword", label: "Keyword" },
+  { key: "position", label: "Position" },
   { key: "search_volume", label: "Volume" },
   { key: "keyword_difficulty", label: "Difficulty" },
+  { key: "ai_opportunity_score", label: "Opportunity" },
   { key: "best_position", label: "Best pos." },
-  { key: "keyword", label: "Keyword" },
 ];
 const PAGE_SIZE = 25;
 
@@ -27,8 +28,8 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState("ai_opportunity_score");
-  const [asc, setAsc] = useState(false);
+  const [sort, setSort] = useState("position");
+  const [asc, setAsc] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -66,7 +67,7 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
 
   return (
     <Panel>
-      <PanelHead title="Your keywords" badge={total || undefined} sub="Every keyword we track for your business, ranked by opportunity." />
+      <PanelHead title="Your keywords" badge={total || undefined} sub="Position, volume and difficulty for every keyword we track — ranked so you can act, not just browse." />
 
       <div className="p-toolbar">
         <Field
@@ -125,10 +126,19 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
                         </div>
                       )}
                     </td>
+                    <td>{posBadge(r.position ?? r.best_position)}</td>
                     <td>{r.search_volume != null ? r.search_volume.toLocaleString() : <span className="p-na">—</span>}</td>
-                    <td>{r.keyword_difficulty != null ? r.keyword_difficulty : <span className="p-na">—</span>}</td>
-                    <td>{posBadge(r.best_position)}</td>
+                    <td>
+                      {r.keyword_difficulty != null ? (
+                        <span className={`p-chip ${r.keyword_difficulty >= 70 ? "warn" : r.keyword_difficulty <= 30 ? "good" : ""}`}>
+                          {r.keyword_difficulty}
+                        </span>
+                      ) : (
+                        <span className="p-na">—</span>
+                      )}
+                    </td>
                     <td>{r.ai_opportunity_score != null ? <b>{r.ai_opportunity_score}</b> : <span className="p-na">—</span>}</td>
+                    <td>{posBadge(r.best_position)}</td>
                     <td>{r.search_intent ? <span className="p-chip">{r.search_intent}</span> : <span className="p-na">—</span>}</td>
                     <td>{r.status ? <span className="p-chip">{r.status}</span> : <span className="p-na">—</span>}</td>
                   </tr>

@@ -86,8 +86,8 @@ test("inspectPage returns the text it already computed", () => {
 });
 
 // ── AI visibility → metric snapshots ────────────────────────────────────────
-test("checkAiVisibility has a caller", () => {
-  expect(callersOf("checkAiVisibility", "lib/geo-agent.ts").length).toBeGreaterThan(0);
+test("checkAiVisibilitySuite has a caller", () => {
+  expect(callersOf("checkAiVisibilitySuite", "lib/geo-agent.ts").length).toBeGreaterThan(0);
 });
 
 test("ai_visibility is no longer hardcoded null", () => {
@@ -97,7 +97,9 @@ test("ai_visibility is no longer hardcoded null", () => {
 });
 
 test("a failed visibility check leaves the column null rather than failing the snapshot", () => {
-  expect(read("lib/metrics.ts")).toMatch(/checkAiVisibility\(brand\)[\s\S]{0,120}\.catch\(\(\) => null\)/);
+  const src = read("lib/metrics.ts");
+  expect(src).toMatch(/checkAiVisibilitySuite/);
+  expect(src).toMatch(/aiVisibility = null/);
 });
 
 test("the AI visibility card explains what its number means", () => {

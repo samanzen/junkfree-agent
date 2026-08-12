@@ -170,3 +170,99 @@ export async function publishGbpReviewReply(opts: {
   }
   return { ok: true, remoteName: `${opts.reviewName}/reply` };
 }
+
+export type GbpReview = {
+  name: string;
+  reviewer: string;
+  rating: number;
+  text: string;
+  createTime?: string;
+};
+
+/** List recent Google Business Profile reviews for a connected location. */
+export async function listGbpReviews(opts: {
+  brandId: string;
+  locationId: string;
+  pageSize?: number;
+}): Promise<{ ok: true; reviews: GbpReview[] } | { ok: false; error: string; retryable: boolean }> {
+  const google = await readGoogle(opts.brandId);
+  const accountId =
+    google.selections.google_business_profile?.accountId ||
+    google.accounts[google.accounts.length - 1]?.id;
+  if (!accountId) {
+    return { ok: false, error: "Google Business Profile is not connected.", retryable: false };
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await accessTokenFor(opts.brandId, accountId);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not refresh Google access.",
+      retryable: false,
+    };
+  }
+
+  let parent: string | null;
+  try {
+    parent = await resolveLocationParent(accessToken, opts.locationId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const quota = /\b429\b|RESOURCE_EXHAUSTED|Quota/i.test(msg);
+    return {
+      ok: false,
+      error: quota
+        ? "Google has not enabled Business Profile API access for this project yet."
+        : msg,
+      retryable: quota,
+    };
+  }
+  if (!parent) {
+    return { ok: false, error: "Could not resolve that Business Profile location.", retryable: false };
+  }
+
+  const size = Math.min(Math.max(opts.pageSize || 20, 1), 50);
+  const res = await fetch(
+    `https://mybusiness.googleapis.com/v4/${parent}/reviews?pageSize=${size}&orderBy=updateTime%20desc`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    return {
+      ok: false,
+      error: `GBP reviews ${res.status}: ${text.slice(0, 280)}`,
+      retryable: res.status >= 500 || res.status === 429,
+    };
+  }
+
+  const data = (await res.json()) as {
+    reviews?: {
+      name?: string;
+      reviewer?: { displayName?: string };
+      starRating?: string;
+      comment?: string;
+      createTime?: string;
+    }[];
+  };
+
+  const starMap: Record<string, number> = {
+    ONE: 1,
+    TWO: 2,
+    THREE: 3,
+    FOUR: 4,
+    FIVE: 5,
+  };
+
+  const reviews: GbpReview[] = (data.reviews || [])
+    .filter((r) => r.name)
+    .map((r) => ({
+      name: r.name!,
+      reviewer: r.reviewer?.displayName || "Customer",
+      rating: starMap[r.starRating || ""] || 0,
+      text: (r.comment || "").slice(0, 4000),
+      createTime: r.createTime,
+    }));
+
+  return { ok: true, reviews };
+}

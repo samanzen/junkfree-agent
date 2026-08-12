@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const { data: brand } = await db.from("brands").select("*").eq("id", brandId).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
-  const [{ current, previous }, ts, drafts, gbpPosts, citations, lessons] = await Promise.all([
+  const [{ current, previous }, ts, drafts, gbpPosts, citations, lessons, conversions] = await Promise.all([
     latestWithDelta(brandId),
     series(brandId, 12),
     db.from("drafts").select("title,task_type,status,created_at,target_keyword")
@@ -35,6 +35,19 @@ export async function GET(req: NextRequest) {
       .eq("brand_id", brandId).order("priority", { ascending: false }).limit(8),
     db.from("lessons").select("lesson,created_at")
       .eq("brand_id", brandId).order("created_at", { ascending: false }).limit(3),
+    (async () => {
+      try {
+        const { data } = await db
+          .from("conversion_signals")
+          .select("leads,calls,conversions,source,captured_at")
+          .eq("brand_id", brandId)
+          .order("captured_at", { ascending: false })
+          .limit(1);
+        return data?.[0] || null;
+      } catch {
+        return null;
+      }
+    })(),
   ]);
 
   const keywords = brand.gsc_property
@@ -73,6 +86,15 @@ export async function GET(req: NextRequest) {
       backlinks_delta: delta("backlinks"),
       position_delta: delta("avg_position"),
     },
+    conversions: conversions
+      ? {
+          leads: conversions.leads,
+          calls: conversions.calls,
+          conversions: conversions.conversions,
+          source: conversions.source,
+          connected: true,
+        }
+      : { leads: null, calls: null, conversions: null, source: null, connected: false },
     chart: ts.map((s) => ({
       date: new Date(s.captured_at).toLocaleDateString("en-CA", { month: "short", day: "numeric" }),
       traffic: s.organic_traffic ?? 0,

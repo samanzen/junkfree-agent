@@ -375,14 +375,22 @@ export default function PortalDashboard() {
               <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} dimension="backlinks" icon={<IconLink size={16} />} hint="Sites linking to you" />
               <MetricCard label="Reviews" value={reviewCount} dimension="reviews" icon={<IconReviews size={16} />} hint="Drafted replies" />
             </Stagger>
-            <Link href="/portal/settings" className="p-locked-row">
-              <IconLock size={14} />
-              <div>
-                <strong>Connect lead &amp; call tracking</strong>
-                <span>Unlock leads, calls and conversions when those integrations are available.</span>
-              </div>
-              <IconChevron size={13} />
-            </Link>
+            {summary.conversions?.connected ? (
+              <Stagger className="p-kpi-grid" stagger={0.045} style={{ marginTop: 12 }}>
+                <MetricCard label="Leads" value={summary.conversions.leads} dimension="leads" icon={<IconTarget size={16} />} hint="From connected analytics" />
+                <MetricCard label="Calls" value={summary.conversions.calls} dimension="leads" icon={<IconTarget size={16} />} hint="Click-to-call / call events" />
+                <MetricCard label="Conversions" value={summary.conversions.conversions} dimension="leads" icon={<IconCheck size={16} />} hint="GA4 conversion events" />
+              </Stagger>
+            ) : (
+              <Link href="/portal/settings" className="p-locked-row">
+                <IconLock size={14} />
+                <div>
+                  <strong>Connect Google Analytics</strong>
+                  <span>Unlock leads, calls and conversions from your GA4 property.</span>
+                </div>
+                <IconChevron size={13} />
+              </Link>
+            )}
           </Panel>
         </div>
 
