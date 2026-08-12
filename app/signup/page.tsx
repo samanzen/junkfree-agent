@@ -34,10 +34,16 @@ function SignupInner() {
   // website the visitor already gave us on the landing page. Re-validated here
   // rather than trusted: it arrives in a query string a visitor can edit.
   useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("site");
-    if (!raw) return;
-    const checked = checkUrlShape(raw);
-    if (checked.ok) setSite(checked.url.toString());
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("site");
+    if (raw) {
+      const checked = checkUrlShape(raw);
+      if (checked.ok) setSite(checked.url.toString());
+    }
+    const emailQ = params.get("email");
+    if (emailQ && emailQ.includes("@") && emailQ.length < 200) {
+      setEmail(emailQ.trim());
+    }
   }, []);
 
   async function signUp() {

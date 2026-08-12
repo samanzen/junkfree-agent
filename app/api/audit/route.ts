@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { safeFetchPage } from "@/lib/audit/url";
 import { extractFacts, runChecks, scoreChecks } from "@/lib/audit/onpage";
 import { buildReport } from "@/lib/audit/report";
+import { fetchDomainIntel } from "@/lib/audit/enrich";
 import { clientKeyFrom, consumeAnonAudit, anonLimitMessage } from "@/lib/audit/limit";
 
 export const maxDuration = 30;
@@ -59,11 +60,14 @@ export async function POST(req: NextRequest) {
 
   const facts = extractFacts(fetched.html, fetched.finalUrl, fetched.elapsedMs);
   const checks = runChecks(facts);
+  // Off-page enrichment is best-effort and never blocks the on-page report.
+  const domain = await fetchDomainIntel(fetched.finalUrl).catch(() => undefined);
   const report = buildReport({
     url: raw.trim(),
     finalUrl: fetched.finalUrl,
     checks,
     score: scoreChecks(checks),
+    domain,
   });
 
   return NextResponse.json({ report });

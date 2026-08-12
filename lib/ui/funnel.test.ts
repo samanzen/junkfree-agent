@@ -97,12 +97,16 @@ test("trial length is centralised and consistent across the funnel", () => {
   expect(signup).not.toMatch(/\b(7|14|30)-day/);
 });
 
-test("the audited URL survives signup and reaches onboarding", () => {
+test("the audited URL and email survive signup", () => {
   const widget = read("app/_components/AuditWidget.tsx");
-  expect(widget).toMatch(/\/signup\?site=/);
+  expect(widget).toMatch(/\/signup\?/);
+  expect(widget).toMatch(/gateEmail|email/);
+  expect(widget).toMatch(/Keyword rankings/);
+  expect(widget).toMatch(/Domain snapshot/);
 
   const signup = read("app/signup/page.tsx");
   expect(signup).toMatch(/checkUrlShape/); // re-validated, never trusted
+  expect(signup).toMatch(/params\.get\("email"\)/);
   // Site rides through destinationForSession → /onboarding?site=
   expect(signup).toMatch(/destinationForSession/);
   expect(signup).toMatch(/site:\s*site/);
@@ -112,6 +116,16 @@ test("the audited URL survives signup and reaches onboarding", () => {
   const onboarding = read("app/onboarding/page.tsx");
   expect(onboarding).toMatch(/get\("site"\)/);
   expect(onboarding).toMatch(/setSiteUrl/);
+});
+
+test("public audit enriches with domain intel without fabricating metrics", () => {
+  const enrich = read("lib/audit/enrich.ts");
+  expect(enrich).toMatch(/FREE_KEYWORD_LIMIT/);
+  expect(enrich).toMatch(/rankedKeywords/);
+  expect(enrich).toMatch(/backlinksSummary/);
+  expect(enrich).toMatch(/emptyDomainIntel/);
+  expect(read("app/api/audit/route.ts")).toMatch(/fetchDomainIntel/);
+  expect(read("lib/audit/report.ts")).toMatch(/domain:/);
 });
 
 test("the audit widget uses the shared Field so labels stay wired", () => {

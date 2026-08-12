@@ -21,9 +21,11 @@
 
 import type { Check } from "./onpage";
 import { countByStatus, scoreBand } from "./onpage";
+import type { AuditDomainIntel } from "./enrich";
+import { emptyDomainIntel } from "./enrich";
 
 /** How many fully-detailed issues an anonymous visitor gets. */
-export const FREE_ISSUE_LIMIT = 3;
+export const FREE_ISSUE_LIMIT = 5;
 
 export type LockedModule = {
   id: string;
@@ -96,6 +98,8 @@ export type AuditReport = {
   /** Labels only, so the visitor sees the shape of what is withheld. */
   lockedIssueLabels: string[];
   lockedModules: LockedModule[];
+  /** Off-page snapshot (DataForSEO when configured). Never fabricated. */
+  domain: AuditDomainIntel;
 };
 
 const IMPACT_ORDER = { high: 0, medium: 1, low: 2 } as const;
@@ -116,6 +120,7 @@ export function buildReport(args: {
   checks: Check[];
   score: number;
   fetchedAt?: string;
+  domain?: AuditDomainIntel;
 }): AuditReport {
   const { url, finalUrl, checks, score } = args;
   const counts = countByStatus(checks);
@@ -138,6 +143,7 @@ export function buildReport(args: {
     lockedIssueCount: withheld.length,
     lockedIssueLabels: withheld.map((c) => c.label),
     lockedModules: LOCKED_MODULES,
+    domain: args.domain || emptyDomainIntel(),
   };
 }
 

@@ -275,5 +275,20 @@ describe("buildReport", () => {
     });
     expect(report.issuesFound).toBe(report.previewIssues.length + report.lockedIssueCount);
     expect(report.passedChecks.length).toBeGreaterThan(8);
+    // Off-page defaults empty — never invented.
+    expect(report.domain.keywordsPreview).toEqual([]);
+    expect(report.domain.organicTraffic).toBeNull();
+  });
+});
+
+describe("domain intel honesty", () => {
+  test("empty intel never invents keyword or backlink figures", async () => {
+    const { emptyDomainIntel, FREE_KEYWORD_LIMIT } = await import("./enrich");
+    const empty = emptyDomainIntel();
+    expect(empty.configured).toBe(false);
+    expect(empty.keywordsPreview).toEqual([]);
+    expect(empty.keywordsLockedCount).toBe(0);
+    expect(empty.backlinks).toBeNull();
+    expect(FREE_KEYWORD_LIMIT).toBeGreaterThanOrEqual(3);
   });
 });

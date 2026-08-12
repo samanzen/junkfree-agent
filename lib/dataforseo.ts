@@ -89,10 +89,19 @@ export async function keywordIdeas(seed: string, geo: Geo = {}): Promise<Keyword
 }
 
 // Keywords a competitor domain ranks for that you may not — gap analysis.
-export async function rankedKeywords(domain: string, geo: Geo = {}): Promise<{ keyword: string; position: number; volume: number | null }[]> {
+export async function rankedKeywords(
+  domain: string,
+  geo: Geo = {},
+  limit = 100
+): Promise<{ keyword: string; position: number; volume: number | null }[]> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/ranked_keywords/live",
-    { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 100 }
+    {
+      target: domain,
+      location_code: geo.locationCode ?? LOCATION_CANADA,
+      language_code: geo.languageCode ?? LANG,
+      limit: Math.min(Math.max(1, limit), 100),
+    }
   );
   const items = (data?.tasks?.[0]?.result?.[0] as { items?: { keyword_data?: { keyword: string; keyword_info?: { search_volume: number } }; ranked_serp_element?: { serp_item?: { rank_absolute: number } } }[] })?.items || [];
   return items.map((it) => ({

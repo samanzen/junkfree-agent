@@ -1,34 +1,37 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Field from "@/app/_components/Field";
 import type { AuditReport } from "@/lib/audit/report";
+import { TRIAL_DAYS } from "@/lib/ui/tokens";
 
 // THE FUNNEL ENTRY POINT.
 //
-// URL in → real audit → partial report → account to unlock. Modelled on how
-// Semrush and Ahrefs convert, with one deliberate difference: everything shown
-// before signup is genuinely measured on the visitor's own page, and everything
-// held back is either a real measured issue we are withholding (exact count) or
-// a capability that truly needs their data. Nothing behind the lock is invented,
-// because a report that overstates is worth less than one that converts slightly
-// slower.
+// URL in → real audit → useful partial report → email/account to unlock.
+// Everything shown before signup is measured (on-page HTML and, when
+// configured, DataForSEO domain/keyword/backlink data). Locked rows never
+// invent figures — they withhold real remainder counts or ask for signup.
 
 type Phase = "idle" | "scanning" | "done" | "error";
 
 const SCAN_STEPS = [
   "Fetching your page",
   "Reading titles, headings and meta",
-  "Checking mobile and indexing",
+  "Checking rankings and backlinks",
   "Scoring against SEO best practice",
 ];
+
+function fmt(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "—";
+  return new Intl.NumberFormat("en", { notation: n >= 10000 ? "compact" : "standard", maximumFractionDigits: 0 }).format(n);
+}
 
 function ScoreRing({ score, tone }: { score: number; tone: "good" | "mixed" | "poor" }) {
   const [shown, setShown] = useState(0);
   const radius = 54;
   const circumference = 2 * Math.PI * radius;
 
-  // Count up so the number reads as a result being produced, not a static fact.
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
@@ -68,11 +71,13 @@ function ScoreRing({ score, tone }: { score: number; tone: "good" | "mixed" | "p
 }
 
 export default function AuditWidget() {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState(0);
   const [report, setReport] = useState<AuditReport | null>(null);
   const [error, setError] = useState("");
+  const [gateEmail, setGateEmail] = useState("");
   const resultRef = useRef<HTMLDivElement>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -91,9 +96,6 @@ export default function AuditWidget() {
     setReport(null);
     setStep(0);
 
-    // The steps are honest labels for work that is genuinely happening server
-    // side; they advance on a timer only because a single fetch gives us no
-    // progress events to subscribe to.
     timers.current.forEach(clearTimeout);
     timers.current = SCAN_STEPS.map((_, i) =>
       setTimeout(() => setStep(i), i * 700),
@@ -122,21 +124,36 @@ export default function AuditWidget() {
     }
   }, [url]);
 
-  // Move focus/scroll to the result so the payoff is not below the fold.
   useEffect(() => {
     if (phase === "done" && resultRef.current) {
       resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [phase]);
 
-  const signupHref = report
-    ? `/signup?site=${encodeURIComponent(report.finalUrl)}`
-    : "/signup";
+  function signupHref(email?: string) {
+    if (!report) return "/signup";
+    const q = new URLSearchParams({ site: report.finalUrl });
+    if (email?.trim()) q.set("email", email.trim());
+    return `/signup?${q.toString()}`;
+  }
+
+  function continueWithEmail(e: FormEvent) {
+    e.preventDefault();
+    router.push(signupHref(gateEmail));
+  }
 
   const showCue = !url.trim() && (phase === "idle" || phase === "error");
+  const domain = report?.domain;
+  const hasDomainMetrics =
+    !!domain &&
+    (domain.organicTraffic != null ||
+      domain.organicKeywords != null ||
+      domain.backlinks != null ||
+      domain.referringDomains != null);
+  const hasKeywordPreview = !!domain && domain.keywordsPreview.length > 0;
 
   return (
-    <div className={`ad${showCue ? " is-cue" : ""}`}>
+    <div className={`ad${showCue ? " is-cue" : ""}${phase === "done" ? " is-report" : ""}`}>
       <form
         className="ad-form"
         onSubmit={(e) => {
@@ -237,27 +254,162 @@ export default function AuditWidget() {
             </div>
           </div>
 
-          {report.previewIssues.length > 0 && (
-            <div className="ad-issues">
-              <h4 className="ad-sub">What&apos;s hurting you most</h4>
-              {report.previewIssues.map((issue) => (
-                <div key={issue.id} className={`ad-issue is-${issue.status}`}>
-                  <div className="ad-issue-top">
-                    <span className={`ad-chip is-${issue.status}`}>
-                      {issue.status === "fail" ? "Critical" : "Warning"}
-                    </span>
-                    <strong>{issue.label}</strong>
-                  </div>
-                  <p className="ad-issue-detail">{issue.detail}</p>
-                  <p className="ad-issue-fix">
-                    <span>Fix</span>
-                    {issue.fix}
-                  </p>
-                </div>
-              ))}
+          {/* Domain / off-page snapshot */}
+          <section className="ad-section" aria-labelledby="ad-domain-title">
+            <div className="ad-section-head">
+              <h4 id="ad-domain-title" className="ad-sub">
+                Domain snapshot
+              </h4>
+              <p className="ad-section-note">
+                {hasDomainMetrics
+                  ? `Organic visibility estimates · ${domain!.locationLabel}`
+                  : "Sign in to load live domain, keyword and backlink metrics for this site."}
+              </p>
             </div>
+            <div className="ad-metric-grid">
+              <div className="ad-metric">
+                <span className="ad-metric-label">Est. organic traffic</span>
+                <b className={hasDomainMetrics ? undefined : "is-locked"}>{fmt(domain?.organicTraffic)}</b>
+              </div>
+              <div className="ad-metric">
+                <span className="ad-metric-label">Organic keywords</span>
+                <b className={hasDomainMetrics ? undefined : "is-locked"}>{fmt(domain?.organicKeywords)}</b>
+              </div>
+              <div className="ad-metric">
+                <span className="ad-metric-label">Backlinks</span>
+                <b className={hasDomainMetrics ? undefined : "is-locked"}>{fmt(domain?.backlinks)}</b>
+              </div>
+              <div className="ad-metric">
+                <span className="ad-metric-label">Referring domains</span>
+                <b className={hasDomainMetrics ? undefined : "is-locked"}>{fmt(domain?.referringDomains)}</b>
+              </div>
+            </div>
+          </section>
+
+          {/* Keywords */}
+          <section className="ad-section" aria-labelledby="ad-kw-title">
+            <div className="ad-section-head">
+              <h4 id="ad-kw-title" className="ad-sub">
+                Keyword rankings
+              </h4>
+              <p className="ad-section-note">
+                {hasKeywordPreview
+                  ? `Where you rank now · volume & difficulty · ${domain!.locationLabel}`
+                  : "Positions, search volume and keyword difficulty unlock with your free account."}
+              </p>
+            </div>
+
+            {hasKeywordPreview ? (
+              <>
+                <div className="ad-table-wrap">
+                  <table className="ad-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Keyword</th>
+                        <th scope="col">Position</th>
+                        <th scope="col">Volume</th>
+                        <th scope="col">Difficulty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {domain!.keywordsPreview.map((row) => (
+                        <tr key={row.keyword}>
+                          <td>{row.keyword}</td>
+                          <td>
+                            <span className={`ad-pos ${row.position <= 10 ? "is-good" : row.position <= 20 ? "is-warn" : ""}`}>
+                              #{row.position}
+                            </span>
+                          </td>
+                          <td>{fmt(row.volume)}</td>
+                          <td>{row.difficulty == null ? "—" : row.difficulty}</td>
+                        </tr>
+                      ))}
+                      {domain!.keywordsLockedCount > 0 &&
+                        Array.from({ length: Math.min(3, domain!.keywordsLockedCount) }).map((_, i) => (
+                          <tr key={`locked-kw-${i}`} className="is-locked-row">
+                            <td colSpan={4}>
+                              <div className="ad-locked-row-inner">
+                                <span className="ad-lock" aria-hidden="true">
+                                  <LockIcon />
+                                </span>
+                                <span className="ad-locked-blur" aria-hidden="true" />
+                                <span className="ad-sr">Locked keyword row</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+                {domain!.keywordsLockedCount > 0 && (
+                  <p className="ad-locked-note">
+                    <LockIcon /> {domain!.keywordsLockedCount} more ranking{" "}
+                    {domain!.keywordsLockedCount === 1 ? "keyword" : "keywords"} locked — unlock with email below.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="ad-locked-panel">
+                <ul className="ad-locked-list">
+                  {["Top ranking keywords + positions", "Search volume by keyword", "Keyword difficulty scores"].map(
+                    (label) => (
+                      <li key={label}>
+                        <span className="ad-lock" aria-hidden="true">
+                          <LockIcon />
+                        </span>
+                        <span className="ad-locked-label">{label}</span>
+                        <span className="ad-locked-blur" aria-hidden="true" />
+                      </li>
+                    ),
+                  )}
+                </ul>
+              </div>
+            )}
+          </section>
+
+          {/* On-page issues */}
+          {report.previewIssues.length > 0 && (
+            <section className="ad-section ad-issues" aria-labelledby="ad-issues-title">
+              <h4 id="ad-issues-title" className="ad-sub">
+                What&apos;s hurting you most
+              </h4>
+              <div className="ad-issue-grid">
+                {report.previewIssues.map((issue) => (
+                  <div key={issue.id} className={`ad-issue is-${issue.status}`}>
+                    <div className="ad-issue-top">
+                      <span className={`ad-chip is-${issue.status}`}>
+                        {issue.status === "fail" ? "Critical" : "Warning"}
+                      </span>
+                      <strong>{issue.label}</strong>
+                    </div>
+                    <p className="ad-issue-detail">{issue.detail}</p>
+                    <p className="ad-issue-fix">
+                      <span>Fix</span>
+                      {issue.fix}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
+          {report.passedChecks.length > 0 && (
+            <section className="ad-section" aria-labelledby="ad-pass-title">
+              <h4 id="ad-pass-title" className="ad-sub">
+                Already looking good
+              </h4>
+              <ul className="ad-pass-grid">
+                {report.passedChecks.slice(0, 8).map((c) => (
+                  <li key={c.id}>
+                    <span aria-hidden="true">✓</span>
+                    {c.label}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Gate */}
           <div className="ad-gate">
             {report.lockedIssueCount > 0 && (
               <div className="ad-locked-issues">
@@ -296,16 +448,31 @@ export default function AuditWidget() {
             </div>
 
             <div className="ad-cta">
-              <h4>Get the full report and let AI fix it</h4>
+              <h4>Email yourself the full report</h4>
               <p>
-                Create your free account to see every issue, connect Search Console for your real
-                rankings, and have the fixes written for your approval.
+                Enter your email to create a free account, unlock every keyword and issue, and let
+                AI draft the fixes for your approval.
               </p>
-              <Link href={signupHref} className="ad-cta-btn">
-                Unlock my full report — free
-              </Link>
+              <form className="ad-cta-form" onSubmit={continueWithEmail}>
+                <Field
+                  label="Work email"
+                  hideLabel
+                  className="ad-cta-field"
+                  inputClassName="ad-cta-input"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder="you@company.com"
+                  value={gateEmail}
+                  onChange={(e) => setGateEmail(e.target.value)}
+                />
+                <button type="submit" className="ad-cta-btn">
+                  Unlock my full report — free
+                </button>
+              </form>
               <p className="ad-cta-micro">
-                14-day free trial · No credit card required · Cancel anytime
+                {TRIAL_DAYS}-day free trial · No credit card · Or{" "}
+                <Link href={signupHref()}>continue without email</Link>
               </p>
             </div>
           </div>
@@ -317,6 +484,7 @@ export default function AuditWidget() {
               setPhase("idle");
               setReport(null);
               setUrl("");
+              setGateEmail("");
             }}
           >
             Check another website
