@@ -2,6 +2,7 @@
 import Link from "next/link";
 import MarketingShell from "@/app/_components/MarketingShell";
 import AuditWidget from "@/app/_components/AuditWidget";
+import MarketingCharts from "@/app/_components/MarketingCharts";
 import { PLATFORM_NAME } from "@/lib/ui/tokens";
 
 // Public front door and the top of the funnel.
@@ -95,6 +96,8 @@ export default function Home() {
             </ol>
           </div>
         </section>
+
+        <MarketingCharts />
 
         <section className="mk-section" aria-labelledby="mk-work-title" style={{ paddingTop: 0 }}>
           <div className="mk-wrap">
