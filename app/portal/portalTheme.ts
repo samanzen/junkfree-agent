@@ -757,6 +757,10 @@ ${down.md} {
 .p-pos.top10 { background:var(--accent-soft); color:var(--accent); border-color:var(--accent-line); }
 .p-pos.top20 { background:var(--amber-soft); color:var(--amber); border-color:var(--amber-line); }
 .p-chip { font-size:var(--fz-caption); font-weight:500; padding:2.4px 8px; border-radius:var(--r-xs); background:var(--surface2); color:var(--muted); border:1px solid var(--line-soft); text-transform:capitalize; white-space:nowrap; }
+.p-chip.good { background:var(--green-soft); color:var(--green); border-color:var(--green-line); }
+.p-chip.warn { background:var(--amber-soft); color:var(--amber); border-color:var(--amber-line); }
+.p-kw-url { color:var(--accent); font-size:11.5px; text-decoration:none; max-width:160px; display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+.p-kw-url:hover { text-decoration:underline; }
 .p-na { color:var(--muted2); }
 
 /* ══ Inputs ═════════════════════════════════════════════════════════ */

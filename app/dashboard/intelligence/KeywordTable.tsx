@@ -16,7 +16,8 @@ import {
 
 type Kw = {
   id: string; keyword: string; status: string;
-  position: number|null; best_position: number|null; worst_position: number|null;
+  position: number|null; previous_position: number|null; position_change: number|null;
+  best_position: number|null; worst_position: number|null;
   search_volume: number|null; keyword_difficulty: number|null; search_intent: string|null;
   cpc: number|null; landing_page: string|null;
   clicks: number|null; impressions: number|null; ctr: number|null;
@@ -135,23 +136,26 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
           <thead>
             <tr>
               <Th col="keyword" label="Keyword" />
-              <Th col="best_position" label="Position" />
-              <th className="kt-th">Change</th>
+              <Th col="position" label="Pos" />
+              <Th col="position_change" label="Change" />
               <Th col="search_volume" label="Volume" />
-              <th className="kt-th">Difficulty <MetricExplainer metric="difficulty" /></th>
+              <th className="kt-th">KD <MetricExplainer metric="difficulty" /></th>
+              <Th col="cpc" label="CPC" />
               <th className="kt-th">Intent <MetricExplainer metric="search_intent" /></th>
               <Th col="ai_opportunity_score" label="AI Score" />
-              <th className="kt-th">Clicks</th>
+              <Th col="clicks" label="Clicks" />
+              <th className="kt-th">CTR</th>
+              <th className="kt-th">URL</th>
               <th className="kt-th">Status</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               [...Array(8)].map((_, i) => (
-                <tr key={i}><td colSpan={9} className="kt-skel-row"><div className="kt-skel" /></td></tr>
+                <tr key={i}><td colSpan={12} className="kt-skel-row"><div className="kt-skel" /></td></tr>
               ))
             ) : keywords.length === 0 ? (
-              <tr><td colSpan={9} className="kt-empty">
+              <tr><td colSpan={12} className="kt-empty">
                 {status === "ok" && !search && !statusFilter
                   ? "No keywords found. Run agents or add one above."
                   : status !== "ok" && !search && !statusFilter
@@ -170,14 +174,22 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                 <td className="kt-td kt-kw">{kw.keyword}</td>
                 <td className="kt-td kt-center">
                   {kw.position != null ? (() => {
-                    // Rank bands: top 3, page 1, everything else.
                     const band = (kw.position || 0) <= 3 ? POSITIVE : (kw.position || 0) <= 10 ? SYSTEM : ATTENTION;
                     return <span className="kt-pos-badge" style={{ background: tint(band), color: band }}>{kw.position}</span>;
                   })() : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">
-                  {kw.best_position != null && kw.position != null && kw.position !== kw.best_position
-                    ? <span style={{ color: kw.position < kw.best_position ? POSITIVE : NEGATIVE, fontSize: 12, fontWeight: 600 }}>{kw.position < kw.best_position ? "▲" : "▼"} {Math.abs(kw.position - kw.best_position)}</span>
+                  {kw.position_change != null && kw.position_change !== 0
+                    ? (
+                      <span
+                        style={{ color: kw.position_change > 0 ? POSITIVE : NEGATIVE, fontSize: 12, fontWeight: 600 }}
+                        title={kw.previous_position != null ? `Was #${kw.previous_position}` : undefined}
+                      >
+                        {kw.position_change > 0 ? "▲" : "▼"} {Math.abs(kw.position_change)}
+                      </span>
+                    )
+                    : kw.position_change === 0
+                    ? <span style={{ color: MUTED, fontSize: 12 }}>0</span>
                     : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.search_volume?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>
@@ -191,6 +203,9 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                     </div>
                   ) : <span className="kt-dash">–</span>}
                 </td>
+                <td className="kt-td kt-center">
+                  {kw.cpc != null ? `$${Number(kw.cpc).toFixed(2)}` : <span className="kt-dash">–</span>}
+                </td>
                 <td className="kt-td">
                   {kw.search_intent ? <span className="kt-intent-badge" style={{ background: tint(INTENT_COLOR[kw.search_intent] || MUTED), color: INTENT_COLOR[kw.search_intent] || MUTED }}>{kw.search_intent}</span> : <span className="kt-dash">–</span>}
                 </td>
@@ -200,6 +215,14 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                   ) : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.clicks?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>
+                <td className="kt-td kt-center">
+                  {kw.ctr != null ? `${(Number(kw.ctr) * 100).toFixed(1)}%` : <span className="kt-dash">–</span>}
+                </td>
+                <td className="kt-td" style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11.5 }}>
+                  {kw.landing_page
+                    ? <span title={kw.landing_page}>{kw.landing_page.replace(/^https?:\/\/[^/]+/, "") || "/"}</span>
+                    : <span className="kt-dash">–</span>}
+                </td>
                 <td className="kt-td">
                   <span className="kt-status" style={{ background: tint(STATUS_COLOR[kw.status] || MUTED), color: STATUS_COLOR[kw.status] || MUTED }}>{kw.status}</span>
                 </td>
@@ -319,10 +342,13 @@ function KeywordDrawer({ kw, brandId, onClose }: { kw: Kw; brandId: string; onCl
         <div className="kd-meta">
           <div className="kd-meta-grid">
             {[
+              { label: "Previous pos", val: kw.previous_position != null ? `#${kw.previous_position}` : "–" },
+              { label: "Change",       val: kw.position_change != null ? `${kw.position_change > 0 ? "▲" : kw.position_change < 0 ? "▼" : ""}${Math.abs(kw.position_change)}` : "–" },
               { label: "Best ever",    val: kw.best_position != null ? `#${kw.best_position}` : "–" },
               { label: "Worst ever",   val: kw.worst_position != null ? `#${kw.worst_position}` : "–" },
               { label: "Difficulty",   val: kw.keyword_difficulty != null ? `${kw.keyword_difficulty}/100` : "–" },
               { label: "CPC",          val: kw.cpc != null ? `$${kw.cpc}` : "–" },
+              { label: "CTR",          val: kw.ctr != null ? `${(Number(kw.ctr) * 100).toFixed(1)}%` : "–" },
               { label: "Est. clicks",  val: kw.estimated_monthly_clicks != null ? `${kw.estimated_monthly_clicks}/mo at #1` : "–" },
               { label: "Revenue est.", val: kw.estimated_revenue_impact || "Not configured" },
             ].map((m) => (
