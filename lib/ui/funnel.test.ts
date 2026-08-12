@@ -115,3 +115,29 @@ test("the audit widget uses the shared Field so labels stay wired", () => {
   expect(src).toMatch(/import Field from/);
   expect(src).not.toMatch(/<input\b/);
 });
+
+test("no client component imports the server-only URL module", () => {
+  // lib/audit/url.ts imports dns/promises at module scope. Reaching it from a
+  // "use client" file pulls a Node built-in into the browser bundle and fails
+  // the production build — which typecheck and unit tests both pass straight
+  // through, so it needs its own guard.
+  const clientFiles = ["app/signup/page.tsx", "app/_components/AuditWidget.tsx", "app/page.tsx"];
+  for (const f of clientFiles) {
+    const src = read(f);
+    expect(src, f).not.toMatch(/from "@\/lib\/audit\/url"/);
+  }
+
+  // And the shape module must stay free of Node built-ins so it is safe to share.
+  const shape = read("lib/audit/url-shape.ts");
+  expect(shape).not.toMatch(/from "(dns|fs|net|crypto|http|https)/);
+  expect(shape).not.toMatch(/require\((["'])(dns|fs|net|crypto)/);
+});
+
+test("URL validation has exactly one implementation", () => {
+  // A second copy would drift, and the copy that drifted would be the one
+  // guarding SSRF.
+  const server = read("lib/audit/url.ts");
+  expect(server).toMatch(/from "\.\/url-shape"/);
+  expect(server).not.toMatch(/export function checkUrlShape/);
+  expect(server).not.toMatch(/const BLOCKED_V4/);
+});

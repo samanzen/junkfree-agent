@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { checkUrlShape, isBlockedIp } from "./url";
+import { checkUrlShape, isBlockedIp } from "./url-shape";
 import { extractFacts, runChecks, scoreChecks, scoreBand } from "./onpage";
 import { buildReport, sortBySeverity, FREE_ISSUE_LIMIT } from "./report";
 

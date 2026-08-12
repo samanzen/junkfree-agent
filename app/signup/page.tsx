@@ -6,7 +6,9 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import MarketingShell from "@/app/_components/MarketingShell";
 import Field from "@/app/_components/Field";
 import { PLATFORM_NAME, TRIAL_DAYS } from "@/lib/ui/tokens";
-import { checkUrlShape } from "@/lib/audit/url";
+// The pure shape module, never lib/audit/url: that one imports dns/promises and
+// would drag a Node built-in into the browser bundle.
+import { checkUrlShape } from "@/lib/audit/url-shape";
 
 export default function SignupPage() {
   // useSearchParams needs a Suspense boundary to keep this page prerenderable.
