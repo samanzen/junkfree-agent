@@ -824,6 +824,7 @@ ${down.md} {
 .p-approve-actions { display:flex; gap:8px; margin-left:auto; }
 .p-approve-done { display:flex; align-items:center; gap:12px; padding:16px 20px; }
 .p-approve-donetitle { font-size:13px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.p-approve-donedetail { display:block; width:100%; font-size:var(--fz-caption); color:var(--muted); line-height:1.45; margin-top:4px; }
 .p-cardlist { display:flex; flex-direction:column; gap:12px; }
 .p-review-quote { background:var(--surface2); border-left:2.5px solid var(--accent-line); border-radius:0 var(--r-sm) var(--r-sm) 0; padding:12px 16px; font-size:var(--fz-small); line-height:1.68; color:var(--muted); font-style:italic; margin-bottom:14px; }
 .p-reply-label { font-size:10.5px; font-weight:660; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }

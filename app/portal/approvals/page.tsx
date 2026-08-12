@@ -112,7 +112,10 @@ function DraftCard({ draft }: { draft: Draft }) {
       }
       body={draft.body}
       footer={draft.rationale ? <span style={{ fontSize: 12, color: "var(--muted)", maxWidth: 420 }}>{draft.rationale}</span> : null}
-      onApprove={() => approveDraft(draft.id)}
+      onApprove={async () => {
+        const r = await approveDraft(draft.id);
+        return { ok: r.ok, detail: r.live?.message || null };
+      }}
       onDismiss={() => dismissDraft(draft.id)}
       approveLabel="Approve & publish"
     />

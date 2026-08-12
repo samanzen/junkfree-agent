@@ -52,7 +52,7 @@ export default function ContentPage() {
       <PageHeader
         eyebrow="Content"
         title="Your content pipeline"
-        sub="Everything your AI team has written for you — review it, approve it, and watch it go live."
+        sub="Review drafts from your AI team. Approving publishes to your connected website when WordPress or a webhook is set up."
       />
 
       <Panel>
@@ -178,7 +178,10 @@ function DraftCard({ draft }: { draft: Draft }) {
       }
       body={draft.body}
       footer={draft.rationale ? <span style={{ fontSize: 12, color: "var(--muted)", maxWidth: 420 }}>{draft.rationale}</span> : null}
-      onApprove={() => approveDraft(draft.id)}
+      onApprove={async () => {
+        const r = await approveDraft(draft.id);
+        return { ok: r.ok, detail: r.live?.message || null };
+      }}
       onDismiss={() => dismissDraft(draft.id)}
       approveLabel="Approve & publish"
     />

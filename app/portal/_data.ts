@@ -196,9 +196,24 @@ export function usePortalSummary(brandId: string | undefined) {
 // already uses. Every one of these enforces requireBrandAccess server-side,
 // so a customer can only ever act on their own brand's rows.
 
-export async function approveDraft(id: string): Promise<boolean> {
+export type ApproveLiveStatus =
+  | "queued"
+  | "published"
+  | "not_configured"
+  | "not_publishable"
+  | "unsupported"
+  | "failed";
+
+export type ApproveResult = {
+  ok: boolean;
+  live?: { status: ApproveLiveStatus; platform?: string; message?: string };
+};
+
+export async function approveDraft(id: string): Promise<ApproveResult> {
   const res = await authedFetch(`/api/drafts/${id}/approve`, { method: "POST" });
-  return res.ok;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, live: data.live };
+  return { ok: true, live: data.live };
 }
 
 export async function dismissDraft(id: string): Promise<boolean> {
