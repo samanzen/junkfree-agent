@@ -35,6 +35,16 @@ export const PLATFORM_TAGLINE = "AI SEO operating system";
 export const PLATFORM_DESCRIPTION =
   "Your AI SEO team — connect your site, approve the work, publish safely, and measure the results.";
 
+/**
+ * Free trial length, in days.
+ *
+ * 14 rather than 7 on purpose: SEO signal accrues in Search Console over days,
+ * so a 7-day trial ends before the product can show a customer anything that
+ * moved. Centralised because it appears in marketing copy, signup, and pricing —
+ * three places that must never disagree about what was promised.
+ */
+export const TRIAL_DAYS = 14;
+
 /** "Acme Roofing | SEO Platform", or just the platform name when no tenant is resolved. */
 export function pageTitle(tenantName?: string | null): string {
   return tenantName ? `${tenantName} | ${PLATFORM_NAME}` : PLATFORM_NAME;

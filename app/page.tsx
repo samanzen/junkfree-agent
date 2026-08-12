@@ -1,46 +1,40 @@
 "use client";
 import Link from "next/link";
 import MarketingShell from "@/app/_components/MarketingShell";
-import { PLATFORM_NAME, PLATFORM_DESCRIPTION } from "@/lib/ui/tokens";
+import AuditWidget from "@/app/_components/AuditWidget";
+import { PLATFORM_NAME } from "@/lib/ui/tokens";
 
-// Public front door. Previously redirected straight to /dashboard — that made
-// the product invisible to anyone who was not already an operator. This page
-// is the marketing surface; signed-in users still reach the apps via Login.
+// Public front door and the top of the funnel.
+//
+// The hero leads with a free audit rather than a signup button on purpose: a
+// visitor who has just seen real problems on their own site has a reason to
+// create an account, where one who has only read a value proposition does not.
+// Everything below the fold exists to answer the questions that audit raises.
 
 export default function Home() {
   return (
     <MarketingShell>
       <main id="main">
-        <section className="mk-hero" aria-labelledby="mk-hero-brand">
+        <section className="mk-hero mk-hero-audit" aria-labelledby="mk-hero-title">
           <div className="mk-hero-inner">
             <div className="mk-hero-copy">
-              <h1 id="mk-hero-brand" className="mk-hero-brand">{PLATFORM_NAME}</h1>
-              <p className="mk-hero-headline">
-                An AI SEO team that executes — with you in control.
+              <p className="mk-hero-kicker">{PLATFORM_NAME}</p>
+              <h1 id="mk-hero-title" className="mk-hero-title">
+                Find out why your site isn&apos;t ranking — in seconds
+              </h1>
+              <p className="mk-hero-support">
+                Get a free SEO report on your website, then let AI do the work: on-page fixes,
+                content, and off-page strategy. Built for any business, at any size.
               </p>
-              <p className="mk-hero-support">{PLATFORM_DESCRIPTION}</p>
-              <div className="mk-hero-cta">
-                <Link href="/signup" className="mk-btn mk-btn-primary">Start free trial</Link>
-                <a href="#how" className="mk-btn mk-btn-secondary">See how it works</a>
-              </div>
-            </div>
-
-            <div className="mk-viz" aria-hidden="true">
-              <div className="mk-viz-plane">
-                <div className="mk-viz-rail">
-                  <span /><span /><span /><span />
-                </div>
-                <div className="mk-viz-main">
-                  <div className="mk-viz-bar" />
-                  <div className="mk-viz-rows">
-                    <div className="mk-viz-row"><i /><i /><i /></div>
-                    <div className="mk-viz-row"><i /><i /><i /></div>
-                    <div className="mk-viz-row"><i /><i /><i /></div>
-                    <div className="mk-viz-row"><i /><i /><i /></div>
-                  </div>
-                </div>
-                <div className="mk-viz-pulse" />
-              </div>
+              <AuditWidget />
+              <ul className="mk-hero-proof">
+                <li>Real checks on your live page</li>
+                <li>Fixes written for you</li>
+                <li>You approve before anything publishes</li>
+              </ul>
+              <p className="mk-hero-alt">
+                <a href="#how">See how it works</a> · <Link href="/pricing">View pricing</Link>
+              </p>
             </div>
           </div>
         </section>

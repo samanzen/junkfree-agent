@@ -21,10 +21,26 @@ export default function OnboardingPage() {
   const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
+  const [prefilled, setPrefilled] = useState(false);
   const [businessModel, setBusinessModel] = useState<BusinessModel>("local_service");
   const [serviceArea, setServiceArea] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Carried from the landing-page audit through signup. Never ask twice for
+  // something the visitor already typed.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("site");
+    if (!raw) return;
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+      setSiteUrl(parsed.toString().replace(/\/$/, ""));
+      setPrefilled(true);
+    } catch {
+      /* a hand-edited query string is simply ignored */
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,7 +151,7 @@ export default function OnboardingPage() {
                 setSiteUrl(e.target.value);
                 if (err) setErr("");
               }}
-              helper="Must start with https://"
+              helper={prefilled ? "From your free report — edit if this isn't right." : "Must start with https://"}
               placeholder="https://example.com"
               disabled={busy}
               autoComplete="url"
