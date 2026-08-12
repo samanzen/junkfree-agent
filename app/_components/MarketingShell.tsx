@@ -254,9 +254,58 @@ ${up.md} {
 }
 .mk-hero-audit .mk-hero-inner { grid-template-columns: minmax(0, 1fr); }
 .mk-hero-audit .mk-hero-copy { max-width: 48rem; margin-inline: auto; text-align: center; }
-.mk-hero-audit .ad-form { text-align: left; max-width: 40rem; margin-inline: auto; }
-.mk-hero-audit .ad-field .fld-label { justify-content: center; }
+.mk-hero-audit .ad-form { text-align: left; max-width: 36rem; margin-inline: auto; }
+.mk-hero-audit .ad-prompt { text-align: center; }
 .mk-hero-audit .ad-micro { text-align: center; }
+
+/* Soft depth layers behind the hero CTA — parallax-ish drift, not card chrome */
+.mk-hero-depth {
+  position: absolute; inset: -8% -4%; pointer-events: none; z-index: 0;
+  perspective: 900px; transform-style: preserve-3d; overflow: hidden;
+}
+.mk-depth-orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(2px);
+  will-change: transform;
+}
+.mk-depth-orb-a {
+  width: min(42vw, 420px); height: min(42vw, 420px);
+  left: -6%; top: 12%;
+  background: radial-gradient(circle at 35% 35%, rgba(37,99,235,.28), rgba(37,99,235,.04) 62%, transparent 72%);
+  animation: mkDepthFloatA 14s var(--ease-inout) infinite;
+}
+.mk-depth-orb-b {
+  width: min(36vw, 340px); height: min(36vw, 340px);
+  right: -4%; bottom: 8%;
+  background: radial-gradient(circle at 60% 40%, rgba(232,121,58,.22), rgba(232,121,58,.03) 60%, transparent 72%);
+  animation: mkDepthFloatB 18s var(--ease-inout) infinite;
+}
+.mk-depth-orb-c {
+  width: min(28vw, 260px); height: min(28vw, 260px);
+  left: 42%; top: -4%;
+  background: radial-gradient(circle at 50% 50%, rgba(15,23,42,.08), transparent 70%);
+  animation: mkDepthFloatC 22s var(--ease-inout) infinite;
+}
+.mk-depth-ring {
+  position: absolute; border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--mk-accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 40%, transparent);
+  transform: rotateX(62deg) rotateZ(-18deg);
+  animation: mkDepthSpin 26s linear infinite;
+}
+.mk-depth-ring-a {
+  width: min(58vw, 520px); height: min(58vw, 520px);
+  right: 4%; top: 18%;
+  opacity: .55;
+}
+.mk-depth-ring-b {
+  width: min(40vw, 360px); height: min(40vw, 360px);
+  left: 6%; bottom: 10%;
+  opacity: .4;
+  animation-duration: 34s;
+  animation-direction: reverse;
+  border-color: color-mix(in srgb, var(--mk-cta) 28%, transparent);
+}
 /* The CTA block is the one part of the report that SHOULD stay centred. */
 .ad-cta { text-align: center; }
 .mk-hero-kicker {
@@ -637,36 +686,76 @@ ${down.sm} { .mk-social-grid { grid-template-columns: 1fr; } }
    so it never inherits portal tokens. */
 .ad { width: 100%; }
 .ad-form { display: grid; gap: 10px; }
+.ad-prompt {
+  margin: 0 0 2px; font-size: 13px; font-weight: 600;
+  letter-spacing: .02em; color: var(--mk-ink-soft);
+}
+.ad-stage { position: relative; }
+.ad.is-cue .ad-stage { padding-top: 42px; }
+.ad-cue {
+  position: absolute; left: 14%; top: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  color: var(--mk-accent);
+  animation: adCueBob 1.6s var(--ease-inout) infinite;
+  pointer-events: none;
+}
+.ad-cue-label {
+  font-size: 11px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+  color: var(--mk-accent);
+  background: color-mix(in srgb, #fff 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-accent) 22%, transparent);
+  border-radius: 999px; padding: 3px 9px;
+}
+.ad-cue-arrow { display: block; }
 .ad-field { min-width: 0; }
-/* The shared Field owns the label/error wiring; only the sizing is local.
-   align-items:end keeps the button's baseline on the input, not the label. */
-.mk .ad-field .fld-label {
-  font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--mk-ink-soft);
+/* Label lives in .ad-prompt; Field is hideLabel so the row is input+button only. */
+.ad-input-row {
+  display: grid; gap: 10px;
+  align-items: stretch;
 }
-.ad-input-row { display: grid; gap: 10px; align-items: end; }
 ${up.sm} { .ad-input-row { grid-template-columns: minmax(0, 1fr) auto; } }
-.mk .ad-input {
-  width: 100%; min-height: 54px;
+/* Higher specificity than .mk .fld-input so padding/border don't diverge from the CTA */
+.mk .ad-input.fld-input,
+.mk .ad-submit {
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  padding: 0 16px;
+  border-width: 1.5px;
+  border-radius: 10px;
+  font-size: 15.5px;
+  line-height: 1;
+}
+.mk .ad-input.fld-input {
+  width: 100%;
   background: var(--mk-surface); color: var(--mk-ink);
-  border: 2px solid var(--mk-line-strong); border-radius: 10px;
-  padding: 14px 16px; font-family: inherit; font-size: 16.5px;
-  transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+  border-style: solid; border-color: var(--mk-line-strong);
+  transition:
+    border-color var(--dur-2) var(--ease-out),
+    box-shadow var(--dur-2) var(--ease-out);
 }
-.mk .ad-input::placeholder { color: var(--mk-muted); opacity: .75; }
-.mk .ad-input:hover:not(:disabled) { border-color: var(--mk-accent); }
-.mk .ad-input:focus {
+.mk .ad.is-cue .ad-input.fld-input {
+  animation: adInputPulse 2.4s var(--ease-inout) infinite;
+}
+.mk .ad-input.fld-input::placeholder { color: var(--mk-muted); opacity: .75; }
+.mk .ad-input.fld-input:hover:not(:disabled) { border-color: var(--mk-accent); }
+.mk .ad-input.fld-input:focus {
   outline: none; border-color: var(--mk-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mk-accent) 20%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mk-accent) 18%, transparent);
+  animation: none;
 }
-.mk .ad-input:disabled { opacity: .65; }
+.mk .ad-input.fld-input:disabled { opacity: .65; }
 .mk .ad-field .fld-error {
   font-size: 13.5px; font-weight: 600; color: var(--mk-bad); margin-top: 4px;
 }
-.ad-submit {
-  min-height: 54px; padding: 14px 26px;
+.mk .ad-submit {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 22px;
   background: var(--mk-cta); color: var(--mk-cta-ink);
-  border: 2px solid var(--mk-cta); border-radius: 10px;
-  font-family: inherit; font-size: 16px; font-weight: 600; letter-spacing: -.01em;
+  border-style: solid; border-color: var(--mk-cta);
+  font-family: inherit; font-weight: 600; letter-spacing: -.01em;
   cursor: pointer; white-space: nowrap;
   transition: background var(--dur-2) var(--ease-out), transform var(--dur-1);
 }
@@ -865,6 +954,30 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @keyframes adPulse {
   0%, 100% { transform: scale(1); opacity: .9; }
   50% { transform: scale(1.35); opacity: 1; }
+}
+@keyframes adCueBob {
+  0%, 100% { transform: translateY(0); opacity: .95; }
+  50% { transform: translateY(7px); opacity: 1; }
+}
+@keyframes adInputPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 0%, transparent); border-color: var(--mk-line-strong); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mk-accent) 14%, transparent); border-color: color-mix(in srgb, var(--mk-accent) 55%, var(--mk-line-strong)); }
+}
+@keyframes mkDepthFloatA {
+  0%, 100% { transform: translate3d(0, 0, 40px) scale(1); }
+  50% { transform: translate3d(18px, -22px, 80px) scale(1.06); }
+}
+@keyframes mkDepthFloatB {
+  0%, 100% { transform: translate3d(0, 0, 20px) scale(1); }
+  50% { transform: translate3d(-24px, 16px, 60px) scale(1.08); }
+}
+@keyframes mkDepthFloatC {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(12px, 18px, 30px) scale(1.04); }
+}
+@keyframes mkDepthSpin {
+  from { transform: rotateX(62deg) rotateZ(-18deg); }
+  to { transform: rotateX(62deg) rotateZ(342deg); }
 }
 
 @keyframes mkRise {
@@ -1138,7 +1251,8 @@ ${up.md} {
 
 @media (prefers-reduced-motion: reduce) {
   .mk-hero::before, .mk-hero-title, .mk-hero-support,
-  .ad-scan-dot, .ad-result {
+  .ad-scan-dot, .ad-result, .ad-cue, .mk .ad.is-cue .ad-input.fld-input,
+  .mk-depth-orb, .mk-depth-ring {
     animation: none !important;
   }
   .mkc-panel { opacity: 1; transform: none; transition: none; }
@@ -1164,6 +1278,11 @@ ${down.sm} {
   .mk-nav-links > a[href="/#how"] { display: none; }
   .mk-hero { align-items: center; min-height: auto; padding-top: 48px; }
   .mk-auth-card { padding: 28px 22px; border-radius: var(--radius-md); }
+  .ad-cue { left: 0; right: 0; width: 100%; }
+  .ad-cue-label { font-size: 10.5px; }
+  .mk .ad-input.fld-input,
+  .mk .ad-submit { height: 46px; min-height: 46px; max-height: 46px; font-size: 15px; }
+  .mk .ad-submit { width: 100%; }
 }
 
 /* Shared field + touch guarantees for marketing auth forms */

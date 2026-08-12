@@ -17,6 +17,14 @@ export default function Home() {
     <MarketingShell>
       <main id="main">
         <section className="mk-hero mk-hero-audit" aria-labelledby="mk-hero-title">
+          {/* Atmospheric depth — CSS-only “3D” planes that drift behind the CTA */}
+          <div className="mk-hero-depth" aria-hidden="true">
+            <span className="mk-depth-orb mk-depth-orb-a" />
+            <span className="mk-depth-orb mk-depth-orb-b" />
+            <span className="mk-depth-orb mk-depth-orb-c" />
+            <span className="mk-depth-ring mk-depth-ring-a" />
+            <span className="mk-depth-ring mk-depth-ring-b" />
+          </div>
           <div className="mk-hero-inner">
             <div className="mk-hero-copy">
               <p className="mk-badge">

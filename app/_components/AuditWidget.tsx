@@ -133,8 +133,10 @@ export default function AuditWidget() {
     ? `/signup?site=${encodeURIComponent(report.finalUrl)}`
     : "/signup";
 
+  const showCue = !url.trim() && (phase === "idle" || phase === "error");
+
   return (
-    <div className="ad">
+    <div className={`ad${showCue ? " is-cue" : ""}`}>
       <form
         className="ad-form"
         onSubmit={(e) => {
@@ -142,35 +144,57 @@ export default function AuditWidget() {
           void run();
         }}
       >
-        <div className="ad-input-row">
-          <Field
-            label="See it on your site — free report in seconds"
-            className="ad-field"
-            inputClassName="ad-input"
-            type="text"
-            inputMode="url"
-            autoComplete="url"
-            spellCheck={false}
-            placeholder="yourwebsite.com"
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              if (phase === "error") {
-                setPhase("idle");
-                setError("");
-              }
-            }}
-            disabled={phase === "scanning"}
-            error={phase === "error" ? error : null}
-          />
-          <button
-            type="submit"
-            className="ad-submit"
-            disabled={phase === "scanning"}
-            data-busy={phase === "scanning" || undefined}
-          >
-            <span>{phase === "scanning" ? "Analyzing…" : "Get my free report"}</span>
-          </button>
+        <p className="ad-prompt" id="ad-prompt">
+          See it on your site — free report in seconds
+        </p>
+        <div className="ad-stage">
+          {showCue && (
+            <div className="ad-cue" aria-hidden="true">
+              <span className="ad-cue-label">Your domain</span>
+              <svg className="ad-cue-arrow" viewBox="0 0 24 40" width="22" height="36">
+                <path
+                  d="M12 2v28M5 22l7 10 7-10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+          )}
+          <div className="ad-input-row">
+            <Field
+              label="Website URL"
+              hideLabel
+              className="ad-field"
+              inputClassName="ad-input"
+              type="text"
+              inputMode="url"
+              autoComplete="url"
+              spellCheck={false}
+              placeholder="yourwebsite.com"
+              aria-describedby="ad-prompt"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                if (phase === "error") {
+                  setPhase("idle");
+                  setError("");
+                }
+              }}
+              disabled={phase === "scanning"}
+              error={phase === "error" ? error : null}
+            />
+            <button
+              type="submit"
+              className="ad-submit"
+              disabled={phase === "scanning"}
+              data-busy={phase === "scanning" || undefined}
+            >
+              <span>{phase === "scanning" ? "Analyzing…" : "Get my free report"}</span>
+            </button>
+          </div>
         </div>
         <p className="ad-micro">Free · No credit card · Results in seconds</p>
       </form>
