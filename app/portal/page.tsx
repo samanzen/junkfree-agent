@@ -152,8 +152,13 @@ export default function PortalDashboard() {
   ].filter(Boolean) as Signal[];
 
   const quickActions: QuickAction[] = [
+    (pendingDrafts + pendingReviews) > 0 && {
+      label: "Open approvals",
+      count: pendingDrafts + pendingReviews,
+      href: "/portal/approvals",
+      tone: "accent" as const,
+    },
     pendingDrafts > 0 && { label: "Review content", count: pendingDrafts, href: "/portal/content", tone: "accent" as const },
-    pendingReviews > 0 && { label: "Reply to reviews", count: pendingReviews, href: "/portal/reviews", tone: "pink" as const },
     { label: "Ask your AI assistant", href: "/portal/assistant", tone: "accent" as const },
   ].filter(Boolean) as QuickAction[];
 
