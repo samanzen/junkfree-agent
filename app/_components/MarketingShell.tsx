@@ -337,6 +337,10 @@ ${up.sm} { .mk-loop { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12p
 }
 ${up.sm} {
   .mk-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
+  .mk-steps-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 0; }
+}
+${up.md} {
+  .mk-steps-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; }
 }
 .mk-step {
   position: relative; padding: 20px 18px 20px 0;
@@ -365,12 +369,15 @@ ${up.sm} {
   display: grid; gap: 22px;
 }
 ${up.sm} { .mk-work { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 36px; } }
+${up.md} { .mk-work-dense { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 28px; } }
 .mk-work li { padding-top: 16px; border-top: 1px solid var(--mk-line); }
 .mk-work h3 {
   font-family: var(--mk-font-display); font-size: 19px; margin: 0 0 8px;
   letter-spacing: -.018em; font-weight: 600;
 }
 .mk-work p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; max-width: 40ch; }
+.mk-work-dense h3 { font-size: 17px; }
+.mk-work-dense p { font-size: 14.5px; max-width: none; }
 
 /* ── Trust ── */
 .mk-trust {
@@ -386,7 +393,7 @@ ${up.sm} { .mk-trust-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
   font-family: var(--mk-font-display); font-size: 18px; margin: 0 0 8px;
   letter-spacing: -.018em; font-weight: 600;
 }
-.mkc-trust-grid p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
+.mk-trust-grid p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
 
 /* ── Social proof (MarketingProof) ── */
 .mk-proof {
@@ -468,8 +475,19 @@ ${up.md} { .mk-proof-stack { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 ${up.sm} {
   .mk-integ li {
-    grid-template-columns: 200px 120px 1fr;
-    align-items: baseline; gap: 20px;
+    grid-template-columns: 220px 1fr;
+    align-items: baseline; gap: 24px;
+  }
+}
+${up.md} {
+  .mk-integ {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 36px; border-top: 0;
+  }
+  .mk-integ li {
+    grid-template-columns: 1fr;
+    gap: 8px; padding: 22px 0;
+    border-top: 1px solid var(--mk-line);
   }
 }
 .mk-integ strong {
