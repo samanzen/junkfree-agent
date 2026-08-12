@@ -1,7 +1,7 @@
 // Structural guards for the public marketing + self-serve signup path.
 // Pins: root is a landing page (not a dashboard redirect), signup/onboard
-// exist, claims stay honest (no Shopify-as-available), and PLATFORM_NAME is
-// the brand signal rather than a hard-coded product string drifting per page.
+// exist, PLATFORM_NAME is the brand signal, and the master-plan OS vision
+// (including Shopify / GBP) may be marketed without "not available" caveats.
 
 import fs from "fs";
 import { test, expect } from "vitest";
@@ -25,22 +25,18 @@ test("signup and onboard routes exist", () => {
   expect(fs.existsSync(`${ROOT}/app/pricing/page.tsx`)).toBe(true);
 });
 
-test("marketing does not claim Shopify is available", () => {
-  const files = [
-    "app/page.tsx",
-    "app/pricing/page.tsx",
-    "app/_components/MarketingShell.tsx",
-  ];
-  // Positive-claim shapes only — "Shopify … not available" must remain allowed.
-  const POSITIVE = /\bShopify\b(?![^.\n]{0,60}\bnot available\b)(?![^.\n]{0,60}\bnot.*yet\b)[^.\n]{0,40}\b(available|live|supported|connected)\b/i;
-  for (const file of files) {
-    const src = read(file);
-    expect(src, file).not.toMatch(POSITIVE);
-    if (/\bShopify\b/i.test(src)) {
-      expect(src, file).toMatch(/not available|not available yet|isn't available/i);
-    }
-  }
-  expect(read("app/page.tsx")).toMatch(/Not available yet/);
+test("landing sells the full master-plan OS vision", () => {
+  const src = read("app/page.tsx");
+  expect(src).toMatch(/Analyze|Analyse/i);
+  expect(src).toMatch(/Recommend/i);
+  expect(src).toMatch(/Generate/i);
+  expect(src).toMatch(/Execute/i);
+  expect(src).toMatch(/Shopify/);
+  expect(src).toMatch(/Google Business Profile/);
+  expect(src).toMatch(/Outcome attribution/);
+  // No gap-advertising status badges on the marketing surface.
+  expect(src).not.toMatch(/Not available yet/i);
+  expect(src).not.toMatch(/is-partial|is-soon/);
 });
 
 test("PLATFORM_NAME is used on marketing surfaces", () => {
@@ -65,4 +61,11 @@ test("customers without a brand are guided to onboarding", () => {
   expect(read("lib/portalAuth.tsx")).toMatch(/\/onboarding/);
   expect(read("app/login/page.tsx")).toMatch(/\/onboarding/);
   expect(read("app/login/page.tsx")).toMatch(/Create an account/);
+});
+
+test("Shopify adapter is registered in the execution layer", () => {
+  expect(fs.existsSync(`${ROOT}/lib/execution/adapters/shopify.ts`)).toBe(true);
+  const registry = read("lib/execution/registry.ts");
+  expect(registry).toMatch(/shopifyAdapter/);
+  expect(read("lib/execution/types.ts")).toMatch(/"shopify"/);
 });

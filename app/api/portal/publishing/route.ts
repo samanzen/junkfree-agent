@@ -7,17 +7,12 @@ import {
   disconnectIntegration,
   getIntegration,
 } from "@/lib/integrations";
-import { getAdapter, isSitePlatform } from "@/lib/execution/registry";
+import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "@/lib/execution/registry";
 import type { SitePlatform } from "@/lib/execution/types";
 
 export const maxDuration = 60;
 
-// PUBLISHING CONNECT — customer-facing setup for WordPress / webhook.
-//
-// The Connections tab used to redirect "Connect" to /portal/website, which had
-// no credential form. This route is the missing write path: validate inputs,
-// live-check the adapter, then encrypt credentials into brand_integrations.
-// Secrets are never echoed back.
+// PUBLISHING CONNECT — customer-facing setup for WordPress / Shopify / webhook.
 
 function httpsUrl(raw: string, label: string): { ok: true; url: string } | { ok: false; error: string } {
   const trimmed = (raw || "").trim().replace(/\/+$/, "");
@@ -34,6 +29,19 @@ function httpsUrl(raw: string, label: string): { ok: true; url: string } | { ok:
   return { ok: true, url: trimmed };
 }
 
+function normalizeShop(raw: string): { ok: true; shop: string } | { ok: false; error: string } {
+  const trimmed = (raw || "").trim().toLowerCase();
+  if (!trimmed) return { ok: false, error: "Shopify store is required." };
+  const host = trimmed
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "")
+    .replace(/\.myshopify\.com$/i, "");
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(host)) {
+    return { ok: false, error: "Use your store subdomain, e.g. mystore or mystore.myshopify.com." };
+  }
+  return { ok: true, shop: `${host}.myshopify.com` };
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -48,6 +56,8 @@ export async function POST(req: NextRequest) {
     publishStatus?: "publish" | "draft";
     endpointUrl?: string;
     signingSecret?: string;
+    shop?: string;
+    accessToken?: string;
   };
 
   const brandId = body.brand_id;
@@ -64,12 +74,14 @@ export async function POST(req: NextRequest) {
   const action = body.action || "connect";
   const platformRaw = body.platform || "wordpress";
   if (!isSitePlatform(platformRaw)) {
-    return NextResponse.json({ error: "Choose WordPress or a webhook endpoint." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Choose WordPress, Shopify, or a webhook endpoint." },
+      { status: 400 }
+    );
   }
   const platform: SitePlatform = platformRaw;
   const adapter = getAdapter(platform);
 
-  // ── Disconnect ────────────────────────────────────────────────────────────
   if (action === "disconnect") {
     await disconnectIntegration(brandId, platform);
     return NextResponse.json({
@@ -78,7 +90,6 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── Connect / test ────────────────────────────────────────────────────────
   let credentials: Record<string, string>;
   let config: Record<string, unknown>;
 
@@ -90,13 +101,34 @@ export async function POST(req: NextRequest) {
     if (!username) return NextResponse.json({ error: "WordPress username is required." }, { status: 400 });
     if (!applicationPassword) {
       return NextResponse.json(
-        { error: "Application password is required. Create one in WordPress under Users → Profile → Application Passwords." },
+        {
+          error:
+            "Application password is required. Create one in WordPress under Users → Profile → Application Passwords.",
+        },
         { status: 400 }
       );
     }
     credentials = { username, applicationPassword };
     config = {
       siteUrl: site.url,
+      status: body.publishStatus === "draft" ? "draft" : "publish",
+    };
+  } else if (platform === "shopify") {
+    const shop = normalizeShop(body.shop || "");
+    if (!shop.ok) return NextResponse.json({ error: shop.error }, { status: 400 });
+    const accessToken = (body.accessToken || "").trim();
+    if (!accessToken || accessToken.length < 20) {
+      return NextResponse.json(
+        {
+          error:
+            "Admin access token is required. Create a custom app in Shopify admin and paste the token.",
+        },
+        { status: 400 }
+      );
+    }
+    credentials = { accessToken };
+    config = {
+      shop: shop.shop,
       status: body.publishStatus === "draft" ? "draft" : "publish",
     };
   } else {
@@ -113,12 +145,10 @@ export async function POST(req: NextRequest) {
     config = { endpointUrl: endpoint.url };
   }
 
-  const check = await adapter
-    .check({ brand, credentials, config })
-    .catch((e) => ({
-      ok: false as const,
-      detail: e instanceof Error ? e.message : String(e),
-    }));
+  const check = await adapter.check({ brand, credentials, config }).catch((e) => ({
+    ok: false as const,
+    detail: e instanceof Error ? e.message : String(e),
+  }));
 
   if (!check.ok) {
     return NextResponse.json(
@@ -138,26 +168,27 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Only store after a successful live check — never persist credentials that
-  // cannot authenticate.
   await upsertIntegrationCredentials(brandId, platform, credentials, config);
 
-  // A brand can only publish through one adapter at a time. If they switch
-  // from WordPress to webhook (or the reverse), clear the other so status
-  // reporting cannot claim two publishers.
-  const other: SitePlatform = platform === "wordpress" ? "webhook" : "wordpress";
-  const prior = await getIntegration(brandId, other);
-  if (prior?.status === "connected") {
-    await disconnectIntegration(brandId, other);
+  // One active publisher at a time.
+  for (const other of SITE_PLATFORMS) {
+    if (other === platform) continue;
+    const prior = await getIntegration(brandId, other);
+    if (prior?.status === "connected") {
+      await disconnectIntegration(brandId, other);
+    }
   }
+
+  const messages: Record<SitePlatform, string> = {
+    wordpress: "WordPress connected. Approved pages can be published to your site.",
+    shopify: "Shopify connected. Approved pages can be published to your store.",
+    webhook: "Webhook connected. Approved changes will be sent to your endpoint.",
+  };
 
   return NextResponse.json({
     ok: true,
     platform,
-    message:
-      platform === "wordpress"
-        ? "WordPress connected. Approved pages can be published to your site."
-        : "Webhook connected. Approved changes will be sent to your endpoint.",
+    message: messages[platform],
     detail: check.detail || null,
   });
 }

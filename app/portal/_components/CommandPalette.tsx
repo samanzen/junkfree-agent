@@ -4,10 +4,27 @@ import { useRouter } from "next/navigation";
 import { useDialog } from "@/lib/ui/useDialog";
 import Field from "@/app/_components/Field";
 import { NAV_GROUPS, NAV_ROUTES } from "../nav";
+import {
+  IconCheck, IconSettings, IconSparkle, IconTarget, IconTraffic,
+} from "../icons";
 
-// Route-only command palette (v1). Opens on ⌘K / Ctrl+K from anywhere in the
-// portal shell. Record search and verbs come later — this only jumps to
-// destinations so a 13+ page product stays keyboard-reachable.
+// Command palette: routes + a few high-value verbs that jump to existing
+// authenticated destinations (setup, approvals, opportunities, results).
+
+type CmdItem = {
+  href: string;
+  label: string;
+  group: string;
+  Icon: React.ComponentType<{ size?: number; className?: string }>;
+};
+
+const VERBS: CmdItem[] = [
+  { href: "/portal/setup", label: "Continue setup", group: "Actions", Icon: IconSparkle },
+  { href: "/portal/approvals", label: "Review approvals", group: "Actions", Icon: IconCheck },
+  { href: "/portal/opportunities", label: "Open opportunities", group: "Actions", Icon: IconTarget },
+  { href: "/portal/results", label: "See outcome trails", group: "Actions", Icon: IconTraffic },
+  { href: "/portal/settings", label: "Manage connections", group: "Actions", Icon: IconSettings },
+];
 
 export default function CommandPalette() {
   const router = useRouter();
@@ -39,17 +56,27 @@ export default function CommandPalette() {
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) {
-      return NAV_GROUPS.flatMap((g) =>
-        g.items.map((item) => ({ ...item, group: g.label })),
-      );
-    }
-    return NAV_ROUTES
-      .filter((item) => item.label.toLowerCase().includes(q) || item.href.includes(q))
-      .map((item) => {
-        const group = NAV_GROUPS.find((g) => g.items.some((i) => i.href === item.href))?.label || "";
-        return { ...item, group };
-      });
+    const routes: CmdItem[] = !q
+      ? NAV_GROUPS.flatMap((g) => g.items.map((item) => ({ ...item, group: g.label })))
+      : NAV_ROUTES
+          .filter((item) => item.label.toLowerCase().includes(q) || item.href.includes(q))
+          .map((item) => {
+            const group = NAV_GROUPS.find((g) => g.items.some((i) => i.href === item.href))?.label || "";
+            return { ...item, group };
+          });
+
+    const verbs = VERBS.filter(
+      (v) => !q || v.label.toLowerCase().includes(q) || v.href.includes(q)
+    );
+    // Verbs first when searching; when idle, show verbs then routes.
+    const merged = q ? [...verbs, ...routes] : [...verbs, ...routes];
+    // Dedupe by href keeping first (verb wins).
+    const seen = new Set<string>();
+    return merged.filter((item) => {
+      if (seen.has(item.href)) return false;
+      seen.add(item.href);
+      return true;
+    });
   }, [query]);
 
   useEffect(() => {
@@ -79,7 +106,6 @@ export default function CommandPalette() {
 
   return (
     <div className="p-cmd-root" role="presentation">
-      {/* Decorative — Escape via useDialog already closes the palette. */}
       <div className="p-cmd-scrim" onClick={close} aria-hidden="true" />
       <div
         ref={dialogRef}
@@ -95,7 +121,7 @@ export default function CommandPalette() {
             type="search"
             className="p-cmd-field"
             inputClassName="p-cmd-input"
-            placeholder="Go to…"
+            placeholder="Go to a page or action…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onListKey}
@@ -110,7 +136,7 @@ export default function CommandPalette() {
             <li className="p-cmd-empty">No matching destinations</li>
           ) : (
             results.map((item, i) => (
-              <li key={item.href} role="option" id={`p-cmd-opt-${i}`} aria-selected={i === active}>
+              <li key={`${item.group}:${item.href}`} role="option" id={`p-cmd-opt-${i}`} aria-selected={i === active}>
                 <button
                   type="button"
                   className={`p-cmd-item ${i === active ? "on" : ""}`}

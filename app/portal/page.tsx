@@ -109,7 +109,7 @@ export default function PortalDashboard() {
   const localScore = computeLocalScore(summary.activity);
   const websiteHealth = m.site_health;
   const aiVisibility = m.ai_visibility;
-  const gbpScore: number | null = null; // no GBP integration connected yet
+  const gbpScore: number | null = brand.gbp_location_id ? localScore : null;
   const overall = computeOverallHealth([seoScore, localScore, websiteHealth]);
 
   const priorities = buildPriorities(summary, platform, brand);

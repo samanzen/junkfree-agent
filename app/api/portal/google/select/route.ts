@@ -102,8 +102,12 @@ export async function POST(req: NextRequest) {
     // Search Console's selection is mirrored onto brands.gsc_property, which is
     // what every existing query reads. Clearing one without the other would
     // leave the platform still pulling data the customer just disconnected.
+    // Same for GBP → brands.gbp_location_id (Local SEO / opportunities).
     if (key === "search_console") {
       await db.from("brands").update({ gsc_property: null }).eq("id", brandId);
+    }
+    if (key === "google_business_profile") {
+      await db.from("brands").update({ gbp_location_id: null }).eq("id", brandId);
     }
     forgetTokens(brandId);
     return NextResponse.json({ ok: true, message: "Disconnected." });
@@ -119,6 +123,9 @@ export async function POST(req: NextRequest) {
     await unlinkAccount(brandId, accountId);
     if (before.selections.search_console?.accountId === accountId) {
       await db.from("brands").update({ gsc_property: null }).eq("id", brandId);
+    }
+    if (before.selections.google_business_profile?.accountId === accountId) {
+      await db.from("brands").update({ gbp_location_id: null }).eq("id", brandId);
     }
     forgetTokens(brandId);
     return NextResponse.json({ ok: true, message: "Google account removed." });
@@ -156,10 +163,13 @@ export async function POST(req: NextRequest) {
 
   await selectResource(brandId, key, { accountId, resourceId, label });
 
-  // Keep brands.gsc_property in step, so existing Search Console reads pick the
-  // customer's choice up without any other code changing.
+  // Keep brands.gsc_property / gbp_location_id in step so existing reads pick
+  // the customer's choice up without any other code changing.
   if (key === "search_console") {
     await db.from("brands").update({ gsc_property: resourceId }).eq("id", brandId);
+  }
+  if (key === "google_business_profile") {
+    await db.from("brands").update({ gbp_location_id: resourceId }).eq("id", brandId);
   }
 
   return NextResponse.json({ ok: true, message: "Connected.", label });

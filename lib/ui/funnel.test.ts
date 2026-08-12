@@ -136,12 +136,12 @@ test("no client component imports the server-only URL module", () => {
 test("the landing page states the product category before any benefit line", () => {
   // A visitor must know WHAT this is on arrival, not infer it from a promise.
   const src = read("app/page.tsx");
-  expect(src).toMatch(/Automated SEO platform/i);
-  // The four verbs that make "runs itself" concrete.
-  for (const verb of ["Finds", "Writes", "Publishes", "Measures"]) {
-    expect(src).toContain(`<b>${verb}</b>`);
+  expect(src).toMatch(/AI SEO operating system/i);
+  // Intelligence loop verbs — compete/diagnose was replaced by the master-plan OS loop.
+  for (const verb of ["Analyze", "Recommend", "Generate", "Execute"]) {
+    expect(src).toMatch(new RegExp(verb, "i"));
   }
-  const badgeAt = src.indexOf("Automated SEO platform");
+  const badgeAt = src.search(/AI SEO operating system/i);
   const h1At = src.indexOf('id="mk-hero-title"');
   expect(badgeAt).toBeGreaterThan(-1);
   expect(badgeAt).toBeLessThan(h1At);

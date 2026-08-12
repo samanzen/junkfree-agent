@@ -17,7 +17,8 @@ export default function PricingPage() {
               Simple plans for {PLATFORM_NAME}
             </h1>
             <p className="mk-lead">
-              Start with a trial while self-serve billing comes online. No surprise auto-charges today.
+              Start with a trial. Self-serve plans unlock when you are ready to convert —
+              Founding and Growth cover the full AI SEO operating system.
             </p>
           </div>
 
@@ -28,7 +29,7 @@ export default function PricingPage() {
               <p>For operators who want the AI workflow now and help shape what ships next.</p>
               <ul>
                 <li>One brand workspace</li>
-                <li>Search Console + WordPress connect</li>
+                <li>Search Console, WordPress, Shopify, and Business Profile</li>
                 <li>Approval queue and audit trail</li>
                 <li>Founding pricing locked when billing goes live</li>
               </ul>
@@ -63,8 +64,8 @@ export default function PricingPage() {
           </div>
 
           <p className="mk-price-note">
-            Card checkout is not wired yet. Starting a trial creates your account and brand workspace;
-            paid self-serve plans will attach later. Shopify publishing is not available.
+            Start a trial to create your account and brand workspace. Card checkout unlocks when
+            Stripe is configured — until then there are no surprise auto-charges.
           </p>
         </div>
       </main>

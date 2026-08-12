@@ -7,7 +7,7 @@ import { Panel, PanelHead } from "../_components/Panel";
 import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
 
-type PublishPlatform = "wordpress" | "webhook";
+type PublishPlatform = "wordpress" | "webhook" | "shopify";
 
 type PublishForm = {
   platform: PublishPlatform;
@@ -17,6 +17,8 @@ type PublishForm = {
   publishStatus: "publish" | "draft";
   endpointUrl: string;
   signingSecret: string;
+  shop: string;
+  accessToken: string;
 };
 
 const emptyPublishForm = (): PublishForm => ({
@@ -27,6 +29,8 @@ const emptyPublishForm = (): PublishForm => ({
   publishStatus: "publish",
   endpointUrl: "",
   signingSecret: "",
+  shop: "",
+  accessToken: "",
 });
 
 // THE INTEGRATION CENTER.
@@ -194,6 +198,16 @@ function PublishingSetup({
         <button
           type="button"
           role="tab"
+          aria-selected={form.platform === "shopify"}
+          className={`p-btn ${form.platform === "shopify" ? "primary" : "ghost"}`}
+          onClick={() => onChange({ platform: "shopify" })}
+          disabled={busy}
+        >
+          <span>Shopify</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={form.platform === "webhook"}
           className={`p-btn ${form.platform === "webhook" ? "primary" : "ghost"}`}
           onClick={() => onChange({ platform: "webhook" })}
@@ -248,6 +262,42 @@ function PublishingSetup({
           >
             <option value="publish">Publish live immediately after approval</option>
             <option value="draft">Save as a WordPress draft for a final check</option>
+          </Field>
+        </div>
+      ) : form.platform === "shopify" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            In Shopify admin, create a <strong>custom app</strong> with content
+            write permission, install it on the store, then paste the admin access
+            token here. We verify before saving.
+          </p>
+          <Field
+            label="Store subdomain"
+            placeholder="mystore.myshopify.com"
+            value={form.shop}
+            onChange={(e) => onChange({ shop: e.target.value })}
+            disabled={busy}
+            required
+            helper="Just the store name is fine — mystore or mystore.myshopify.com."
+          />
+          <Field
+            label="Admin access token"
+            type="password"
+            autoComplete="off"
+            value={form.accessToken}
+            onChange={(e) => onChange({ accessToken: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+          >
+            <option value="publish">Publish the page live after approval</option>
+            <option value="draft">Save as an unpublished Shopify page</option>
           </Field>
         </div>
       ) : (
@@ -486,13 +536,22 @@ export default function ConnectionsPanel({
               applicationPassword: publishForm.applicationPassword,
               publishStatus: publishForm.publishStatus,
             }
-          : {
-              brand_id: brandId,
-              action: "connect" as const,
-              platform: "webhook" as const,
-              endpointUrl: publishForm.endpointUrl,
-              signingSecret: publishForm.signingSecret,
-            };
+          : publishForm.platform === "shopify"
+            ? {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "shopify" as const,
+                shop: publishForm.shop,
+                accessToken: publishForm.accessToken,
+                publishStatus: publishForm.publishStatus,
+              }
+            : {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "webhook" as const,
+                endpointUrl: publishForm.endpointUrl,
+                signingSecret: publishForm.signingSecret,
+              };
 
       const res = await authedFetch("/api/portal/publishing", {
         method: "POST",
@@ -527,7 +586,12 @@ export default function ConnectionsPanel({
     if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
       setPublishForm((f) => ({
         ...emptyPublishForm(),
-        platform: row.detail?.toLowerCase() === "webhook" ? "webhook" : "wordpress",
+        platform:
+          /shopify/i.test(row.detail || "")
+            ? "shopify"
+            : /webhook/i.test(row.detail || "")
+              ? "webhook"
+              : "wordpress",
         siteUrl: f.siteUrl,
       }));
       setPublishOpen(true);

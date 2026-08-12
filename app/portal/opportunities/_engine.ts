@@ -259,9 +259,22 @@ function fromCounts(c: CountsInput): Opportunity[] {
       impact: [], steps: ["Link your Business Profile location", "Confirm categories and service area"],
       capabilities: [
         { id: "gbp:nav", label: "Review your connections", produces: "See exactly what is and isn't linked", exec: "navigate", href: "/portal/settings", primary: true },
-        { id: "gbp:post", label: "Generate a Google post", produces: "A ready-to-publish update for your profile", exec: "soon" },
       ],
       score: PRIORITY_WEIGHT.high + 90,
+    });
+  } else {
+    out.push({
+      id: "local:gbp-post", kind: "Local", category: "local",
+      title: "Publish a Google Business Profile post",
+      priority: "medium", difficulty: "easy", effort: "5 min",
+      why: "Fresh posts keep your profile active in the local pack. Agents can draft one; you approve and it can go live on Google.",
+      impact: ["Profile freshness signal", "Ready-to-publish local update"],
+      steps: ["Open content / local drafts", "Approve a Google post", "Publish to your Business Profile"],
+      capabilities: [
+        { id: "gbp:post", label: "Open Google posts", produces: "Review and approve drafted profile updates", exec: "navigate", href: "/portal/content", primary: true },
+        { id: "gbp:approvals", label: "Open approvals inbox", produces: "Clear every pending local item in one place", exec: "navigate", href: "/portal/approvals" },
+      ],
+      score: PRIORITY_WEIGHT.medium + 40,
     });
   }
 

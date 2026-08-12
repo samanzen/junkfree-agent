@@ -274,7 +274,7 @@ async function lastSuccessfulSync(brandId: string, kinds: string[]): Promise<str
 }
 
 /**
- * Website publishing (WordPress / webhook).
+ * Website publishing (WordPress / Shopify / webhook).
  *
  * Credentials live in brand_integrations and the adapters already exist in
  * lib/execution. This reports their state; the live credential check stays in
@@ -328,9 +328,11 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const label =
     active.provider === "wordpress"
       ? "WordPress"
-      : active.provider === "webhook"
-        ? "Webhook"
-        : active.provider;
+      : active.provider === "shopify"
+        ? "Shopify"
+        : active.provider === "webhook"
+          ? "Webhook"
+          : active.provider;
   return {
     ...base,
     status: "connected",
