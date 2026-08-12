@@ -50,14 +50,17 @@ export async function POST(
         if (result.ok) {
           publish.ok = true;
           nextStatus = "live";
-          await db
-            .from("gbp_posts")
-            .update({
-              status: "live",
-              remote_name: result.remoteName,
-              published_at: new Date().toISOString(),
-            })
-            .eq("id", id);
+          const livePatch = {
+            status: "live",
+            remote_name: result.remoteName,
+            published_at: new Date().toISOString(),
+          };
+          let { error: upErr } = await db.from("gbp_posts").update(livePatch).eq("id", id);
+          if (upErr && /remote_name|published_at|column/i.test(upErr.message)) {
+            // Migration 014 not applied yet — still mark live without extras.
+            ({ error: upErr } = await db.from("gbp_posts").update({ status: "live" }).eq("id", id));
+          }
+          if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
           return NextResponse.json({ ok: true, published: true, remote_name: result.remoteName });
         }
         publish.detail = result.error;
