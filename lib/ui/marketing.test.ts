@@ -72,6 +72,13 @@ test("login and signup offer social providers and route via /auth/callback", () 
   expect(read("app/signup/page.tsx")).toMatch(/destinationForSession/);
 });
 
+test("auth pages use an atmospheric backdrop behind the form card", () => {
+  expect(fs.existsSync(`${ROOT}/app/_components/AuthBackdrop.tsx`)).toBe(true);
+  expect(read("app/login/page.tsx")).toMatch(/AuthBackdrop/);
+  expect(read("app/signup/page.tsx")).toMatch(/AuthBackdrop/);
+  expect(read("app/_components/AuthBackdrop.tsx")).toMatch(/auth-bd-orb/);
+});
+
 test("Shopify adapter is registered in the execution layer", () => {
   expect(fs.existsSync(`${ROOT}/lib/execution/adapters/shopify.ts`)).toBe(true);
   const registry = read("lib/execution/registry.ts");

@@ -686,11 +686,17 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 
 /* ── Auth forms on marketing ground ── */
 .mk-auth {
+  position: relative; isolation: isolate; overflow: hidden;
   min-height: calc(100vh - 140px);
   display: flex; align-items: center; justify-content: center;
   padding: 40px 20px 72px;
+  background:
+    radial-gradient(1000px 520px at 80% 8%, color-mix(in srgb, var(--mk-bright) 16%, transparent), transparent 60%),
+    radial-gradient(820px 460px at 8% 92%, color-mix(in srgb, var(--mk-cta) 10%, transparent), transparent 58%),
+    linear-gradient(165deg, #EDF3F9 0%, #F7FAFC 45%, #E6EFF6 100%);
 }
 .mk-auth-card {
+  position: relative; z-index: 1;
   width: 100%; max-width: 420px;
   background: var(--mk-surface);
   border: 1px solid var(--mk-line);

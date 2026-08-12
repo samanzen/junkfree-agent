@@ -10,6 +10,7 @@ import { PLATFORM_NAME, TRIAL_DAYS } from "@/lib/ui/tokens";
 // would drag a Node built-in into the browser bundle.
 import { checkUrlShape } from "@/lib/audit/url-shape";
 import SocialAuthButtons from "@/app/_components/SocialAuthButtons";
+import AuthBackdrop from "@/app/_components/AuthBackdrop";
 import { destinationForSession } from "@/lib/authDestination";
 
 export default function SignupPage() {
@@ -91,6 +92,7 @@ function SignupInner() {
   return (
     <MarketingShell active="signup">
       <main id="main" className="mk-auth">
+        <AuthBackdrop />
         <div className="mk-auth-card">
           <h1>{site ? "Unlock your full report" : "Create your account"}</h1>
           <p className="mk-auth-sub">

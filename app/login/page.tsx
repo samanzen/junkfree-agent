@@ -5,6 +5,7 @@ import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { touchTargetCSS, fieldCSS, down, PLATFORM_NAME, PLATFORM_TAGLINE } from "@/lib/ui/tokens";
 import Field from "@/app/_components/Field";
 import SocialAuthButtons from "@/app/_components/SocialAuthButtons";
+import AuthBackdrop from "@/app/_components/AuthBackdrop";
 import { destinationForSession, safeAuthNext } from "@/lib/authDestination";
 
 export default function Login() {
@@ -55,6 +56,7 @@ function LoginInner() {
   return (
     <div className="lg">
       <style>{CSS}</style>
+      <AuthBackdrop />
       <main className="card">
         <div className="brand">
           <span className="dot" /> {PLATFORM_NAME}
@@ -124,8 +126,20 @@ function LoginInner() {
 }
 
 const CSS = `
-.lg { min-height:100vh; display:flex; align-items:center; justify-content:center; background:linear-gradient(160deg,#F6F8FB,#ECEFF2); font-family:var(--font-sans); color:#1A2030; padding:20px; }
-.lg .card { width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-lg); padding:36px; box-shadow:var(--shadow-4); }
+.lg {
+  position:relative; isolation:isolate; overflow:hidden;
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(1100px 560px at 82% 12%, rgba(37,99,235,.16), transparent 58%),
+    radial-gradient(900px 520px at 10% 90%, rgba(247,148,30,.10), transparent 55%),
+    linear-gradient(165deg, #EEF2F8 0%, #F7F8FB 42%, #E7EDF7 100%);
+  font-family:var(--font-sans); color:#1A2030; padding:20px;
+}
+.lg .card {
+  position:relative; z-index:1;
+  width:100%; max-width:390px; background:#fff; border:1px solid #E7EAF0;
+  border-radius:var(--radius-lg); padding:36px; box-shadow:var(--shadow-4);
+}
 .lg .brand { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#616C82; margin-bottom:22px; }
 .lg .dot { width:8px; height:8px; border-radius:50%; background:#2563EB; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
 .lg h1 { font-size:26px; margin:0 0 4px; color:#12172A; }
