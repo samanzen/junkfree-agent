@@ -26,13 +26,13 @@ export default function Home() {
                 AI SEO operating system
               </p>
               <h1 id="mk-hero-title" className="mk-hero-title">
-                Outrank competitors. Grow the business.
+                Grow your business while you sleep
               </h1>
               <p className="mk-hero-support">
-                {PLATFORM_NAME} is the intelligence layer behind your SEO: it maps rivals,
-                finds the gaps that actually cost you customers, ranks the next moves by
-                impact, then drafts and ships the work — on-page and off-page — after you
-                approve. Content is one output. Competitive clarity is the product.
+                {PLATFORM_NAME} is a fully automated AI SEO system: it maps rivals, finds the
+                gaps costing you customers, ranks the next moves by impact, then drafts and
+                ships the work — on-page and off-page — after you approve. It keeps working
+                when your team clocks out. Content is one output. Competitive growth is the product.
               </p>
 
               <AuditWidget />
