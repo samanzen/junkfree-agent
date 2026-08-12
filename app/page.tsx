@@ -3,6 +3,7 @@ import Link from "next/link";
 import MarketingShell from "@/app/_components/MarketingShell";
 import AuditWidget from "@/app/_components/AuditWidget";
 import MarketingCharts from "@/app/_components/MarketingCharts";
+import MarketingProof from "@/app/_components/MarketingProof";
 import { PLATFORM_NAME } from "@/lib/ui/tokens";
 
 // Public front door and the top of the funnel.
@@ -10,7 +11,8 @@ import { PLATFORM_NAME } from "@/lib/ui/tokens";
 // The hero leads with a free audit rather than a signup button on purpose: a
 // visitor who has just seen real problems on their own site has a reason to
 // create an account, where one who has only read a value proposition does not.
-// Everything below the fold exists to answer the questions that audit raises.
+// Everything below the fold exists to answer the questions that audit raises —
+// and to make clear this is an intelligence OS, not a content mill.
 
 export default function Home() {
   return (
@@ -19,45 +21,43 @@ export default function Home() {
         <section className="mk-hero mk-hero-audit" aria-labelledby="mk-hero-title">
           <div className="mk-hero-inner">
             <div className="mk-hero-copy">
-              {/* Category first. A visitor should know WHAT this is before they
-                  read a headline, so the badge states it plainly rather than
-                  making them infer a product from a benefit line. */}
               <p className="mk-badge">
                 <span className="mk-badge-dot" aria-hidden="true" />
-                Automated SEO platform
+                AI SEO operating system
               </p>
               <h1 id="mk-hero-title" className="mk-hero-title">
-                SEO that runs itself
+                Outrank competitors. Grow the business.
               </h1>
               <p className="mk-hero-support">
-                {PLATFORM_NAME} finds what is holding your rankings back, writes the fixes,
-                publishes them once you approve, and measures what actually moved — on-page
-                and off-page, for any business at any size.
+                {PLATFORM_NAME} is the intelligence layer behind your SEO: it maps rivals,
+                finds the gaps that actually cost you customers, ranks the next moves by
+                impact, then drafts and ships the work — on-page and off-page — after you
+                approve. Content is one output. Competitive clarity is the product.
               </p>
 
               <AuditWidget />
 
-              <ol className="mk-loop" aria-label="What the platform does on its own">
+              <ol className="mk-loop" aria-label="What the intelligence system does">
                 <li>
-                  <b>Finds</b>
-                  <span>issues and opportunities</span>
+                  <b>Compete</b>
+                  <span>Benchmark rivals and SERP share</span>
                 </li>
                 <li>
-                  <b>Writes</b>
-                  <span>the fixes and content</span>
+                  <b>Diagnose</b>
+                  <span>Technical, content, and authority debt</span>
                 </li>
                 <li>
-                  <b>Publishes</b>
-                  <span>once you approve</span>
+                  <b>Prioritize</b>
+                  <span>Moves scored by business impact</span>
                 </li>
                 <li>
-                  <b>Measures</b>
-                  <span>what actually moved</span>
+                  <b>Execute &amp; prove</b>
+                  <span>Ship approved work, attribute lift</span>
                 </li>
               </ol>
 
               <p className="mk-hero-alt">
-                <a href="#how">See how it works</a> · <Link href="/pricing">View pricing</Link>
+                <a href="#how">See the operating system</a> · <Link href="/pricing">View pricing</Link>
               </p>
             </div>
           </div>
@@ -67,31 +67,32 @@ export default function Home() {
           <div className="mk-wrap">
             <div className="mk-section-head">
               <p className="mk-eyebrow">How it works</p>
-              <h2 id="mk-how-title" className="mk-h2">From connect to measured results</h2>
+              <h2 id="mk-how-title" className="mk-h2">An operating system — not a content checklist</h2>
               <p className="mk-lead">
-                Five steps. The system proposes; you approve what goes live.
+                The system thinks in competition, demand, and outcomes. You stay in control of
+                what goes live.
               </p>
             </div>
             <ol className="mk-steps">
               <li className="mk-step">
                 <h3>Connect</h3>
-                <p>Link Search Console and your site so the agents work from real data.</p>
+                <p>Search Console and your site feed live ranking, query, and page data into the workspace.</p>
               </li>
               <li className="mk-step">
-                <h3>Analyze</h3>
-                <p>Rankings, gaps, and technical issues are scored against your business model.</p>
+                <h3>Map rivals</h3>
+                <p>Competitive context and SERP gaps show who is winning the customers you want — and why.</p>
               </li>
               <li className="mk-step">
-                <h3>Approve</h3>
-                <p>Drafts and changes wait for a human yes — nothing ships silently.</p>
+                <h3>Score impact</h3>
+                <p>Opportunities and fixes are ranked by likely effect on visibility, leads, and revenue — not vanity volume.</p>
               </li>
               <li className="mk-step">
-                <h3>Execute</h3>
-                <p>Approved work publishes to WordPress (or a webhook) on your terms.</p>
+                <h3>Approve &amp; ship</h3>
+                <p>Drafts, technical changes, and off-page work wait for a human yes, then publish on your terms.</p>
               </li>
               <li className="mk-step">
-                <h3>Measure</h3>
-                <p>See what moved after publish — not vanity dashboards, outcome trails.</p>
+                <h3>Attribute</h3>
+                <p>See whether the work improved the business after go-live — outcome trails, not dashboard theater.</p>
               </li>
             </ol>
           </div>
@@ -102,40 +103,57 @@ export default function Home() {
         <section className="mk-section" aria-labelledby="mk-work-title" style={{ paddingTop: 0 }}>
           <div className="mk-wrap">
             <div className="mk-section-head">
-              <p className="mk-eyebrow">What the AI does</p>
-              <h2 id="mk-work-title" className="mk-h2">Work performed, not another tool list</h2>
+              <p className="mk-eyebrow">What the system figures out</p>
+              <h2 id="mk-work-title" className="mk-h2">Intelligence first. Execution second.</h2>
               <p className="mk-lead">
-                Agents research, draft, and queue changes so your team spends time deciding — not grinding.
+                Agents do not start by writing. They compare, score, and decide what is worth
+                doing — then produce the work your team can approve.
               </p>
             </div>
             <ul className="mk-work">
               <li>
-                <h3>Finds the next worthwhile move</h3>
-                <p>Surfaces keyword and page opportunities from your Search Console data and competitive context.</p>
+                <h3>Competitive gap analysis</h3>
+                <p>
+                  Sees which rival pages, topics, and SERP features are taking your demand —
+                  and which gaps you can still close profitably.
+                </p>
               </li>
               <li>
-                <h3>Writes drafts you can ship</h3>
-                <p>Produces page and post drafts with titles and meta ready for review before anything is published.</p>
+                <h3>Impact-ranked roadmap</h3>
+                <p>
+                  Turns raw issues into a sequenced plan: highest-ROI keywords, pages, and
+                  technical fixes first so effort follows money, not noise.
+                </p>
               </li>
               <li>
-                <h3>Keeps technical hygiene moving</h3>
-                <p>Flags fixable issues and prepares low-risk changes so technical debt does not pile up unnoticed.</p>
+                <h3>Full-stack SEO execution</h3>
+                <p>
+                  Content and meta when needed — plus technical hygiene, authority targets,
+                  and local presence work where it applies. Publishing is one stage of a
+                  larger loop.
+                </p>
               </li>
               <li>
-                <h3>Supports local presence where it applies</h3>
-                <p>For local businesses, drafts location-minded content and citation targets. Google Business automation is still partial.</p>
+                <h3>Outcome attribution</h3>
+                <p>
+                  Ties approved work back to ranking and business movement after publish, so
+                  you know what to double down on — and what to stop.
+                </p>
               </li>
             </ul>
           </div>
         </section>
 
+        <MarketingProof />
+
         <section className="mk-section mk-trust" aria-labelledby="mk-trust-title">
           <div className="mk-wrap">
             <div className="mk-section-head">
-              <p className="mk-eyebrow">Trust</p>
+              <p className="mk-eyebrow">Control</p>
               <h2 id="mk-trust-title" className="mk-h2">Your brand stays yours</h2>
               <p className="mk-lead">
-                Built for business owners who need control, not black-box publishing.
+                Built for owners who need competitive firepower without surrendering the site
+                to a black box.
               </p>
             </div>
             <div className="mk-trust-grid">
@@ -192,9 +210,9 @@ export default function Home() {
         <section className="mk-section mk-final" aria-labelledby="mk-final-title">
           <div className="mk-wrap">
             <p className="mk-eyebrow">Get started</p>
-            <h2 id="mk-final-title" className="mk-h2">Put an AI SEO team on your site</h2>
+            <h2 id="mk-final-title" className="mk-h2">Put competitive SEO intelligence on your side</h2>
             <p className="mk-lead">
-              Start a trial, connect Search Console, and approve the first piece of work.
+              Start a trial, connect Search Console, and see the first impact-ranked moves for your market.
             </p>
             <div className="mk-final-cta">
               <Link href="/signup" className="mk-btn mk-btn-primary">Start free trial</Link>
