@@ -142,18 +142,31 @@ export async function GET(req: NextRequest) {
     historyRows = data || [];
   }
 
-  // If we only have page URLs, still try to gather nearby position rows by page.
+  // If we only have page URLs, match on landing_page. Try an exact IN filter
+  // first so Postgres does the work; the broad scan is the last resort, since
+  // every row it returns is function time we pay for on a serverless platform.
   if (!historyRows.length && pageUrls.length) {
-    const { data } = await db
+    const { data: exact } = await db
       .from("keyword_positions")
       .select("keyword, captured_date, position, clicks, impressions, ctr, landing_page")
       .eq("brand_id", brandId)
+      .in("landing_page", pageUrls)
       .gte("captured_date", historySince)
-      .order("captured_date", { ascending: true })
-      .limit(2000);
-    historyRows = (data || []).filter((r) =>
-      pageUrls.some((u) => urlsMatch(u, r.landing_page)),
-    );
+      .order("captured_date", { ascending: true });
+    historyRows = exact || [];
+
+    if (!historyRows.length) {
+      const { data } = await db
+        .from("keyword_positions")
+        .select("keyword, captured_date, position, clicks, impressions, ctr, landing_page")
+        .eq("brand_id", brandId)
+        .gte("captured_date", historySince)
+        .order("captured_date", { ascending: true })
+        .limit(2000);
+      historyRows = (data || []).filter((r) =>
+        pageUrls.some((u) => urlsMatch(u, r.landing_page)),
+      );
+    }
   }
 
   const byKeyword = new Map<string, DailyMetric[]>();
