@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
-import { googleConfigured, authUrl, redirectUriFor, signState } from "@/lib/google/oauth";
+import {
+  googleConfigured, authUrl, redirectUriFor, signState, safePortalReturnPath,
+} from "@/lib/google/oauth";
 import { GOOGLE_PRODUCTS, isGoogleProduct } from "@/lib/google/registry";
 import { randomBytes } from "crypto";
 
@@ -26,6 +28,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   const product = url.searchParams.get("product") || "";
+  const returnPath = safePortalReturnPath(url.searchParams.get("return"));
 
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
   const accessErr = requireBrandAccess(auth, brandId);
@@ -50,6 +53,8 @@ export async function GET(req: NextRequest) {
     product,
     origin,
     nonce: randomBytes(12).toString("base64url"),
+    iat: Math.floor(Date.now() / 1000),
+    ...(returnPath ? { returnPath } : {}),
   });
 
   // Ask only for what this product needs. Google merges previously granted

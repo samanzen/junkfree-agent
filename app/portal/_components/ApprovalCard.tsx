@@ -5,6 +5,8 @@ import { fadeUp, EASE } from "./motion";
 import { IconCheck } from "../icons";
 import { useToast } from "@/app/_components/Notify";
 
+export type ApprovalActionResult = boolean | { ok: boolean; detail?: string | null };
+
 // Card for anything awaiting the customer's yes/no: a content draft, a Google
 // post, a drafted review reply. Body is rendered as plain text (never HTML)
 // so drafted content can't inject markup.
@@ -21,8 +23,8 @@ export default function ApprovalCard({
   /** Small label above the body block. */
   bodyLabel?: string;
   footer?: ReactNode;
-  onApprove?: () => Promise<boolean>;
-  onDismiss?: () => Promise<boolean>;
+  onApprove?: () => Promise<ApprovalActionResult>;
+  onDismiss?: () => Promise<ApprovalActionResult>;
   approveLabel?: string;
   dismissLabel?: string;
   collapsedHeight?: number;
@@ -31,18 +33,35 @@ export default function ApprovalCard({
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<"" | "approve" | "dismiss">("");
   const [done, setDone] = useState<"" | "approved" | "dismissed">("");
+  const [doneDetail, setDoneDetail] = useState<string | null>(null);
 
   async function run(which: "approve" | "dismiss") {
     const fn = which === "approve" ? onApprove : onDismiss;
     if (!fn) return;
     setBusy(which);
-    const ok = await fn();
+    const result = await fn();
     setBusy("");
-    if (ok) setDone(which === "approve" ? "approved" : "dismissed");
-    else toast.error("That didn't go through", "Please try again in a moment.");
+    const ok = typeof result === "boolean" ? result : result.ok;
+    const detail = typeof result === "boolean" ? null : result.detail || null;
+    if (ok) {
+      setDone(which === "approve" ? "approved" : "dismissed");
+      setDoneDetail(detail);
+      if (detail && which === "approve") {
+        if (/connect wordpress|not configured|workspace/i.test(detail)) {
+          toast.info("Approved", detail);
+        } else if (/fail|error|couldn/i.test(detail)) {
+          toast.error("Approved, but live publish needs attention", detail);
+        } else {
+          toast.success("Approved", detail);
+        }
+      }
+    } else {
+      toast.error("That didn't go through", "Please try again in a moment.");
+    }
   }
 
   if (done) {
+    const badgeClass = done === "approved" ? "p-badge green" : "p-badge";
     return (
       <m.div
         className="p-approve p-approve-done"
@@ -50,12 +69,12 @@ export default function ApprovalCard({
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.28, ease: EASE }}
       >
-        <span className={`p-badge ${done === "approved" ? "green" : ""}`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-          {done === "approved" && <IconCheck size={12} />}
+        <span className={badgeClass} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {done === "approved" ? <IconCheck size={12} /> : null}
           {done === "approved" ? "Approved" : "Dismissed"}
         </span>
         <span className="p-approve-donetitle">{title}</span>
+        {doneDetail ? <span className="p-approve-donedetail">{doneDetail}</span> : null}
       </m.div>
     );
   }

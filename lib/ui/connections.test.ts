@@ -35,17 +35,33 @@ test("the route dispatches work through the existing queue", () => {
   expect(src).not.toMatch(/callClaude|auditSite|fullKeywordSync/);
 });
 
-test("website publishing sends the user to the existing setup page", () => {
-  // Re-entering credentials here would be a second publishing config UI.
-  expect(read("app/api/portal/connections/route.ts")).toMatch(/redirect: "\/portal\/website"/);
+test("website publishing connects through the dedicated publishing API", () => {
+  // The old path redirected to /portal/website, which had no credential form.
+  // Connect/reconnect now open an in-panel form that posts to /api/portal/publishing.
+  const connections = read("app/api/portal/connections/route.ts");
+  expect(connections).not.toMatch(/redirect: "\/portal\/website"/);
+  expect(connections).toMatch(/use_publishing_form/);
+
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(panel).toMatch(/\/api\/portal\/publishing/);
+  expect(panel).toMatch(/function PublishingSetup/);
+
+  const publish = read("app/api/portal/publishing/route.ts");
+  expect(publish).toMatch(/upsertIntegrationCredentials/);
+  expect(publish).toMatch(/adapter[\s\S]{0,40}\.check\(/);
+  // Secrets must never be echoed to the browser after storage.
+  expect(publish).not.toMatch(/applicationPassword:\s*body/);
+  expect(publish).toMatch(/requireBrandAccess/);
 });
 
 // ── the full workflow exists ────────────────────────────────────────────────
 test("every required action is implemented", () => {
   const src = read("app/api/portal/connections/route.ts");
-  for (const a of ["sync_now", "disconnect", "reconnect", "connect"]) {
+  for (const a of ["sync_now", "disconnect", "connect"]) {
     expect(src).toContain(a);
   }
+  // Reconnect for publishing is handled by the panel form, not this route.
+  expect(read("app/portal/settings/_ConnectionsPanel.tsx")).toMatch(/action === "reconnect"/);
 });
 
 test("connecting verifies access instead of trusting the client", () => {

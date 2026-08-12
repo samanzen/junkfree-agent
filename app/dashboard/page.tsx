@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { authedFetch } from "@/lib/authedFetch";
 import { slugify } from "@/lib/utils";
-import { touchTargetCSS, responsiveTableCSS, fieldCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, responsiveTableCSS, fieldCSS, down, semanticVars, SEMANTIC } from "@/lib/ui/tokens";
 import { useToast, useConfirm } from "@/app/_components/Notify";
 import Field, { focusFirstError } from "@/app/_components/Field";
 import dynamic from "next/dynamic";
@@ -190,6 +190,11 @@ export default function Dashboard() {
       const res = await authedFetch("/api/me");
       if (!res.ok) { router.push("/login"); return; }
       const me = await res.json();
+      // Admin console only — customers belong in onboarding/portal.
+      if (me.role !== "admin") {
+        router.replace(me.brand_id ? "/portal" : "/onboarding");
+        return;
+      }
       setRole(me.role); setMyBrand(me.brand_id); setAuthed(true);
     })();
     /* eslint-disable-next-line */
@@ -626,8 +631,17 @@ function DraftBody({ body }: { body: string }) {
 }
 
 const CSS = `
-.sr { --bg:#F6F8FB; --surface:#FFFFFF; --surface2:#F2F5F9; --line:#E7EAF0; --text:#1A2030; --muted:#6B768D;
-  --accent:#6C5CE7; --accent-dim:rgba(108,92,231,.1); --amber:#9A6E00; --coral:#DD3535; --violet:#8655F6; --green:#00856B;
+.sr { --bg:#F5F7FA; --surface:#FFFFFF; --surface2:#F7F9FC; --surface3:#EFF3F8; --line:#E1E7EF; --text:#0C1220; --muted:#5F6B7D;
+  /* Semantic colour now comes from the shared palette rather than this file's
+     own near-misses. The admin used to run a second indigo (#6C5CE7 vs the
+     portal's #5B5FD6), a second green, a second amber and a second red, so an
+     admin previewing a tenant crossed a visible colour boundary. */
+  ${semanticVars("light")}
+  --accent-dim:var(--accent-soft);
+  --on-accent:#FFFFFF;
+  /* This surface's own names for two of the shared hues. Literal rather than
+     var() so they stay machine-checkable by the contrast test. */
+  --coral:${SEMANTIC.light.red}; --violet:${SEMANTIC.light.blue};
   min-height:100vh; background:var(--bg); color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; }
 .sr * { box-sizing:border-box; }
 .sr .wrap { max-width:1000px; margin:0 auto; padding:36px 22px 80px; }
@@ -637,11 +651,16 @@ const CSS = `
 @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(0,184,148,.4)} 70%{box-shadow:0 0 0 8px rgba(0,184,148,0)} 100%{box-shadow:0 0 0 0 rgba(0,184,148,0)} }
 .sr .cmd { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:26px; }
 .sr h1 { font-size:32px; font-weight:700; letter-spacing:-.02em; margin:0; color:#12172A; }
-.sr .run { background:linear-gradient(135deg,#6C5CE7,#8B5CF6); color:#fff; border:0; padding:12px 24px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap; transition:transform var(--dur-1), box-shadow var(--dur-2); box-shadow:0 6px 18px rgba(108,92,231,.3); }
-.sr .run:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 10px 26px rgba(108,92,231,.42); }
-.sr .run.on { background:var(--surface2); color:var(--accent); box-shadow:none; cursor:default; overflow:hidden; position:relative; }
-.sr .run.on::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(108,92,231,.14),transparent); animation:scan 1.4s linear infinite; }
-@keyframes scan { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+/* Was a purple gradient carrying white text; white on its light stop (#8B5CF6)
+   was 3.5:1. A solid brand fill is 6.14:1. */
+.sr .run { background:var(--accent); color:var(--on-accent); border:0; padding:12px 24px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:14px; cursor:pointer; white-space:nowrap; transition:background var(--dur-2), transform var(--dur-1), box-shadow var(--dur-2); box-shadow:var(--shadow-2); }
+.sr .run:hover:not(:disabled) { background:#1D4FD8; transform:translateY(-1px); box-shadow:var(--shadow-3); }
+.sr .run:active:not(:disabled) { background:#1A45BE; transform:translateY(0); box-shadow:none; }
+/* The running state kept a sweeping highlight that conveyed nothing beyond
+   "busy" — the adjacent .runstat already says what step is executing. Removed
+   with the other ambient loops; the state is still obvious from the changed
+   fill and the status text. */
+.sr .run.on { background:var(--surface2); color:var(--accent); box-shadow:none; cursor:default; }
 .sr .runstat { font-family:var(--font-mono); font-size:12px; position:relative; z-index:1; }
 .sr .brandrow { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:22px; }
 .sr .seg { display:flex; gap:4px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:4px; box-shadow:var(--shadow-1); }
@@ -651,7 +670,7 @@ const CSS = `
 .sr .dot.off { background:var(--line); }
 .sr .mode { background:var(--surface); border:1px solid var(--line); color:var(--muted); padding:8px 16px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px; cursor:pointer; box-shadow:var(--shadow-1); }
 .sr .mode:hover { color:var(--text); }
-.sr .mode.auto { background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.35); color:var(--violet); }
+.sr .mode.auto { background:var(--blue-soft); border-color:var(--blue-line); color:var(--violet); }
 .sr .brandrow .mode:first-of-type { margin-left:auto; }
 .sr .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:24px; }
 .sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:12px 16px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; transition:all var(--dur-2) var(--ease-out); }
@@ -659,8 +678,11 @@ const CSS = `
 .sr .tabs button.on { color:var(--accent); border-bottom-color:var(--accent); }
 .sr .tabs button span { font-family:var(--font-mono); font-size:11px; background:var(--surface2); color:var(--muted); padding:1px 8px; border-radius:var(--radius-lg); }
 .sr .tabs button.on span { background:var(--accent-dim); color:var(--accent); }
-.sr .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:22px; margin-bottom:14px; box-shadow:var(--shadow-1); animation:rise .4s ease both; }
-@keyframes rise { from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+/* The "rise" entrance used to replay on .card, .ov-kpi and .ov-panel on every render, so a
+   tab switch or a data refresh re-animated the whole page. Entrance motion on
+   every element of a dense admin surface reads as latency, not polish — the
+   page now appears immediately. The keyframe is gone with its last user. */
+.sr .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:22px; margin-bottom:14px; box-shadow:var(--shadow-1); }
 .sr .card.row { display:flex; justify-content:space-between; align-items:center; gap:16px; }
 .sr .meta { display:flex; align-items:center; gap:10px; margin-bottom:9px; flex-wrap:wrap; }
 .sr .kind { font-family:var(--font-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; background:var(--surface2); color:var(--muted); padding:4px 8px; border-radius:var(--radius-xs); }
@@ -677,11 +699,13 @@ const CSS = `
 .sr .opt:hover { border-color:var(--accent); background:var(--accent-dim); }
 .sr .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:8px; }
 .sr .acts { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
-.sr .primary { background:var(--accent); color:#fff; border:0; padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
-.sr .primary:hover { background:#5b4bd6; }
+.sr .primary { background:var(--accent); color:var(--on-accent); border:0; padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:background var(--dur-2) var(--ease-out), transform var(--dur-1); }
+.sr .primary:hover { background:#1D4FD8; }
+.sr .primary:active:not(:disabled) { background:#1A45BE; transform:translateY(1px); }
 .sr .primary:disabled { opacity:.6; cursor:default; }
-.sr .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; }
+.sr .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; transition:color var(--dur-2), border-color var(--dur-2), background var(--dur-2), transform var(--dur-1); }
 .sr .ghost:hover { color:var(--text); border-color:var(--muted); }
+.sr .ghost:active { background:var(--surface2); transform:translateY(1px); }
 .sr .fb { display:flex; gap:8px; margin-top:12px; }
 .sr .fb input { flex:1; background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; }
 .sr .fb input:focus { outline:none; border-color:var(--accent); }
@@ -699,21 +723,22 @@ const CSS = `
 .sr .empty-body { font-size:13px; line-height:1.65; color:var(--muted); margin:0 auto; max-width:44ch; }
 .sr .empty-action { margin-top:18px; }
 /* Overview CSS moved to Sprint 3 block */
-@media (prefers-reduced-motion:reduce){ .sr .pulse.live,.sr .run.on::after,.sr .card,.sr .lkpi,.sr .lpanel,.sr .lkwt td{ animation:none; } }
+@media (prefers-reduced-motion:reduce){ .sr .pulse.live,.sr .lkpi,.sr .lpanel,.sr .lkwt td{ animation:none; } }
 /* ── Overview (Sprint 3) ───────────────────────────────────────────────────── */
 .sr .ov { display:flex; flex-direction:column; gap:18px; }
 .sr .ov-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
-.sr .ov-kpi { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 18px 14px; box-shadow:var(--shadow-1); animation:rise .5s ease both; position:relative; overflow:hidden; }
+.sr .ov-kpi { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:18px 18px 14px; box-shadow:var(--shadow-1); position:relative; overflow:hidden; }
 .sr .ov-kpi-accent { position:absolute; top:0; left:0; right:0; height:3px; border-radius:var(--radius-md) var(--radius-md) 0 0; }
 .sr .ov-kpi-label { font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
 .sr .ov-kpi-val { font-size:28px; font-weight:700; letter-spacing:-.02em; line-height:1.1; }
 .sr .ov-kpi-foot { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; min-height:18px; }
 .sr .ov-delta { font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:var(--radius-lg); }
-.sr .ov-delta.g { color:var(--green); background:rgba(0,184,148,.1); }
-.sr .ov-delta.b { color:var(--coral); background:rgba(225,75,75,.1); }
-.sr .ov-hint { font-size:11px; color:#B2BAC8; }
+.sr .ov-delta.g { color:var(--green); background:var(--green-soft); }
+.sr .ov-delta.b { color:var(--coral); background:var(--red-soft); }
+/* Was #B2BAC8 on white — 1.95:1, effectively invisible. */
+.sr .ov-hint { font-size:11px; color:var(--muted); }
 .sr .ov-row2 { display:grid; grid-template-columns:1.6fr 1fr; gap:18px; }
-.sr .ov-panel { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-1); animation:rise .5s ease both; }
+.sr .ov-panel { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-md); padding:20px; box-shadow:var(--shadow-1); }
 .sr .ov-chart-panel { grid-column:auto; }
 .sr .ov-panel-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px; }
 .sr .ov-panel-head h3 { font-size:15px; font-weight:700; margin:0; color:#12172A; }
@@ -749,7 +774,7 @@ const CSS = `
 .sr .ov-empty-icon { font-size:48px; margin-bottom:12px; }
 .sr .ov-empty h3 { margin:0 0 8px; }
 .sr .ov-empty p { color:var(--muted); font-size:14px; }
-.sr .ov-skel { background:linear-gradient(90deg,#F0F2F5,#E7EAF0,#F0F2F5); background-size:200%; border-radius:var(--radius-md); animation:rise .5s ease both, shimmer 1.4s infinite; }
+.sr .ov-skel { background:linear-gradient(90deg,#F0F2F5,#E7EAF0,#F0F2F5); background-size:200%; border-radius:var(--radius-md); animation:shimmer 1.4s infinite; }
 .sr .ov-skel { height:110px; }
 .sr .ov-skel-lg { height:260px; margin-top:18px; border-radius:var(--radius-md); }
 @keyframes shimmer { 0%{background-position:200%} 100%{background-position:-200%} }

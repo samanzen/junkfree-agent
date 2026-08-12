@@ -40,7 +40,16 @@ export default function Sparkline({
           <stop offset="100%" stopColor={color} stopOpacity={0} />
         </linearGradient>
       </defs>
-      <path d={area} fill={`url(#sp-${gid})`} />
+      {/* The fill and the endpoint arrive with the line rather than snapping in
+          ahead of it, so the whole mark reads as one piece of information
+          being revealed. Both are inert under prefers-reduced-motion. */}
+      <m.path
+        d={area}
+        fill={`url(#sp-${gid})`}
+        initial={{ opacity: reduce ? 1 : 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: reduce ? 0 : 0.7, ease: EASE, delay: reduce ? 0 : 0.35 }}
+      />
       <m.path
         d={line}
         fill="none"
@@ -52,7 +61,13 @@ export default function Sparkline({
         animate={{ pathLength: 1, opacity: 1 }}
         transition={{ duration: reduce ? 0 : 1, ease: EASE, delay: reduce ? 0 : 0.25 }}
       />
-      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={2.4} fill={color} />
+      <m.circle
+        cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={2.4} fill={color}
+        initial={{ scale: reduce ? 1 : 0, opacity: reduce ? 1 : 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        style={{ transformOrigin: `${pts[pts.length - 1][0]}px ${pts[pts.length - 1][1]}px` }}
+        transition={{ duration: reduce ? 0 : 0.3, ease: EASE, delay: reduce ? 0 : 1.05 }}
+      />
     </svg>
   );
 }

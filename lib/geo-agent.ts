@@ -60,18 +60,85 @@ ${brand.site_url}
 `;
 }
 
-// Optional monitoring: ask an AI model a discovery question and see if the
-// brand is mentioned. Uses web search for a realistic answer.
-export async function checkAiVisibility(brand: Brand) {
-  const service = brand.services?.split(",")[0];
-  const q = isLocalBusiness(brand)
-    ? `best ${service} in ${(brand.service_area || "").split("/")[0]}`
-    : `best ${service}`;
-  const text = await callClaude({
-    search: true,
-    maxTokens: 800,
-    user: `Answer as a helpful assistant would: "${q}". List the top providers you'd recommend with one line each. Then, on a final line, output ONLY JSON: {"mentions_brand": true|false, "brand_checked": "${brand.name}"}`,
-  });
-  const json = extractJSON<{ mentions_brand: boolean }>(text);
-  return { query: q, mentioned: json?.mentions_brand ?? false, raw: text };
+// Optional monitoring: ask an AI model discovery questions and see if the
+// brand is mentioned. Uses web search for a realistic answer. Multi-prompt
+// suite powers the AI Visibility portal (Semrush-competitive share signal).
+
+export type AiVisibilityCheck = {
+  prompt: string;
+  engine: string;
+  mentioned: boolean;
+  raw: string;
+};
+
+function defaultPrompts(brand: Brand): string[] {
+  const service = (brand.services?.split(",")[0] || "service").trim();
+  const area = (brand.service_area || "").split("/")[0].trim();
+  if (isLocalBusiness(brand) && area) {
+    return [
+      `best ${service} in ${area}`,
+      `${service} near me ${area}`,
+      `who is the best ${service} company in ${area}`,
+      `${brand.name} reviews`,
+      `top rated ${service} ${area}`,
+    ];
+  }
+  return [
+    `best ${service}`,
+    `${service} software comparison`,
+    `alternatives to competitors for ${service}`,
+    `${brand.name} review`,
+    `who should I choose for ${service}`,
+  ];
+}
+
+export async function checkAiVisibility(brand: Brand): Promise<AiVisibilityCheck> {
+  const suite = await checkAiVisibilitySuite(brand, 1);
+  return (
+    suite.checks[0] || {
+      prompt: defaultPrompts(brand)[0],
+      engine: "assistant",
+      mentioned: false,
+      raw: "",
+    }
+  );
+}
+
+/**
+ * Run up to `limit` discovery prompts and score mention share (0–100).
+ * Callers persist rows; this function only measures.
+ */
+export async function checkAiVisibilitySuite(
+  brand: Brand,
+  limit = 5,
+  customPrompts?: string[]
+): Promise<{ checks: AiVisibilityCheck[]; score: number }> {
+  const prompts = (customPrompts?.length ? customPrompts : defaultPrompts(brand))
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .slice(0, Math.max(1, limit));
+
+  const checks: AiVisibilityCheck[] = [];
+  for (const q of prompts) {
+    try {
+      const text = await callClaude({
+        search: true,
+        maxTokens: 800,
+        user: `Answer as a helpful assistant would: "${q}". List the top providers you'd recommend with one line each. Then, on a final line, output ONLY JSON: {"mentions_brand": true|false, "brand_checked": "${brand.name}"}`,
+      });
+      const json = extractJSON<{ mentions_brand: boolean }>(text);
+      checks.push({
+        prompt: q,
+        engine: "assistant",
+        mentioned: json?.mentions_brand ?? false,
+        raw: text.slice(0, 2000),
+      });
+    } catch {
+      checks.push({ prompt: q, engine: "assistant", mentioned: false, raw: "" });
+    }
+  }
+
+  const hit = checks.filter((c) => c.mentioned).length;
+  const score = checks.length ? Math.round((hit / checks.length) * 100) : 0;
+  return { checks, score };
 }

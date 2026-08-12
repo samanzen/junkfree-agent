@@ -2,10 +2,9 @@
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ActionButton, { ActionType } from "./ActionButton";
+import { CAT_COLOR, SYSTEM, tint } from "./palette";
 
 type Rec = { priority: number; category: string; title: string; explanation: string; estimated_impact: string; action_type: ActionType; action_label: string; action_payload: Record<string, unknown> };
-
-const CAT_COLOR: Record<string, string> = { keyword: "#6C5CE7", content: "#00B894", backlink: "#0984E3", technical: "#F5B461", local: "#E84393" };
 
 export default function AIRecommendations({ brandId }: { brandId: string }) {
   const [recs, setRecs] = useState<Rec[]>([]);
@@ -38,7 +37,7 @@ export default function AIRecommendations({ brandId }: { brandId: string }) {
         <div className="air-cats">
           {cats.map((c) => (
             <button key={c} className={`air-cat ${catFilter === c ? "on" : ""}`}
-              style={catFilter === c ? { background: CAT_COLOR[c] || "#6C5CE7", color: "#fff", borderColor: CAT_COLOR[c] || "#6C5CE7" } : {}}
+              style={catFilter === c ? { background: CAT_COLOR[c] || SYSTEM, color: "#fff", borderColor: CAT_COLOR[c] || SYSTEM } : {}}
               onClick={() => setCatFilter(c)}>{c.charAt(0).toUpperCase() + c.slice(1)}</button>
           ))}
         </div>
@@ -48,10 +47,10 @@ export default function AIRecommendations({ brandId }: { brandId: string }) {
         <div className="air-empty">No recommendations yet — run the agents to generate AI insights.</div>
       ) : visible.map((rec, i) => (
         <div key={i} className="air-card">
-          <div className="air-card-bar" style={{ background: CAT_COLOR[rec.category] || "#6C5CE7" }} />
+          <div className="air-card-bar" style={{ background: CAT_COLOR[rec.category] || SYSTEM }} />
           <div className="air-card-body">
             <div className="air-card-head">
-              <span className="air-cat-badge" style={{ background: `${CAT_COLOR[rec.category] || "#6C5CE7"}18`, color: CAT_COLOR[rec.category] || "#6C5CE7" }}>{rec.category}</span>
+              <span className="air-cat-badge" style={{ background: tint(CAT_COLOR[rec.category] || SYSTEM), color: CAT_COLOR[rec.category] || SYSTEM }}>{rec.category}</span>
               <span className="air-priority">Priority {rec.priority}/10</span>
               <button className="air-dismiss" onClick={() => setDismissed(new Set([...dismissed, recs.indexOf(rec)]))}>✕</button>
             </div>

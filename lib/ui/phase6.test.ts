@@ -143,7 +143,8 @@ test("no selector list is left dangling without a declaration block", () => {
 // ── De-duplication held ─────────────────────────────────────────────────────
 test("the identical intelligence placeholders are declared once", () => {
   const src = read("app/dashboard/intelligence/IntelligencePage.tsx");
-  const decl = "padding:40px; text-align:center; color:#9AA3B2; font-size:13px;";
+  // The literal grey these carried (#9AA3B2, 2.8:1 on white) is now var(--muted).
+  const decl = "padding:40px; text-align:center; color:var(--muted); font-size:13px;";
   const count = src.split(decl).length - 1;
   expect(count).toBe(1);
 });

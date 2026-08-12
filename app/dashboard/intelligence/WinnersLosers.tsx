@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./ActionButton";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
+import { SYSTEM, POSITIVE, ATTENTION, NEGATIVE, MUTED } from "./palette";
 
 type Kw = { keyword: string; current_position?: number; previous_position?: number; change?: number; position?: number; last_position?: number; search_volume?: number; ai_opportunity_reason?: string; landing_page?: string };
 type Data = { gains: Kw[]; drops: Kw[]; new_keywords: Kw[]; lost_keywords: Kw[]; almost_page_1: Kw[] };
@@ -30,15 +31,15 @@ export default function WinnersLosers({ brandId }: { brandId: string }) {
   if (totalRows === 0 && status !== "ok") return <DataStatus status={status} />;
 
   const tabs = [
-    { key: "gains" as const, label: `↑ Gains`, count: data.gains.length, color: "#00B894" },
-    { key: "drops" as const, label: `↓ Drops`, count: data.drops.length, color: "#FF6B6B" },
-    { key: "new"   as const, label: `★ New`,   count: data.new_keywords.length, color: "#6C5CE7" },
-    { key: "lost"  as const, label: `✕ Lost`,  count: data.lost_keywords.length, color: "#B2BAC8" },
-    { key: "page1" as const, label: `⚡ Almost Page 1`, count: data.almost_page_1.length, color: "#F5B461" },
+    { key: "gains" as const, label: `↑ Gains`, count: data.gains.length, color: POSITIVE },
+    { key: "drops" as const, label: `↓ Drops`, count: data.drops.length, color: NEGATIVE },
+    { key: "new"   as const, label: `★ New`,   count: data.new_keywords.length, color: SYSTEM },
+    { key: "lost"  as const, label: `✕ Lost`,  count: data.lost_keywords.length, color: MUTED },
+    { key: "page1" as const, label: `⚡ Almost Page 1`, count: data.almost_page_1.length, color: ATTENTION },
   ];
 
   const rows: Kw[] = tab === "gains" ? data.gains : tab === "drops" ? data.drops : tab === "new" ? data.new_keywords : tab === "lost" ? data.lost_keywords : data.almost_page_1;
-  const activeColor = tabs.find((t) => t.key === tab)?.color || "#6C5CE7";
+  const activeColor = tabs.find((t) => t.key === tab)?.color || SYSTEM;
 
   return (
     <div className="wl">

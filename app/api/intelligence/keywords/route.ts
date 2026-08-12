@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import {
+  buildPositionMetricsMap,
+  isKeywordDbSort,
+  isKeywordMetricSort,
+  mergeKeywordWithMetrics,
+  positionLookbackDate,
+  sortKeywordRows,
+  type PositionRow,
+} from "@/lib/keywords";
 
 export const maxDuration = 30;
+
+/** Cap in-memory sort loads so a huge Managed brand can't OOM the route. */
+const METRIC_SORT_CAP = 5000;
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -14,48 +26,73 @@ export async function GET(req: NextRequest) {
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
 
-  const sort = url.searchParams.get("sort") || "ai_opportunity_score";
-  const order = url.searchParams.get("order") === "asc";
+  const sortParam = url.searchParams.get("sort") || "ai_opportunity_score";
+  const ascending = url.searchParams.get("order") === "asc";
   const search = url.searchParams.get("search") || "";
   const status = url.searchParams.get("status") || "";
-  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
-  const limit = Math.min(100, parseInt(url.searchParams.get("limit") || "50"));
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+  const limit = Math.min(100, parseInt(url.searchParams.get("limit") || "50", 10));
   const offset = (page - 1) * limit;
 
-  const safeSort = ["ai_opportunity_score","search_volume","keyword_difficulty","keyword","status","best_position"].includes(sort)
-    ? sort : "ai_opportunity_score";
+  const metricSort = isKeywordMetricSort(sortParam);
+  const dbSort = isKeywordDbSort(sortParam) ? sortParam : "ai_opportunity_score";
 
-  let q = db.from("tracked_keywords")
-    .select("id,keyword,status,source,search_volume,keyword_difficulty,search_intent,cpc,ai_opportunity_score,ai_opportunity_reason,estimated_monthly_clicks,estimated_revenue_impact,best_position,best_position_date,worst_position,first_seen_date,last_seen_date,enriched_at", { count: "exact" })
+  const selectCols =
+    "id,keyword,status,source,search_volume,keyword_difficulty,search_intent,cpc,ai_opportunity_score,ai_opportunity_reason,estimated_monthly_clicks,estimated_revenue_impact,best_position,best_position_date,worst_position,first_seen_date,last_seen_date,enriched_at";
+
+  let q = db
+    .from("tracked_keywords")
+    .select(selectCols, { count: "exact" })
     .eq("brand_id", brandId)
     .neq("status", "lost");
 
   if (search) q = q.ilike("keyword", `%${search}%`);
   if (status) q = q.eq("status", status);
-  q = q.order(safeSort, { ascending: order, nullsFirst: false });
-  q = q.range(offset, offset + limit - 1);
+
+  if (metricSort) {
+    // Need the full filtered set to sort by live position / change / clicks.
+    q = q.order("ai_opportunity_score", { ascending: false, nullsFirst: false });
+    q = q.range(0, METRIC_SORT_CAP - 1);
+  } else {
+    q = q.order(dbSort, { ascending, nullsFirst: false });
+    q = q.range(offset, offset + limit - 1);
+  }
 
   const { data: keywords, count, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fetch latest positions for these keywords
-  const today = new Date().toISOString().slice(0, 10);
-  const kwIds = (keywords || []).map((k) => k.id);
-  const { data: positions } = kwIds.length
-    ? await db.from("keyword_positions")
-        .select("keyword_id, position, clicks, impressions, ctr, landing_page, captured_date")
-        .in("keyword_id", kwIds)
-        .eq("captured_date", today)
-    : { data: [] };
+  const rows = await attachLatestPositions(brandId, keywords || []);
 
-  const posMap = new Map((positions || []).map((p) => [p.keyword_id, p]));
+  let pageRows = rows;
+  let total = count || 0;
 
-  const rows = (keywords || []).map((kw) => ({
-    ...kw,
-    ...(posMap.get(kw.id) || { position: null, clicks: null, impressions: null, ctr: null, landing_page: null }),
-  }));
+  if (metricSort) {
+    const sorted = sortKeywordRows(rows, sortParam, ascending);
+    total = count || sorted.length;
+    pageRows = sorted.slice(offset, offset + limit);
+  }
 
-  return NextResponse.json({ keywords: rows, total: count || 0, page, limit });
+  return NextResponse.json({ keywords: pageRows, total, page, limit });
+}
+
+async function attachLatestPositions<T extends { id: string }>(
+  brandId: string,
+  keywords: T[],
+) {
+  const kwIds = keywords.map((k) => k.id);
+  if (!kwIds.length) return [];
+
+  const since = positionLookbackDate(90);
+  const { data: positions } = await db
+    .from("keyword_positions")
+    .select("keyword_id, position, clicks, impressions, ctr, landing_page, captured_date")
+    .eq("brand_id", brandId)
+    .in("keyword_id", kwIds)
+    .gte("captured_date", since)
+    .order("captured_date", { ascending: false });
+
+  const metricsMap = buildPositionMetricsMap((positions || []) as PositionRow[]);
+  return keywords.map((kw) => mergeKeywordWithMetrics(kw, metricsMap.get(kw.id)));
 }
 
 export async function POST(req: NextRequest) {

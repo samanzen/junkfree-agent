@@ -23,6 +23,28 @@
 // lives here so that decision is one edit, not a search across the codebase.
 export const PLATFORM_NAME = "SEO Platform";
 
+/**
+ * Short product line shown under the mark (sidebar, login). Kept separate from
+ * PLATFORM_NAME so renaming the product does not force every surface to reuse
+ * the same sentence — but every surface must import from here, never invent a
+ * fourth self-description.
+ */
+export const PLATFORM_TAGLINE = "AI SEO operating system";
+
+/** Root metadata / marketing one-liner. Promise must stay ≤ shipped reality. */
+export const PLATFORM_DESCRIPTION =
+  "Your AI SEO team — connect your site, approve the work, publish safely, and measure the results.";
+
+/**
+ * Free trial length, in days.
+ *
+ * 14 rather than 7 on purpose: SEO signal accrues in Search Console over days,
+ * so a 7-day trial ends before the product can show a customer anything that
+ * moved. Centralised because it appears in marketing copy, signup, and pricing —
+ * three places that must never disagree about what was promised.
+ */
+export const TRIAL_DAYS = 14;
+
 /** "Acme Roofing | SEO Platform", or just the platform name when no tenant is resolved. */
 export function pageTitle(tenantName?: string | null): string {
   return tenantName ? `${tenantName} | ${PLATFORM_NAME}` : PLATFORM_NAME;
@@ -64,6 +86,252 @@ export const TOUCH_MIN = 44;
  */
 export const INPUT_FONT_MIN = 16;
 
+// ── Semantic colour ─────────────────────────────────────────────────────────
+//
+// ONE semantic palette for the whole product. Before this, each surface owned
+// its own accent, green, amber and red, and they had drifted into near-misses:
+// two indigos (#5B5FD6 / #6C5CE7), two greens (#0C8560 / #00856B), two ambers
+// (#A46A08 / #9A6E00) and two reds (#D63D3D / #DD3535). A warning is now one
+// colour product-wide.
+//
+// Why TypeScript constants emitted per surface, rather than CSS variables at
+// :root: the portal's dark mode is driven by `.portal[data-theme="dark"]`, not
+// by the document root. A :root-level `prefers-color-scheme` block would ignore
+// that explicit toggle, so a customer who forces light on a dark OS would get
+// light neutrals with dark semantic colours. Emitting into each surface's own
+// theme blocks keeps one source of truth AND keeps the scoping boundary intact.
+//
+// EVERY value below is contrast-checked, not eyeballed:
+//   - each colour clears 4.5:1 against its surface (lib/ui/phase5.test.ts)
+//   - each colour clears 4.5:1 against its OWN -soft tint, on every ground that
+//     tint can land on (surface, surface2, surface3, page bg). The previous
+//     soft pairs were chosen for appearance and were never checked against
+//     their own foregrounds — six of them sat at 4.0-4.4:1.
+//   - white clears 4.5:1 on --accent, so a solid brand fill can carry white
+//     text and icons. The old gradient's light stop was 2.67:1.
+
+// NOTE ON -soft TOKENS
+//
+// These were translucent rgba() and are now OPAQUE. A translucent tint
+// composites with whatever is behind it, so the same chip measured 4.61:1 on
+// --surface but only 4.05:1 on --surface3, and the value drifted with the
+// ladder. Each -soft is now a solved opaque step, so a chip reads identically
+// on every surface. The alpha that produced each one is recorded beside it.
+
+// ══ "SIGNAL" — the colour system ════════════════════════════════════════════
+//
+// This is an SEO INTELLIGENCE platform: rankings, competitors, technical health,
+// content, local, reviews, plus agents acting on their own. Its screens are
+// dense with data that has many DIMENSIONS, and a reader has to tell those
+// dimensions apart at a glance.
+//
+// The previous iteration got this wrong in an instructive way. It applied
+// "colour only where it carries meaning" so strictly that it ended up
+// achromatic — a graphite brand with one reserved azure. But encoding a data
+// DIMENSION *is* meaning. Stripping hue from metrics, charts and categories did
+// not create discipline, it destroyed the reader's fastest channel for telling
+// traffic from keywords from backlinks. The product read as an editorial
+// finance app rather than an SEO platform.
+//
+// So colour is spent deliberately, in four separate jobs that never mix:
+//
+//   BRAND    one vivid blue. Primary actions, active navigation, focus.
+//            Energetic and unmistakably software. Also series slot 1, which is
+//            why blue no longer feels quarantined.
+//   SYSTEM   violet. ONLY where the machine acts — agent runs, AI-written
+//            content, the assistant, live status. It is deliberately NOT the
+//            brand, so this is a system signal rather than "purple AI SaaS".
+//   STATUS   positive / warning / critical. Reserved: never a chart series.
+//   SERIES   six validated categorical hues for data identity — metrics,
+//            chart lines, categories, rank bands.
+//
+// Every value below was computed, not eyeballed:
+//   - the six series hues pass all six checks of the data-viz validator in BOTH
+//     modes (lightness band, chroma floor, CVD separation, normal-vision floor,
+//     contrast) — worst adjacent CVD dE 9.2 light / 11.3 dark
+//   - the ORDER matters: gold separates teal from magenta, because magenta
+//     adjacent to green collides under deuteranopia (dE 1.2)
+//   - status hues are excluded from the series set so a state can never be
+//     mistaken for "series 4"
+//   - every -soft is a solved opaque step; see the note above
+
+type Hue = "green" | "amber" | "red" | "blue" | "pink";
+
+/** Brand and system: the two identity colours, with their inks and press steps. */
+const BRAND = {
+  light: { base: "#2563EB", on: "#FFFFFF", hover: "#1D4FD8", active: "#1A45BE" },
+  dark: { base: "#5D9BFF", on: "#08121F", hover: "#7BB0FF", active: "#4A86E8" },
+} as const;
+
+const SYSTEM_HUE = {
+  light: { base: "#6D3BE4", on: "#FFFFFF", soft: "#E3DAFA", line: "#B79EF2" },
+  // Pushed toward magenta-violet: at #A78BFA it measured dE 0.095 from the dark
+  // brand blue, so "the platform did this" and "this is a button" converged.
+  dark: { base: "#B98CF7", on: "#170C2B", soft: "#383253", line: "#785EA4" },
+} as const;
+
+// `blue` is the brand; `pink` is a data hue kept for tone variety. Status hues
+// (green/amber/red) are reserved and never appear in CHART.series.
+const HUES_LIGHT: Record<Hue, string> = {
+  green: "#0B7A42",
+  // A gold rather than an orange-brown. #B45309 measured dE 0.080 from --red,
+  // which put "needs attention" and "failed" inside the confusion band — the
+  // single most costly mix-up in a status palette. This is dE 0.166.
+  amber: "#8A6A00",
+  red: "#C2261F",
+  blue: "#2563EB",
+  // Magenta-leaning, for the same reason: at #D6336C it sat dE 0.075 from red.
+  pink: "#AD2E86",
+};
+
+const HUES_DARK: Record<Hue, string> = {
+  green: "#35C489",
+  amber: "#E0A038",
+  red: "#F0736A",
+  blue: "#5D9BFF",
+  // A step lighter than the series-5 mark (#D14F86). The two serve different
+  // rules: a chart MARK needs 3:1 and is validated for CVD separation inside
+  // the series order, while this token is used as TEXT and needs 4.5:1, which
+  // #D14F86 misses at 4.43:1 on --surface.
+  pink: "#DE6B9C",
+};
+
+/** Solved opaque -soft/-line steps. Keyed to the hue names above. */
+const SOFT_LIGHT: Record<string, [string, string]> = {
+  green: ["#E3F0E9", "#B5D7C6"],
+  amber: ["#F7F5ED", "#EAE4D0"],
+  red: ["#F6DFDE", "#E7ABA8"],
+  blue: ["#EDF2FD", "#CFDDFB"],
+  pink: ["#F2DDEB", "#DCA6CB"],
+  accent: ["#EDF2FD", "#CFDDFB"],
+};
+const SOFT_DARK: Record<string, [string, string]> = {
+  green: ["#1B483F", "#2C976E"],
+  amber: ["#4B3D27", "#A87B32"],
+  red: ["#402A30", "#8C4A49"],
+  blue: ["#21334F", "#3A5F9A"],
+  pink: ["#322435", "#663A54"],
+  accent: ["#21334F", "#3A5F9A"],
+};
+
+/** Faint brand-tinted wash for hero surfaces. Carries no text and no meaning. */
+export const MESH_LIGHT = { a2: "rgba(37,99,235,.045)", a3: "rgba(109,59,228,.035)" } as const;
+export const MESH_DARK = { a2: "rgba(93,155,255,.07)", a3: "rgba(167,139,250,.05)" } as const;
+
+function rgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Every colour custom property for one theme, ready to drop into a surface's
+ * `{ ... }` block. Emits the achromatic brand (`--accent` and its ink, hover
+ * and active steps), then `--<hue>`, `--<hue>-soft` and `--<hue>-line` per hue.
+ *
+ * `--accent` keeps its name despite no longer being chromatic: it is on markup
+ * and in CSS across three surfaces, and renaming it would be churn with no
+ * behavioural gain. `--system` is an alias of the azure so AI surfaces can say
+ * what they mean rather than reaching for "blue".
+ */
+export function semanticVars(mode: "light" | "dark"): string {
+  const hues = mode === "light" ? HUES_LIGHT : HUES_DARK;
+  const softs = mode === "light" ? SOFT_LIGHT : SOFT_DARK;
+  const b = BRAND[mode];
+  const sys = SYSTEM_HUE[mode];
+  const series = mode === "light" ? SERIES_LIGHT : SERIES_DARK;
+
+  const brand = [
+    `--accent:${b.base}; --on-accent:${b.on};`,
+    `--accent-hover:${b.hover}; --accent-active:${b.active};`,
+    `--accent-soft:${softs.accent[0]}; --accent-line:${softs.accent[1]};`,
+    `--accent-glow:${rgba(b.base, mode === "light" ? 0.22 : 0.3)};`,
+  ].join("\n  ");
+
+  const chromatic = (Object.keys(hues) as Hue[])
+    .map((k) => `--${k}:${hues[k]}; --${k}-soft:${softs[k][0]}; --${k}-line:${softs[k][1]};`)
+    .join("\n  ");
+
+  // The system/AI identity — a hue of its own, never the brand's.
+  const system = [
+    `--system:${sys.base}; --on-system:${sys.on};`,
+    `--system-soft:${sys.soft}; --system-line:${sys.line};`,
+    `--system-glow:${rgba(sys.base, mode === "light" ? 0.2 : 0.28)};`,
+  ].join("\n  ");
+
+  // Categorical data identity. Exposed as custom properties so a component can
+  // say `var(--series-3)` instead of importing a colour into markup.
+  const seriesVars = series.map((c, i) => `--series-${i + 1}:${c};`).join(" ");
+
+  return `${brand}\n  ${chromatic}\n  ${system}\n  ${seriesVars}`;
+}
+
+/** Reading access for surfaces that need a raw value (admin's own tokens). */
+export const SEMANTIC = { light: HUES_LIGHT, dark: HUES_DARK } as const;
+/** The brand, for surfaces that need the literal value. */
+export const BRAND_COLOR = BRAND;
+/** The AI/system identity, for surfaces that need the literal value. */
+export const SYSTEM_COLOR = SYSTEM_HUE;
+
+// ── Categorical data series ─────────────────────────────────────────────────
+//
+// Six hues, in a FIXED order that must not be re-sorted: gold sits between teal
+// and magenta because magenta adjacent to teal/green collides under
+// deuteranopia (dE 1.2 — effectively identical). Validated by the data-viz
+// skill's checker in both modes; see the note at the top of this section.
+//
+// Assign by ENTITY, never by rank: "organic traffic" is always slot 1 wherever
+// it appears, so filtering a chart never repaints the surviving series.
+const SERIES_LIGHT = ["#2563EB", "#E8590C", "#0E9384", "#A67C00", "#D6336C", "#0284C7"] as const;
+const SERIES_DARK = ["#3F84E8", "#D95F28", "#159C8B", "#B0862A", "#D14F86", "#2891C4"] as const;
+
+/**
+ * Chart and data-series colours.
+ *
+ * Recharts takes literal colour strings for fills and strokes, so these cannot
+ * be CSS custom properties. Deriving them from the same palette is what stops
+ * the charts drifting into a private colour scheme — which is exactly what had
+ * happened in the Intelligence tab, where nine files carried their own indigo,
+ * teal, coral and mint with no relationship to anything else in the product.
+ *
+ * Ordered by how distinguishable adjacent entries are, so a two- or three-
+ * series chart takes the most separated colours first.
+ */
+export const CHART = {
+  /** Neutral grid, axes and inactive series. */
+  grid: "#E1E7EF",
+  axis: "#5F6B7D",
+  /** The validated categorical order. Slot 1 is the default single series. */
+  series: SERIES_LIGHT,
+  seriesDark: SERIES_DARK,
+  /** Named roles, for charts whose series mean something specific. */
+  positive: HUES_LIGHT.green,
+  negative: HUES_LIGHT.red,
+  neutral: "#5F6B7D",
+  system: SYSTEM_HUE.light.base,
+} as const;
+
+/**
+ * Stable colour for a named data dimension.
+ *
+ * Colour follows the ENTITY, not its position in a list — so "backlinks" is the
+ * same hue on the dashboard, in a chart legend and on a table chip, and a
+ * filter that drops a series never repaints the others.
+ */
+const DIMENSION_SLOT: Record<string, number> = {
+  traffic: 1, clicks: 1,
+  keywords: 2, rankings: 2,
+  position: 3, health: 3,
+  backlinks: 4, impressions: 4,
+  content: 5, reviews: 5,
+  local: 6, citations: 6, competitors: 6,
+};
+
+/** 1-based slot for a dimension name, falling back to slot 1. */
+export function dimensionSlot(name: string): number {
+  return DIMENSION_SLOT[name] ?? 1;
+}
+
 // ── Motion ──────────────────────────────────────────────────────────────────
 /**
  * The same vocabulary as the CSS custom properties above, for Framer Motion.
@@ -94,8 +362,22 @@ export const GLOBAL_CSS = `
      --font-mono is a pure system stack: every modern OS ships an excellent
      monospace, so shipping a webfont for label text was never worth the bytes
      (three surfaces were each downloading JetBrains Mono separately). */
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* The var() fallbacks are load-bearing, not decoration.
+     A var(--font-inter) reference with NO fallback makes the whole declaration
+     invalid at computed-value time whenever next/font's stylesheet has not
+     loaded — and an invalid --font-sans takes every font-family that references
+     it down too, so the entire app silently drops to Times New Roman. Naming
+     the family inside the fallback means a missing font file costs a webfont,
+     not the whole type system. */
+  --font-sans: var(--font-inter, 'Inter'), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, monospace;
+  /* SIGNAL / OPERATOR — the display face is the SAME sans as the interface.
+     A serif display was tried and removed: over dense tables it read as a
+     publication rather than an instrument, and it is the strongest possible
+     signal of the "editorial magazine" feel this product is explicitly not.
+     Products that hit this quality bar use sans in the app and reserve serif
+     for marketing. Energy here comes from WEIGHT, SCALE and TRACKING instead. */
+  --font-display: var(--font-sans);
 
   /* Spacing scale. Replaces the 19 distinct ad-hoc padding values previously
      in use across the two stylesheets. */
@@ -128,6 +410,7 @@ export const GLOBAL_CSS = `
   --radius-sm:10px;   /* buttons, inputs, small controls */
   --radius-md:14px;   /* cards, panels, table containers */
   --radius-lg:20px;   /* dialogs, drawers, hero surfaces */
+  --radius-xl:26px;   /* hero and report surfaces (the portal's largest step) */
   --radius-full:999px;
 
   /* ── Elevation ──
@@ -157,7 +440,57 @@ export const GLOBAL_CSS = `
   --fw-semi:600;       /* absorbs 560/570/580/620 */
   --fw-bold:660;       /* absorbs 640/650/670/680 */
   --fw-heavy:720;
+
+  /* ── Numbers ──
+     Metrics, deltas, ranks and counts are this product's primary content, and
+     until now they had no role of their own: the same figure was 29px/660 on a
+     KPI card, 26px/700 in an AI signal, 23px/660 on a mini-stat and 22px/660 on
+     a stat tile. Four treatments for one concept.
+
+     --fz-metric* are the sizes; .num is the property set every numeric value
+     opts into, so tabular alignment and tracking cannot be forgotten on a
+     new component. Tabular figures matter here specifically because these
+     numbers sit in columns and update in place — proportional digits make a
+     value visibly jump when it changes. */
+  /* ── SIGNAL / OPERATOR display scale ──
+     The scale is deliberately DRAMATIC. The previous range topped out at 33px,
+     so nothing on screen was ever genuinely large and the product read as
+     timid. Confident data products earn presence from the gap between a 60px
+     figure and an 11px label, not from ornament. Line-height is tight because
+     display text is short; tracking is negative because large sans needs it to
+     hold together. */
+  --fz-display:clamp(38px,5.4vw,60px);  /* hero title / headline figure */
+  --fz-title:clamp(28px,3.2vw,38px);    /* page title */
+  --fz-subhead:20px;                    /* section lead-in */
+  --lh-display:1.02;
+  /* Tighter than body tracking: large sans needs negative tracking to hold
+     together, and it is what makes the type read as engineered. */
+  --tr-display:-.032em;
+  --fw-display:750;
+
+  --fz-metric:29px;    /* headline KPI */
+  --fz-metric-md:22px; /* stat tile, mini-stat, hero cell */
+  --fz-metric-sm:17px; /* inline, dense rows */
+  --num-spacing:-.035em;
 }
+
+/* Applied by every numeric value in both surfaces. */
+.num, [data-num] {
+  font-variant-numeric:tabular-nums;
+  letter-spacing:var(--num-spacing);
+  font-feature-settings:'tnum' 1;
+}
+
+/* Page ground, painted before any surface mounts.
+   app/layout.tsx used to hardcode background:#0b0f14 on <body> -- a dark navy
+   belonging to neither surface's palette, while the portal's light ground is
+   #F4F5F8 and the admin's is #F6F8FB. Every cold load therefore flashed dark
+   navy before the scoped surface took over.
+   Set on <html> so it is painted at first paint rather than after hydration,
+   and switched on the OS preference, which is what both surfaces already fall
+   back to when no explicit theme has been chosen. */
+html { background:#F4F5F8; color-scheme:light; }
+@media (prefers-color-scheme:dark) { html { background:#07080B; color-scheme:dark; } }
 
 /* Horizontal-overflow backstop. A single unwrapped table or an over-wide flex
    row should degrade to a scrollable region, never to a page that slides

@@ -30,17 +30,22 @@ export type PlatformData = {
 };
 
 // Single brand-scoped read of /api/platform. Reused by Dashboard, Content,
-// Reviews and Local SEO instead of each page rolling its own fetch.
+// Reviews, Approvals and Local SEO instead of each page rolling its own fetch.
 export function usePlatformData(brandId: string | undefined) {
   const [data, setData] = useState<PlatformData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
     setLoading(true);
+    setError(null);
     authedFetch(`/api/platform?brand=${brandId}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error("platform");
+        return r.json();
+      })
       .then((d) => {
         if (cancelled) return;
         setData({
@@ -49,11 +54,99 @@ export function usePlatformData(brandId: string | undefined) {
         });
         setLoading(false);
       })
-      .catch(() => { if (!cancelled) setLoading(false); });
+      .catch(() => {
+        if (!cancelled) {
+          setError("We couldn't load items waiting on you.");
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [brandId]);
 
-  return { data, loading };
+  return { data, loading, error };
+}
+
+export type ApprovalCounts = { drafts: number; reviews: number; total: number };
+
+/**
+ * Lightweight pending-approval counts for nav badges.
+ *
+ * Hits /api/platform once per brandId/refreshKey. Kept separate from
+ * usePlatformData so the shell can show a badge without every page also
+ * re-subscribing to the full payload — and so Approvals can still own its
+ * own fuller read without a shared cache storm.
+ */
+export function useApprovalCounts(brandId: string | undefined, refreshKey?: string): ApprovalCounts {
+  const [counts, setCounts] = useState<ApprovalCounts>({ drafts: 0, reviews: 0, total: 0 });
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/platform?brand=${brandId}`)
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        const drafts = (d.drafts || []).filter(
+          (x: { status: string }) => x.status === "pending_review",
+        ).length;
+        const reviews = (d.reviews || []).filter(
+          (x: { status: string }) => x.status === "pending_review",
+        ).length;
+        setCounts({ drafts, reviews, total: drafts + reviews });
+      })
+      .catch(() => { /* badge stays at last known */ });
+    return () => { cancelled = true; };
+  }, [brandId, refreshKey]);
+
+  return counts;
+}
+
+// ── /api/portal/activity ────────────────────────────────────────────────────
+// What the agents have actually been doing. Read-only; see lib/agentActivity.
+export type AgentActivityItem = {
+  id: string; kind: string; status: "queued" | "running" | "done" | "failed";
+  created_at: string; started_at: string | null; finished_at: string | null;
+  duration_ms: number | null; error: string | null;
+};
+export type AgentActivity = {
+  items: AgentActivityItem[];
+  counts: Record<"queued" | "running" | "done" | "failed", number>;
+  active: boolean;
+};
+
+/**
+ * Polls only while work is actually in flight. A dashboard that re-fetches on a
+ * fixed timer forever is a battery cost with nothing to show; once the queue is
+ * idle this settles and stops, and resumes on the next visit or refresh.
+ */
+export function useAgentActivity(brandId: string | undefined, limit = 6) {
+  const [data, setData] = useState<AgentActivity | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = () => {
+      authedFetch(`/api/portal/activity?brand=${brandId}&limit=${limit}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: AgentActivity | null) => {
+          if (cancelled) return;
+          if (d) setData(d);
+          setLoading(false);
+          // Only keep watching while something is queued or running.
+          if (d?.active) timer = setTimeout(load, 15000);
+        })
+        .catch(() => { if (!cancelled) setLoading(false); });
+    };
+
+    setLoading(true);
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [brandId, limit]);
+
+  return { activity: data, loading };
 }
 
 // ── /api/portal/summary ─────────────────────────────────────────────────────
@@ -68,6 +161,13 @@ export type PortalMetrics = {
 export type PortalSummary = {
   brand: { name: string; site_url: string; service_area: string; business_model?: string };
   metrics: PortalMetrics;
+  conversions?: {
+    leads: number | null;
+    calls: number | null;
+    conversions: number | null;
+    source: string | null;
+    connected: boolean;
+  };
   chart: { date: string; traffic: number; keywords: number }[];
   activity: {
     published_this_month: number;
@@ -98,14 +198,97 @@ export function usePortalSummary(brandId: string | undefined) {
   return { summary, loading };
 }
 
+// ── /api/portal/setup ───────────────────────────────────────────────────────
+export type SetupSnapshot = {
+  complete: boolean;
+  doneCount: number;
+  total: number;
+  next: string | null;
+  steps: { key: string; label: string; done: boolean; href: string }[];
+};
+
+export function useSetupProgress(brandId: string | undefined) {
+  const [setup, setSetup] = useState<SetupSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/portal/setup?brand=${brandId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.progress) return;
+        setSetup({
+          complete: !!d.progress.complete,
+          doneCount: d.progress.doneCount,
+          total: d.progress.total,
+          next: d.progress.next,
+          steps: d.progress.steps || [],
+        });
+      })
+      .catch(() => { /* home keeps working without setup strip */ });
+    return () => { cancelled = true; };
+  }, [brandId]);
+
+  return setup;
+}
+
+// ── /api/portal/outcomes ────────────────────────────────────────────────────
+export type OutcomeSnapshot = {
+  available: boolean;
+  improved: number;
+  declined: number;
+  too_early: number;
+  total: number;
+};
+
+export function useOutcomeSummary(brandId: string | undefined) {
+  const [outcomes, setOutcomes] = useState<OutcomeSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!brandId) return;
+    let cancelled = false;
+    authedFetch(`/api/portal/outcomes?brand=${brandId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        setOutcomes({
+          available: d.available !== false,
+          improved: d.summary?.improved ?? 0,
+          declined: d.summary?.declined ?? 0,
+          too_early: d.summary?.too_early ?? 0,
+          total: d.summary?.total ?? 0,
+        });
+      })
+      .catch(() => { /* optional strip */ });
+    return () => { cancelled = true; };
+  }, [brandId]);
+
+  return outcomes;
+}
+
 // ── Mutations ───────────────────────────────────────────────────────────────
 // Thin wrappers over the EXISTING brand-scoped endpoints the admin dashboard
 // already uses. Every one of these enforces requireBrandAccess server-side,
 // so a customer can only ever act on their own brand's rows.
 
-export async function approveDraft(id: string): Promise<boolean> {
+export type ApproveLiveStatus =
+  | "queued"
+  | "published"
+  | "not_configured"
+  | "not_publishable"
+  | "unsupported"
+  | "failed";
+
+export type ApproveResult = {
+  ok: boolean;
+  live?: { status: ApproveLiveStatus; platform?: string; message?: string };
+};
+
+export async function approveDraft(id: string): Promise<ApproveResult> {
   const res = await authedFetch(`/api/drafts/${id}/approve`, { method: "POST" });
-  return res.ok;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, live: data.live };
+  return { ok: true, live: data.live };
 }
 
 export async function dismissDraft(id: string): Promise<boolean> {

@@ -1,34 +1,55 @@
 "use client";
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
+import { shortLandingPath } from "@/lib/keywords";
 import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import Field from "@/app/_components/Field";
+import { IconArrowUp, IconArrowDown } from "../../icons";
 
 type Row = {
-  id: string; keyword: string; status: string | null;
-  search_volume: number | null; keyword_difficulty: number | null;
-  search_intent: string | null; ai_opportunity_score: number | null;
-  ai_opportunity_reason: string | null; best_position: number | null;
-  position: number | null; clicks: number | null; impressions: number | null;
+  id: string;
+  keyword: string;
+  status: string | null;
+  search_volume: number | null;
+  keyword_difficulty: number | null;
+  search_intent: string | null;
+  cpc: number | null;
+  ai_opportunity_score: number | null;
+  ai_opportunity_reason: string | null;
+  best_position: number | null;
+  estimated_monthly_clicks: number | null;
+  position: number | null;
+  previous_position: number | null;
+  position_change: number | null;
+  clicks: number | null;
+  impressions: number | null;
+  ctr: number | null;
+  landing_page: string | null;
+  captured_date: string | null;
 };
 
-const SORTS = [
-  { key: "ai_opportunity_score", label: "Opportunity" },
+const SORTS: { key: string; label: string; defaultAsc?: boolean }[] = [
+  { key: "keyword", label: "Keyword", defaultAsc: true },
+  { key: "position", label: "Pos", defaultAsc: true },
+  { key: "position_change", label: "Change", defaultAsc: false },
   { key: "search_volume", label: "Volume" },
-  { key: "keyword_difficulty", label: "Difficulty" },
-  { key: "best_position", label: "Best pos." },
-  { key: "keyword", label: "Keyword" },
+  { key: "keyword_difficulty", label: "KD" },
+  { key: "cpc", label: "CPC" },
+  { key: "clicks", label: "Clicks" },
+  { key: "ctr", label: "CTR" },
+  { key: "ai_opportunity_score", label: "Opp." },
 ];
+
 const PAGE_SIZE = 25;
 
 export default function KeywordsTab({ brandId }: { brandId: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [sort, setSort] = useState("ai_opportunity_score");
-  const [asc, setAsc] = useState(false);
+  const [sort, setSort] = useState("position");
+  const [asc, setAsc] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -51,7 +72,7 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
           setRows(d.keywords || []); setTotal(d.total || 0); setLoading(false);
         })
         .catch(() => { if (!cancelled) setLoading(false); });
-    }, search ? 300 : 0); // debounce typing only
+    }, search ? 300 : 0);
 
     return () => { cancelled = true; clearTimeout(t); };
   }, [brandId, sort, asc, page, search, status]);
@@ -60,13 +81,21 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
 
   function toggleSort(key: string) {
     if (sort === key) setAsc((a) => !a);
-    else { setSort(key); setAsc(key === "keyword" || key === "best_position"); }
+    else {
+      const meta = SORTS.find((s) => s.key === key);
+      setSort(key);
+      setAsc(meta?.defaultAsc ?? false);
+    }
     setPage(1);
   }
 
   return (
     <Panel>
-      <PanelHead title="Your keywords" badge={total || undefined} sub="Every keyword we track for your business, ranked by opportunity." />
+      <PanelHead
+        title="Your keywords"
+        badge={total || undefined}
+        sub="Current position, how many places you moved, volume, difficulty, CPC, traffic and ranking URL — the same core columns Semrush and Ahrefs track."
+      />
 
       <div className="p-toolbar">
         <Field
@@ -82,6 +111,7 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
           <option value="declining">Declining</option>
           <option value="stable">Stable</option>
           <option value="new">New</option>
+          <option value="recovered">Recovered</option>
         </Field>
       </div>
 
@@ -105,12 +135,13 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
                 <tr>
                   {SORTS.map((s) => (
                     <th key={s.key}>
-                      <button className={`p-table-sort ${sort === s.key ? "on" : ""}`} onClick={() => toggleSort(s.key)}>
+                      <button type="button" className={`p-table-sort ${sort === s.key ? "on" : ""}`} onClick={() => toggleSort(s.key)}>
                         {s.label}{sort === s.key ? (asc ? " ↑" : " ↓") : ""}
                       </button>
                     </th>
                   ))}
                   <th>Intent</th>
+                  <th>URL</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -120,16 +151,44 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
                     <td>
                       <div className="p-kwcell" title={r.keyword}>{r.keyword}</div>
                       {r.ai_opportunity_reason && (
-                        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2, maxWidth: 320 }}>
+                        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2, maxWidth: 280 }}>
                           {r.ai_opportunity_reason}
                         </div>
                       )}
                     </td>
+                    <td>
+                      {posBadge(r.position)}
+                      {r.previous_position != null && r.position != null && r.previous_position !== r.position && (
+                        <div style={{ fontSize: 10.5, color: "var(--muted2)", marginTop: 3 }}>
+                          was #{r.previous_position}
+                        </div>
+                      )}
+                    </td>
+                    <td>{changeBadge(r.position_change)}</td>
                     <td>{r.search_volume != null ? r.search_volume.toLocaleString() : <span className="p-na">—</span>}</td>
-                    <td>{r.keyword_difficulty != null ? r.keyword_difficulty : <span className="p-na">—</span>}</td>
-                    <td>{posBadge(r.best_position)}</td>
+                    <td>
+                      {r.keyword_difficulty != null ? (
+                        <span className={`p-chip ${r.keyword_difficulty >= 70 ? "warn" : r.keyword_difficulty <= 30 ? "good" : ""}`}>
+                          {r.keyword_difficulty}
+                        </span>
+                      ) : (
+                        <span className="p-na">—</span>
+                      )}
+                    </td>
+                    <td>{r.cpc != null ? `$${Number(r.cpc).toFixed(2)}` : <span className="p-na">—</span>}</td>
+                    <td>{r.clicks != null ? r.clicks.toLocaleString() : <span className="p-na">—</span>}</td>
+                    <td>{r.ctr != null ? `${(Number(r.ctr) * 100).toFixed(1)}%` : <span className="p-na">—</span>}</td>
                     <td>{r.ai_opportunity_score != null ? <b>{r.ai_opportunity_score}</b> : <span className="p-na">—</span>}</td>
                     <td>{r.search_intent ? <span className="p-chip">{r.search_intent}</span> : <span className="p-na">—</span>}</td>
+                    <td>
+                      {r.landing_page ? (
+                        <a className="p-kw-url" href={r.landing_page} target="_blank" rel="noreferrer" title={r.landing_page}>
+                          {shortLandingPath(r.landing_page)}
+                        </a>
+                      ) : (
+                        <span className="p-na">—</span>
+                      )}
+                    </td>
                     <td>{r.status ? <span className="p-chip">{r.status}</span> : <span className="p-na">—</span>}</td>
                   </tr>
                 ))}
@@ -140,8 +199,8 @@ export default function KeywordsTab({ brandId }: { brandId: string }) {
           <div className="p-pager">
             <span>Page {page} of {pages} · {total.toLocaleString()} keywords</span>
             <div className="p-pager-btns">
-              <button className="p-pager-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-              <button className="p-pager-btn" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
+              <button type="button" className="p-pager-btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
+              <button type="button" className="p-pager-btn" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
             </div>
           </div>
         </>
@@ -154,4 +213,22 @@ function posBadge(pos: number | null) {
   if (pos == null) return <span className="p-na">—</span>;
   const cls = pos <= 3 ? "top3" : pos <= 10 ? "top10" : pos <= 20 ? "top20" : "";
   return <span className={`p-pos ${cls}`}>{pos}</span>;
+}
+
+function changeBadge(change: number | null) {
+  if (change == null) return <span className="p-na">—</span>;
+  if (change === 0) return <span className="p-move-delta flat">0</span>;
+  if (change > 0) {
+    return (
+      <span className="p-move-delta up" title={`Up ${change} place${change === 1 ? "" : "s"}`}>
+        <IconArrowUp size={11} />{change}
+      </span>
+    );
+  }
+  const drop = Math.abs(change);
+  return (
+    <span className="p-move-delta down" title={`Down ${drop} place${drop === 1 ? "" : "s"}`}>
+      <IconArrowDown size={11} />{drop}
+    </span>
+  );
 }

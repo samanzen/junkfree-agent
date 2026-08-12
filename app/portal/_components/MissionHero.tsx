@@ -1,9 +1,7 @@
 "use client";
 import Link from "next/link";
-import { m } from "framer-motion";
 import ScoreRing from "./ScoreRing";
 import AnimatedNumber from "./AnimatedNumber";
-import { EASE } from "./motion";
 import { IconChevron } from "../icons";
 
 export type MissionStat = {
@@ -46,14 +44,7 @@ export default function MissionHero({
   const v = verdict(score);
 
   return (
-    <m.section
-      className="p-mission"
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.42, ease: EASE }}
-    >
-      <div className="p-mission-aurora" aria-hidden="true" />
-
+    <section className="p-mission">
       <div className="p-mission-top">
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="p-mission-greet">
@@ -65,13 +56,8 @@ export default function MissionHero({
 
           {actions.length > 0 && (
             <div className="p-mission-actions">
-              {actions.map((a, i) => (
-                <m.div
-                  key={a.href + a.label}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.42, ease: EASE, delay: 0.3 + i * 0.06 }}
-                >
+              {actions.map((a) => (
+                <div key={a.href + a.label}>
                   <Link href={a.href} className="p-quick">
                     {a.count != null && (
                       <span className="p-quick-count" style={{ color: `var(--${a.tone || "accent"})`, background: `var(--${a.tone || "accent"}-soft)` }}>
@@ -81,35 +67,24 @@ export default function MissionHero({
                     {a.label}
                     <IconChevron size={12} className="p-quick-arrow" />
                   </Link>
-                </m.div>
+                </div>
               ))}
             </div>
           )}
         </div>
 
-        <m.div
-          className="p-mission-ring"
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.42, ease: EASE, delay: 0.12 }}
-        >
+        <div className="p-mission-ring">
           <ScoreRing value={score} size={156} strokeWidth={12} label="Business Health" gradient big />
           <span className="p-mission-verdict" style={{ color: v.color, background: v.bg }}>{v.text}</span>
-        </m.div>
+        </div>
       </div>
 
       <div className="p-mission-strip">
-        {stats.map((s, i) => {
+        {stats.map((s) => {
           const up = s.delta != null && s.delta > 0;
           const good = s.invert ? !up : up;
           return (
-            <m.div
-              key={s.label}
-              className="p-mission-cell"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.42, ease: EASE, delay: 0.34 + i * 0.06 }}
-            >
+            <div key={s.label} className="p-mission-cell">
               <div className="p-mission-cell-label">{s.label}</div>
               <div className="p-mission-cell-val">
                 <span style={{ color: s.value == null ? "var(--muted2)" : "var(--text)" }}>
@@ -121,10 +96,10 @@ export default function MissionHero({
                   </span>
                 )}
               </div>
-            </m.div>
+            </div>
           );
         })}
       </div>
-    </m.section>
+    </section>
   );
 }

@@ -274,7 +274,7 @@ async function lastSuccessfulSync(brandId: string, kinds: string[]): Promise<str
 }
 
 /**
- * Website publishing (WordPress / webhook).
+ * Website publishing (WordPress / Shopify / webhook).
  *
  * Credentials live in brand_integrations and the adapters already exist in
  * lib/execution. This reports their state; the live credential check stays in
@@ -318,20 +318,31 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       ...base, status: "not_connected", detail: null,
       why: "No website connection yet, so approved work has to be published by hand.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
+      // connect opens the in-panel WordPress / webhook setup — not a redirect
+      // to a page that used to have no credential form.
       actions: ["connect"],
     };
   }
 
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
+  const label =
+    active.provider === "wordpress"
+      ? "WordPress"
+      : active.provider === "shopify"
+        ? "Shopify"
+        : active.provider === "webhook"
+          ? "Webhook"
+          : active.provider;
   return {
     ...base,
     status: "connected",
-    detail: active.provider,
+    detail: label,
     why: "Connected — approved changes can be published to your site.",
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
-    actions: ["sync_now", "reconnect", "disconnect"],
+    // No sync_now: publishing needs a draft. Reconnect re-opens the setup form.
+    actions: ["reconnect", "disconnect"],
   };
 }
 
@@ -357,7 +368,10 @@ async function keywordData(brand: Brand): Promise<ConnectionState> {
     lastSyncAt: lastSync,
     lastSyncLabel: lastSync ? `Last refreshed ${fmtDate(lastSync.slice(0, 10))}` : "Not refreshed yet",
     lastError: configured ? null : "Ranking data provider not configured.",
-    actions: configured ? ["sync_now"] : [],
+    // No sync_now: rank_enrich is deliberately admin/cron-only (weekly cadence
+    // exists specifically to control DataForSEO cost). Offering Sync here
+    // would put that job on a customer-reachable path.
+    actions: [],
     accounts: null,
     requirement: configured ? null : "Your ranking data is briefly unavailable. Our team has been notified and is restoring it — nothing is needed from you.",
   };

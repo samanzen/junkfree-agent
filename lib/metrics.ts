@@ -2,7 +2,10 @@ import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance } from "./gsc";
 import { domainOverview, backlinksSummary, rankedKeywords, isConfigured, geoOf } from "./dataforseo";
-import { checkAiVisibility } from "./geo-agent";
+import { checkAiVisibilitySuite } from "./geo-agent";
+import { canUse, quotaFor } from "./capabilities";
+import { persistAiVisibilityChecks } from "./aiVisibility";
+import { captureConversionSignals } from "./conversions";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -19,7 +22,7 @@ export function domainOf(brand: Brand) {
   return brand.site_url.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
 }
 
-// Lightweight snapshot — only DataForSEO + GSC (fast, under 30s).
+// Lightweight snapshot — DataForSEO + GSC + AI visibility share + conversions.
 export async function snapshot(brand: Brand): Promise<Snapshot> {
   const domain = domainOf(brand);
   const gsc = brand.gsc_property;
@@ -29,35 +32,55 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     gsc ? strikingDistance(gsc).catch(() => []) : Promise.resolve([]),
     isConfigured() ? domainOverview(domain, geo).catch(() => null) : Promise.resolve(null),
     isConfigured() ? backlinksSummary(domain).catch(() => null) : Promise.resolve(null),
-    isConfigured() ? rankedKeywords(domain, geo).catch(() => []) : Promise.resolve([]),
-    // Site Health is computed by the daily audit job (lib/steps.ts stepAudit),
-    // not here — this is a single fast DB read, not a re-crawl, so it stays
-    // within the "lightweight snapshot" budget this function is named for.
-    db.from("reports").select("summary").eq("brand_id", brand.id).eq("section", "site_health")
-      .order("created_at", { ascending: false }).limit(1).then((r) => r.data || []),
+    isConfigured()
+      ? rankedKeywords(domain, geo, Math.min(100, quotaFor(brand, "tracked_keywords"))).catch(() => [])
+      : Promise.resolve([]),
+    db
+      .from("reports")
+      .select("summary")
+      .eq("brand_id", brand.id)
+      .eq("section", "site_health")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then((r) => r.data || []),
   ]);
 
   let site_health: number | null = null;
   try {
     const parsed = healthRows[0]?.summary ? JSON.parse(healthRows[0].summary) : null;
     site_health = typeof parsed?.score === "number" ? parsed.score : null;
-  } catch { /* leave null */ }
+  } catch {
+    /* leave null */
+  }
 
-  // checkAiVisibility (lib/geo-agent.ts) has existed since Sprint 5 with zero
-  // callers, which is why ai_visibility has been null in every snapshot ever
-  // taken and why the portal's AI Visibility card reads "Coming soon".
-  //
-  // It asks a model, with web search, the discovery question a customer would
-  // ask ("best <service> in <city>") and reports whether this brand appears in
-  // the answer. That is a genuine yes/no, so it is stored as 100 or 0 rather
-  // than dressed up as a percentage — the card's wording says exactly what the
-  // number means.
-  //
-  // Best-effort: a failure leaves the column null, which is what every previous
-  // snapshot already contained, so nothing downstream changes.
-  const aiVisibility = await checkAiVisibility(brand)
-    .then((r) => (r.mentioned ? 100 : 0))
-    .catch(() => null);
+  // Multi-prompt AI visibility share (0–100). Persists per-prompt rows when
+  // migration 015 is applied; degrades to score-only otherwise.
+  let aiVisibility: number | null = null;
+  if (canUse(brand, "ai_visibility_tracking")) {
+    try {
+      const promptCap = Math.min(5, quotaFor(brand, "ai_prompts"));
+      const { data: custom } = await db
+        .from("ai_visibility_prompts")
+        .select("prompt")
+        .eq("brand_id", brand.id)
+        .eq("active", true)
+        .limit(promptCap);
+      const customPrompts = (custom || []).map((r: { prompt: string }) => r.prompt);
+      const suite = await checkAiVisibilitySuite(
+        brand,
+        promptCap,
+        customPrompts.length ? customPrompts : undefined
+      );
+      aiVisibility = suite.score;
+      await persistAiVisibilityChecks(brand.id, suite.checks).catch(() => undefined);
+    } catch {
+      aiVisibility = null;
+    }
+  }
+
+  if (canUse(brand, "conversion_signals")) {
+    await captureConversionSignals(brand).catch(() => undefined);
+  }
 
   let strikingCount = striking.length;
   let avgPos = striking.length
@@ -81,19 +104,29 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
   };
 
   await db.from("metric_snapshots").insert({
-    brand_id: brand.id, ...snap, captured_at: new Date().toISOString(),
+    brand_id: brand.id,
+    ...snap,
+    captured_at: new Date().toISOString(),
   });
   return snap;
 }
 
 export async function series(brandId: string, limit = 30) {
-  const { data } = await db.from("metric_snapshots").select("*")
-    .eq("brand_id", brandId).order("captured_at", { ascending: true }).limit(limit);
+  const { data } = await db
+    .from("metric_snapshots")
+    .select("*")
+    .eq("brand_id", brandId)
+    .order("captured_at", { ascending: true })
+    .limit(limit);
   return data || [];
 }
 
 export async function latestWithDelta(brandId: string) {
-  const { data } = await db.from("metric_snapshots").select("*")
-    .eq("brand_id", brandId).order("captured_at", { ascending: false }).limit(2);
+  const { data } = await db
+    .from("metric_snapshots")
+    .select("*")
+    .eq("brand_id", brandId)
+    .order("captured_at", { ascending: false })
+    .limit(2);
   return { current: data?.[0] || null, previous: data?.[1] || null };
 }

@@ -20,6 +20,7 @@ export type JobKind =
   | "geo"
   | "gbp"
   | "citations"
+  | "reviews"
   | "audit"
   | "performance"
   | "rank_sync"

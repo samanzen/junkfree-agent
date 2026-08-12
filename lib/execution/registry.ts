@@ -7,10 +7,12 @@
 import type { PublishAdapter, SitePlatform } from "./types";
 import { wordpressAdapter } from "./adapters/wordpress";
 import { webhookAdapter } from "./adapters/webhook";
+import { shopifyAdapter } from "./adapters/shopify";
 
 const ADAPTERS: Record<SitePlatform, PublishAdapter> = {
   wordpress: wordpressAdapter,
   webhook: webhookAdapter,
+  shopify: shopifyAdapter,
 };
 
 /** Every platform the engine can publish to today. */

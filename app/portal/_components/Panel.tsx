@@ -5,19 +5,28 @@ import { fadeUp } from "./motion";
 
 // Standard content panel used across every portal page. Reveals with a
 // fade-up; when rendered inside <Stagger> it inherits the parent's timing.
+// No entrance animation.
+//
+// This used to fade+rise every panel on mount. Two problems, both real:
+//
+//  1. The dashboard read as EMPTY for the first couple of seconds — the worst
+//     possible first impression for a product whose whole claim is that it is
+//     data-rich and always working.
+//  2. Framer drives animation with requestAnimationFrame, which is PAUSED in a
+//     background tab. Anything whose visibility depends on an entrance
+//     animation therefore stays at opacity:0 indefinitely if the page loads
+//     while the tab is not focused — measured directly: visibilityState
+//     "hidden", hasFocus false, rAF never fires, every panel stuck at 0.
+//
+// Content is now present at first paint. Motion is reserved for CHANGE —
+// values counting, rows arriving, state transitions — never for arrival.
 export function Panel({ children, className = "", style }: {
   children: ReactNode; className?: string; style?: React.CSSProperties;
 }) {
   return (
-    <m.section
-      className={`p-panel ${className}`}
-      style={style}
-      variants={fadeUp}
-      initial="hidden"
-      animate="show"
-    >
+    <section className={`p-panel ${className}`} style={style}>
       {children}
-    </m.section>
+    </section>
   );
 }
 

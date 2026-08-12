@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useDialog } from "@/lib/ui/useDialog";
+import { MUTED } from "./palette";
 
 const EXPLANATIONS: Record<string, { label: string; explain: string }> = {
   avg_position:    { label: "Avg. Position",    explain: "Your average Google ranking across all tracked keywords. Position 1 is the top result. Below 20 means page 2 or deeper — most clicks go to the top 10." },
@@ -37,7 +38,7 @@ export default function MetricExplainer({ metric }: Props) {
         aria-expanded={open}
         aria-label={`What is ${info.label}?`}
         data-touch="inline"
-        style={{ background: "transparent", border: 0, cursor: "pointer", color: "#B2BAC8", fontSize: 13, padding: "0 2px", lineHeight: 1 }}
+        style={{ background: "transparent", border: 0, cursor: "pointer", color: MUTED, fontSize: 13, padding: "0 2px", lineHeight: 1 }}
       >?</button>
       {open && (
         <>
@@ -54,7 +55,7 @@ export default function MetricExplainer({ metric }: Props) {
               onClick={() => setOpen(false)}
               aria-label="Close explanation"
               data-touch="inline"
-              style={{ position: "absolute", top: 6, right: 8, cursor: "pointer", color: "#B2BAC8", fontSize: 14, background: "none", border: 0, padding: 4, lineHeight: 1 }}
+              style={{ position: "absolute", top: 6, right: 8, cursor: "pointer", color: MUTED, fontSize: 14, background: "none", border: 0, padding: 4, lineHeight: 1 }}
             >✕</button>
           </div>
         </>

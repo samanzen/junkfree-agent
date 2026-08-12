@@ -1,4 +1,5 @@
 "use client";
+import { MUTED } from "./palette";
 
 // Shared empty/status state for the Intelligence panels.
 //
@@ -36,7 +37,8 @@ export default function DataStatus({ status, panel }: { status: DataStatusKind; 
       <div style={{ fontSize: 40, marginBottom: 12 }}>{c.icon}</div>
       <h3>{c.title}</h3>
       <p>{c.body}</p>
-      {panel && <p style={{ fontSize: 12, color: "#B2BAC8", marginTop: 6 }}>{panel}</p>}
+      {/* #B2BAC8 was 1.95:1 on white — this is body copy and has to be read. */}
+      {panel && <p style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>{panel}</p>}
     </div>
   );
 }

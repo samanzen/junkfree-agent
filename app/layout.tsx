@@ -1,5 +1,5 @@
 import { Inter } from "next/font/google";
-import { GLOBAL_CSS, PLATFORM_NAME } from "@/lib/ui/tokens";
+import { GLOBAL_CSS, PLATFORM_NAME, PLATFORM_DESCRIPTION } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
 // Inter, self-hosted by next/font at build time. This replaces THREE separate
@@ -15,6 +15,14 @@ import { NotifyProvider } from "./_components/Notify";
 // One family now serves both frontends, so the product stops presenting two
 // different display faces (Space Grotesk on admin/login, Inter on the portal).
 // Monospace is a system stack (--font-mono) rather than a fourth download.
+// ONE family, product and marketing alike.
+//
+// Marketing previously loaded Syne for display and DM Sans for body on top of
+// this. Syne is a geometric display face with very wide, heavy forms — it reads
+// as a design studio rather than software, which is the wrong signal for a
+// product that has to look like dependable infrastructure. Dropping both also
+// removes two font downloads from the landing page, which is the page whose
+// speed decides whether a visitor ever sees the audit form.
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
@@ -28,7 +36,7 @@ const inter = Inter({
 // errors, and the first paint before a brand has resolved.
 export const metadata = {
   title: PLATFORM_NAME,
-  description: "Autonomous SEO operations dashboard.",
+  description: PLATFORM_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -37,7 +45,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>
-      <body style={{ margin: 0, fontFamily: "var(--font-sans)", background: "#0b0f14", color: "#e6edf3" }}>
+      {/* Background and colour-scheme now live on <html> in GLOBAL_CSS so the
+          correct ground is painted at first paint. This element previously
+          hardcoded a dark navy that belonged to neither surface. */}
+      <body style={{ margin: 0, fontFamily: "var(--font-sans)" }}>
         {/* Mounted once at the root so /dashboard and /portal share one toast
             stack and one confirm dialog, and shared components can raise either
             without knowing which tree they are rendering in. */}

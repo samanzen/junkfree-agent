@@ -25,7 +25,16 @@ test("up/down queries do not overlap at the boundary", () => {
 
 // ── Global CSS ──────────────────────────────────────────────────────────────
 test("global CSS defines the font stacks it promises", () => {
-  expect(GLOBAL_CSS).toMatch(/--font-sans:\s*var\(--font-inter\)/);
+  // The var() reference now carries a family-name fallback. Without one, a
+  // missing next/font stylesheet makes the declaration invalid and every
+  // font-family that references --font-sans collapses to the browser default.
+  expect(GLOBAL_CSS).toMatch(/--font-sans:\s*var\(--font-inter\s*,[^)]*\)/);
+  // Signal / Operator: the display face IS the interface sans. A serif display
+  // was tried and removed — over dense data it read as a publication rather
+  // than an instrument. If a second family reappears here, that decision is
+  // being reversed and should be deliberate.
+  expect(GLOBAL_CSS).toMatch(/--font-display:\s*var\(--font-sans\)/);
+  expect(GLOBAL_CSS).not.toMatch(/Source Serif|--font-serif/);
   expect(GLOBAL_CSS).toMatch(/--font-mono:\s*ui-monospace/);
 });
 

@@ -7,7 +7,7 @@
 
 import fs from "fs";
 import { test, expect } from "vitest";
-import { quotaFor, UNLIMITED } from "../capabilities";
+import { quotaFor, UNLIMITED, PLAN_CAPACITY } from "../capabilities";
 
 const ROOT = process.cwd();
 const read = (p: string) => fs.readFileSync(`${ROOT}/${p}`, "utf8");
@@ -48,17 +48,21 @@ test("the route asks for the limit instead of hard-coding it", () => {
 });
 
 test("quotaFor is the single source of the number", () => {
-  // A future Starter/Pro/Agency split must change this function only.
+  // Plan tiers change this function only — call sites stay on quotaFor().
   const src = read("lib/capabilities.ts");
   expect(src).toMatch(/export function quotaFor\(/);
-  expect(src).toMatch(/const DEFAULT_QUOTAS: Record<Quota, number>/);
-  expect(quotaFor({ id: "any-brand" }, "images_per_day")).toBe(1);
+  expect(src).toMatch(/PLAN_CAPACITY/);
+  expect(quotaFor({ id: "any-brand" }, "images_per_day")).toBe(
+    PLAN_CAPACITY.founding.quotas.images_per_day
+  );
 });
 
 test("quotaFor answers per brand, so tiers can differ later", () => {
-  // Same answer today; what matters is that the brand is the argument.
   expect(quotaFor({ id: "brand-a" }, "images_per_day"))
     .toBe(quotaFor({ id: "brand-b" }, "images_per_day"));
+  expect(quotaFor({ plan: "growth" }, "images_per_day")).toBeGreaterThan(
+    quotaFor({ plan: "founding" }, "images_per_day")
+  );
   expect(quotaFor.length).toBeGreaterThanOrEqual(2);
 });
 

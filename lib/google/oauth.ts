@@ -59,7 +59,31 @@ export function redirectUriFor(origin: string): string {
 // account to that customer's brand. The state carries the brand and product
 // and is HMAC-signed, so the callback trusts nothing the URL merely claims.
 
-export type OAuthState = { brandId: string; product: string; origin: string; nonce: string };
+export type OAuthState = {
+  brandId: string;
+  product: string;
+  origin: string;
+  nonce: string;
+  /** Unix seconds when the state was issued. Required for expiry. */
+  iat: number;
+  /**
+   * Optional in-portal path to resume after Google returns (e.g. setup journey).
+   * Must be a relative `/portal/...` path — never an external URL.
+   */
+  returnPath?: string;
+};
+
+/** Allow only relative portal paths so OAuth state cannot open-redirect. */
+export function safePortalReturnPath(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  if (!raw.startsWith("/portal")) return undefined;
+  if (raw.includes("://") || raw.includes("\\") || raw.includes("..")) return undefined;
+  if (raw.length > 200) return undefined;
+  return raw;
+}
+
+/** How long a signed start URL remains usable. Past this, verifyState rejects. */
+export const OAUTH_STATE_TTL_SECONDS = 15 * 60;
 
 export function signState(state: OAuthState): string {
   const payload = Buffer.from(JSON.stringify(state)).toString("base64url");
@@ -67,6 +91,13 @@ export function signState(state: OAuthState): string {
   return `${payload}.${mac}`;
 }
 
+/**
+ * Verify the HMAC and refuse expired or malformed state.
+ *
+ * Without `iat`, a leaked start URL could be replayed days later to attach an
+ * attacker's Google account to the victim brandId sealed in the state. The
+ * HMAC alone only proves authenticity, not freshness.
+ */
 export function verifyState(raw: string): OAuthState | null {
   const [payload, mac] = (raw || "").split(".");
   if (!payload || !mac) return null;
@@ -75,7 +106,25 @@ export function verifyState(raw: string): OAuthState | null {
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as OAuthState;
+    const state = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Partial<OAuthState>;
+    if (
+      typeof state.brandId !== "string" ||
+      typeof state.product !== "string" ||
+      typeof state.origin !== "string" ||
+      typeof state.nonce !== "string" ||
+      typeof state.iat !== "number" ||
+      !Number.isFinite(state.iat)
+    ) {
+      return null;
+    }
+    const age = Math.floor(Date.now() / 1000) - state.iat;
+    if (age < 0 || age > OAUTH_STATE_TTL_SECONDS) return null;
+    if (state.returnPath !== undefined) {
+      const safe = safePortalReturnPath(state.returnPath);
+      if (!safe) return null;
+      state.returnPath = safe;
+    }
+    return state as OAuthState;
   } catch {
     return null;
   }
