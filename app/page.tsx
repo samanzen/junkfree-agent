@@ -177,31 +177,21 @@ export default function Home() {
           <div className="mk-wrap">
             <div className="mk-section-head">
               <p className="mk-eyebrow">Integrations</p>
-              <h2 id="mk-integ-title" className="mk-h2">Honest about what is live</h2>
+              <h2 id="mk-integ-title" className="mk-h2">Connected to the tools that run your SEO</h2>
               <p className="mk-lead">
-                We only claim connections that customers can actually use today.
+                Live data in. Approved work out. No fake connectors.
               </p>
             </div>
             <ul className="mk-integ">
               <li>
                 <strong>Google Search Console</strong>
                 <span className="mk-status">Available</span>
-                <p>OAuth connect so rankings and opportunities come from your property.</p>
+                <p>OAuth connect so rankings, queries, and opportunities come from your real property.</p>
               </li>
               <li>
                 <strong>WordPress</strong>
                 <span className="mk-status">Available</span>
-                <p>Publish approved pages and posts with application passwords — live site execution, not a mock.</p>
-              </li>
-              <li>
-                <strong>Google Business Profile</strong>
-                <span className="mk-status is-partial">Partial</span>
-                <p>Local workflows and drafts exist; full profile automation is still incomplete.</p>
-              </li>
-              <li>
-                <strong>Shopify</strong>
-                <span className="mk-status is-soon">Not available yet</span>
-                <p>No Shopify adapter ships today. Ecommerce brands can still use analysis and WordPress/webhook publishing where applicable.</p>
+                <p>Publish approved pages and posts with application passwords — live site execution.</p>
               </li>
             </ul>
           </div>
