@@ -41,7 +41,6 @@ export default function Home() {
                 </div>
                 <div className="mk-viz-pulse" />
               </div>
-              <div className="mk-viz-tag">Approve → publish</div>
             </div>
           </div>
         </section>
@@ -116,7 +115,7 @@ export default function Home() {
               <p className="mk-eyebrow">Trust</p>
               <h2 id="mk-trust-title" className="mk-h2">Your brand stays yours</h2>
               <p className="mk-lead">
-                Built for agencies and operators who need control, not black-box publishing.
+                Built for business owners who need control, not black-box publishing.
               </p>
             </div>
             <div className="mk-trust-grid">
