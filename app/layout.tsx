@@ -1,4 +1,4 @@
-import { Inter, Syne, DM_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import { GLOBAL_CSS, PLATFORM_NAME, PLATFORM_DESCRIPTION } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
@@ -15,28 +15,19 @@ import { NotifyProvider } from "./_components/Notify";
 // One family now serves both frontends, so the product stops presenting two
 // different display faces (Space Grotesk on admin/login, Inter on the portal).
 // Monospace is a system stack (--font-mono) rather than a fourth download.
+// ONE family, product and marketing alike.
+//
+// Marketing previously loaded Syne for display and DM Sans for body on top of
+// this. Syne is a geometric display face with very wide, heavy forms — it reads
+// as a design studio rather than software, which is the wrong signal for a
+// product that has to look like dependable infrastructure. Dropping both also
+// removes two font downloads from the landing page, which is the page whose
+// speed decides whether a visitor ever sees the audit form.
 const inter = Inter({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-inter",
   weight: ["400", "500", "600", "700", "800"],
-});
-
-// Marketing-only faces. Product UI keeps Inter via --font-sans; landing /
-// pricing / signup read these variables under the .mk scope. Loading them at
-// the root means client marketing pages get the faces without a second layout
-// tree or a render-blocking <link>.
-const syne = Syne({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-syne",
-  weight: ["500", "600", "700", "800"],
-});
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-dm-sans",
-  weight: ["400", "500", "600", "700"],
 });
 
 // The platform's own identity, never a tenant's. A signed-in customer's
@@ -50,7 +41,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${syne.variable} ${dmSans.variable}`}>
+    <html lang="en" className={inter.variable}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>

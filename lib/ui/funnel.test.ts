@@ -133,6 +133,46 @@ test("no client component imports the server-only URL module", () => {
   expect(shape).not.toMatch(/require\((["'])(dns|fs|net|crypto)/);
 });
 
+test("the landing page states the product category before any benefit line", () => {
+  // A visitor must know WHAT this is on arrival, not infer it from a promise.
+  const src = read("app/page.tsx");
+  expect(src).toMatch(/Automated SEO platform/i);
+  // The four verbs that make "runs itself" concrete.
+  for (const verb of ["Finds", "Writes", "Publishes", "Measures"]) {
+    expect(src).toContain(`<b>${verb}</b>`);
+  }
+  const badgeAt = src.indexOf("Automated SEO platform");
+  const h1At = src.indexOf('id="mk-hero-title"');
+  expect(badgeAt).toBeGreaterThan(-1);
+  expect(badgeAt).toBeLessThan(h1At);
+});
+
+test("marketing runs one modern sans, with no heavy display face", () => {
+  // Syne read as a design studio rather than software, and cost an extra font
+  // download on the page whose speed decides whether the audit form is seen.
+  const layout = read("app/layout.tsx");
+  // Check the import statement itself, not the whole file — the comment above
+  // it names the removed faces on purpose.
+  const fontImport = layout.match(/import \{([^}]*)\} from "next\/font\/google"/)?.[1] || "";
+  expect(fontImport).toContain("Inter");
+  expect(fontImport).not.toContain("Syne");
+  expect(fontImport).not.toContain("DM_Sans");
+  expect(layout).not.toMatch(/DM_Sans\(/);
+  expect(layout).not.toMatch(/\bSyne\(/);
+
+  const shell = read("app/_components/MarketingShell.tsx");
+  expect(shell).toMatch(/--mk-font-display: var\(--font-sans\)/);
+  expect(shell).toMatch(/--mk-font-body: var\(--font-sans\)/);
+
+  // Nothing on marketing should be heavier than a restrained 620. Display is
+  // distinguished by size and tracking, not by weight.
+  const strays: string[] = [];
+  for (const m of shell.matchAll(/font-weight:\s*(\d{3})/g)) {
+    if (Number(m[1]) > 620) strays.push(m[1]);
+  }
+  expect(strays).toEqual([]);
+});
+
 test("URL validation has exactly one implementation", () => {
   // A second copy would drift, and the copy that drifted would be the one
   // guarding SSRF.

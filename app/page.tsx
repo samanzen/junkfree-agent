@@ -18,20 +18,43 @@ export default function Home() {
         <section className="mk-hero mk-hero-audit" aria-labelledby="mk-hero-title">
           <div className="mk-hero-inner">
             <div className="mk-hero-copy">
-              <p className="mk-hero-kicker">{PLATFORM_NAME}</p>
+              {/* Category first. A visitor should know WHAT this is before they
+                  read a headline, so the badge states it plainly rather than
+                  making them infer a product from a benefit line. */}
+              <p className="mk-badge">
+                <span className="mk-badge-dot" aria-hidden="true" />
+                Automated SEO platform
+              </p>
               <h1 id="mk-hero-title" className="mk-hero-title">
-                Find out why your site isn&apos;t ranking — in seconds
+                SEO that runs itself
               </h1>
               <p className="mk-hero-support">
-                Get a free SEO report on your website, then let AI do the work: on-page fixes,
-                content, and off-page strategy. Built for any business, at any size.
+                {PLATFORM_NAME} finds what is holding your rankings back, writes the fixes,
+                publishes them once you approve, and measures what actually moved — on-page
+                and off-page, for any business at any size.
               </p>
+
               <AuditWidget />
-              <ul className="mk-hero-proof">
-                <li>Real checks on your live page</li>
-                <li>Fixes written for you</li>
-                <li>You approve before anything publishes</li>
-              </ul>
+
+              <ol className="mk-loop" aria-label="What the platform does on its own">
+                <li>
+                  <b>Finds</b>
+                  <span>issues and opportunities</span>
+                </li>
+                <li>
+                  <b>Writes</b>
+                  <span>the fixes and content</span>
+                </li>
+                <li>
+                  <b>Publishes</b>
+                  <span>once you approve</span>
+                </li>
+                <li>
+                  <b>Measures</b>
+                  <span>what actually moved</span>
+                </li>
+              </ol>
+
               <p className="mk-hero-alt">
                 <a href="#how">See how it works</a> · <Link href="/pricing">View pricing</Link>
               </p>

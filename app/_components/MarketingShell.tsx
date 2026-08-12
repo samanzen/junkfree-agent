@@ -73,7 +73,7 @@ export default function MarketingShell({
 }
 
 export const MARKETING_CSS = `
-/* Marketing surface — cyan/navy/orange, Syne + DM Sans, no glass/glow clutter.
+/* Marketing surface — cyan/navy/orange, Inter throughout, no glass/glow clutter.
    Scoped under .mk so portal/dashboard tokens are never overridden: the product
    keeps the Signal system (blue = action, violet = machine) untouched, while
    marketing runs a warmer, higher-contrast palette built for conversion.
@@ -107,8 +107,11 @@ export const MARKETING_CSS = `
   --mk-bad: #A93226;
   --mk-system: #6D3BE4;
   --mk-danger: #A93226;
-  --mk-font-display: var(--font-syne, 'Syne'), var(--font-dm-sans, 'DM Sans'), var(--font-sans);
-  --mk-font-body: var(--font-dm-sans, 'DM Sans'), var(--font-sans);
+  /* One family. Display differs from body by SIZE, WEIGHT and TRACKING rather
+     than by a second typeface — which is how modern product marketing reads as
+     software instead of as a poster. */
+  --mk-font-display: var(--font-sans);
+  --mk-font-body: var(--font-sans);
   min-height: 100vh;
   background: var(--mk-bg);
   color: var(--mk-ink);
@@ -151,7 +154,7 @@ export const MARKETING_CSS = `
 }
 .mk-mark-name {
   font-family: var(--mk-font-display);
-  font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em;
+  font-weight: 600; font-size: 1.05rem; letter-spacing: -.02em;
 }
 .mk-nav-links {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;
@@ -179,7 +182,7 @@ export const MARKETING_CSS = `
 .mk-btn-primary:active:not(:disabled) { background: var(--mk-accent-active); }
 /* Conversion CTA — vivid orange with dark ink, the one pairing that keeps the
    reference palette's energy without dropping below AA. */
-.mk-btn-cta { background: var(--mk-cta); color: var(--mk-cta-ink); font-weight: 700; }
+.mk-btn-cta { background: var(--mk-cta); color: var(--mk-cta-ink); font-weight: 600; }
 .mk-btn-cta:hover:not(:disabled) { background: var(--mk-cta-hover); }
 .mk-btn-secondary {
   background: transparent; color: var(--mk-ink);
@@ -193,13 +196,13 @@ export const MARKETING_CSS = `
 .mk-section { padding: clamp(64px, 10vw, 104px) 0; }
 .mk-section-tight { padding: clamp(48px, 8vw, 72px) 0; }
 .mk-eyebrow {
-  font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase;
+  font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
   color: var(--mk-muted); margin: 0 0 12px;
 }
 .mk-h2 {
   font-family: var(--mk-font-display);
-  font-size: clamp(28px, 4vw, 40px); line-height: 1.12; letter-spacing: -.03em;
-  font-weight: 740; margin: 0 0 14px; max-width: 18ch;
+  font-size: clamp(28px, 4vw, 40px); line-height: 1.14; letter-spacing: -.028em;
+  font-weight: 600; margin: 0 0 14px; max-width: 20ch;
 }
 .mk-lead {
   margin: 0; max-width: 52ch; color: var(--mk-ink-soft); font-size: 17px; line-height: 1.55;
@@ -255,123 +258,71 @@ ${up.md} {
 .ad-cta { text-align: center; }
 .mk-hero-kicker {
   font-family: var(--mk-font-display);
-  font-size: 13px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+  font-size: 12.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
   color: var(--mk-accent); margin: 0 0 16px;
 }
 .mk-hero-title {
   font-family: var(--mk-font-display);
   font-size: clamp(32px, 5.6vw, 58px);
-  line-height: 1.04; letter-spacing: -.035em; font-weight: 780;
+  line-height: 1.08; letter-spacing: -.03em; font-weight: 600;
   margin: 0 0 18px; color: var(--mk-ink);
   animation: mkRise .7s var(--ease-out) both;
 }
 .mk-hero-audit .mk-hero-support {
   margin-inline: auto; margin-bottom: 32px; max-width: 44ch; font-size: 17.5px;
 }
-.mk-hero-proof {
-  list-style: none; margin: 26px 0 0; padding: 0;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px;
-}
-.mk-hero-proof li {
+/* Category badge — the first thing read, so it states the product plainly. */
+.mk-badge {
   display: inline-flex; align-items: center; gap: 8px;
-  font-size: 13.5px; font-weight: 600; color: var(--mk-ink-soft);
+  margin: 0 0 18px; padding: 7px 14px 7px 12px;
+  border-radius: 999px; background: var(--mk-surface);
+  border: 1px solid var(--mk-line);
+  font-size: 13px; font-weight: 600; letter-spacing: -.005em; color: var(--mk-ink-soft);
+  box-shadow: 0 1px 2px rgba(18,33,47,.05);
 }
-.mk-hero-proof li::before {
-  content: ""; width: 16px; height: 16px; border-radius: 50%; flex: none;
-  background:
-    linear-gradient(var(--mk-good), var(--mk-good)) center/8px 2px no-repeat,
-    color-mix(in srgb, var(--mk-good) 16%, transparent);
+.mk-badge-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--mk-bright);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mk-bright) 22%, transparent);
 }
 
+/* The automation loop, stated as four verbs. This is what makes "runs itself"
+   concrete rather than a slogan. */
+.mk-loop {
+  list-style: none; margin: 30px 0 0; padding: 0;
+  display: grid; gap: 10px;
+  counter-reset: mkloop;
+  text-align: left;
+}
+${up.sm} { .mk-loop { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; } }
+.mk-loop li {
+  position: relative; padding: 14px 14px 14px 16px;
+  border-radius: 12px; background: var(--mk-surface);
+  border: 1px solid var(--mk-line);
+  display: grid; gap: 3px; align-content: start;
+}
+.mk-loop li::before {
+  content: ""; position: absolute; left: 0; top: 14px; bottom: 14px;
+  width: 3px; border-radius: 0 3px 3px 0; background: var(--mk-bright);
+}
+.mk-loop li:nth-child(3)::before { background: var(--mk-cta); }
+.mk-loop b {
+  font-size: 14.5px; font-weight: 600; letter-spacing: -.015em; color: var(--mk-ink);
+}
+.mk-loop span { font-size: 12.5px; color: var(--mk-muted); line-height: 1.4; }
+
 .mk-hero-alt { margin: 20px 0 0; font-size: 14px; color: var(--mk-muted); }
-.mk-hero-alt a { color: var(--mk-accent); font-weight: 620; text-decoration: none; }
+.mk-hero-alt a { color: var(--mk-accent); font-weight: 600; text-decoration: none; }
 .mk-hero-alt a:hover { text-decoration: underline; }
 
 .mk-hero-copy { max-width: 34rem; }
-.mk-hero-brand {
-  font-family: var(--mk-font-display);
-  font-size: clamp(42px, 7.2vw, 72px);
-  line-height: .98; letter-spacing: -.04em; font-weight: 780;
-  margin: 0 0 18px;
-  animation: mkRise .7s var(--ease-out) both;
-}
-.mk-hero-headline {
-  font-family: var(--mk-font-display);
-  font-size: clamp(22px, 3.2vw, 30px);
-  line-height: 1.2; letter-spacing: -.025em; font-weight: 650;
-  margin: 0 0 14px; color: var(--mk-ink);
-  max-width: 22ch;
-  animation: mkRise .7s var(--ease-out) .08s both;
-}
 .mk-hero-support {
   margin: 0 0 28px; color: var(--mk-ink-soft); font-size: 17px; max-width: 38ch;
   animation: mkRise .7s var(--ease-out) .14s both;
 }
-.mk-hero-cta {
-  display: flex; flex-wrap: wrap; gap: 12px;
-  animation: mkRise .7s var(--ease-out) .2s both;
-}
 
-/* CSS product visualization — composed panels, not stock photography */
-.mk-viz {
-  position: relative; min-height: 280px;
-  animation: mkRise .8s var(--ease-out) .18s both;
-}
-.mk-viz-plane {
-  position: absolute; inset: 8% 4% 0 8%;
-  border: 1px solid var(--mk-line);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.92), rgba(243,246,251,.96)),
-    repeating-linear-gradient(-12deg, transparent, transparent 14px, rgba(37,99,235,.04) 14px, rgba(37,99,235,.04) 15px);
-  border-radius: 4px 22px 8px 18px;
-  box-shadow: var(--shadow-3);
-  overflow: hidden;
-}
-.mk-viz-rail {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 28%;
-  border-right: 1px solid var(--mk-line);
-  background: linear-gradient(180deg, #F8FAFD, #EEF3FA);
-  padding: 18px 14px; display: flex; flex-direction: column; gap: 10px;
-}
-.mk-viz-rail span {
-  display: block; height: 8px; border-radius: 4px;
-  background: color-mix(in srgb, var(--mk-ink) 10%, transparent);
-}
-.mk-viz-rail span:nth-child(1) { width: 72%; background: color-mix(in srgb, var(--mk-accent) 55%, #cbd5e1); }
-.mk-viz-rail span:nth-child(2) { width: 58%; }
-.mk-viz-rail span:nth-child(3) { width: 64%; }
-.mk-viz-rail span:nth-child(4) { width: 48%; }
-.mk-viz-main { position: absolute; left: 28%; right: 0; top: 0; bottom: 0; padding: 20px 22px; }
-.mk-viz-bar {
-  height: 10px; width: 42%; border-radius: 5px; margin-bottom: 18px;
-  background: color-mix(in srgb, var(--mk-ink) 14%, transparent);
-}
-.mk-viz-rows { display: grid; gap: 10px; }
-.mk-viz-row {
-  display: grid; grid-template-columns: 1.2fr .6fr .5fr; gap: 10px; align-items: center;
-}
-.mk-viz-row i {
-  display: block; height: 9px; border-radius: 4px;
-  background: color-mix(in srgb, var(--mk-ink) 9%, transparent);
-  font-style: normal;
-}
-.mk-viz-row i:last-child {
-  height: 22px; border-radius: 6px;
-  background: color-mix(in srgb, var(--mk-accent) 18%, #e2e8f0);
-}
-.mk-viz-pulse {
-  position: absolute; right: 10%; top: 14%;
-  width: 120px; height: 120px; border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--mk-system) 35%, transparent);
-  background: radial-gradient(circle at 40% 40%, color-mix(in srgb, var(--mk-system) 14%, transparent), transparent 68%);
-  animation: mkPulse 4.8s var(--ease-inout) infinite;
-  pointer-events: none;
-}
-.mk-viz-tag {
-  position: absolute; left: 0; bottom: 6%;
-  font-family: var(--mk-font-display); font-size: 12px; font-weight: 700;
-  letter-spacing: .06em; text-transform: uppercase; color: var(--mk-muted);
-}
+/* The two-column hero (brand wordmark + CSS product mock) was replaced by the
+   audit-led hero, so its rules are removed rather than left orphaned. */
 
 /* ── How it works ── */
 .mk-steps {
@@ -394,12 +345,12 @@ ${up.sm} {
 .mk-step::before {
   content: counter(mkstep, decimal-leading-zero);
   display: block; font-family: var(--mk-font-display);
-  font-size: 13px; font-weight: 700; letter-spacing: .06em;
+  font-size: 13px; font-weight: 600; letter-spacing: .06em;
   color: var(--mk-accent); margin-bottom: 10px;
 }
 .mk-step h3 {
   font-family: var(--mk-font-display); font-size: 18px; margin: 0 0 8px;
-  letter-spacing: -.02em; font-weight: 700;
+  letter-spacing: -.018em; font-weight: 600;
 }
 .mk-step p { margin: 0; color: var(--mk-ink-soft); font-size: 14.5px; }
 
@@ -412,7 +363,7 @@ ${up.sm} { .mk-work { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28p
 .mk-work li { padding-top: 16px; border-top: 1px solid var(--mk-line); }
 .mk-work h3 {
   font-family: var(--mk-font-display); font-size: 19px; margin: 0 0 8px;
-  letter-spacing: -.02em; font-weight: 700;
+  letter-spacing: -.018em; font-weight: 600;
 }
 .mk-work p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; max-width: 40ch; }
 
@@ -428,7 +379,7 @@ ${up.sm} { .mk-work { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28p
 ${up.sm} { .mk-trust-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; } }
 .mk-trust-grid h3 {
   font-family: var(--mk-font-display); font-size: 18px; margin: 0 0 8px;
-  letter-spacing: -.02em; font-weight: 700;
+  letter-spacing: -.018em; font-weight: 600;
 }
 .mk-trust-grid p { margin: 0; color: var(--mk-ink-soft); font-size: 15px; }
 
@@ -448,10 +399,10 @@ ${up.sm} {
   }
 }
 .mk-integ strong {
-  font-family: var(--mk-font-display); font-size: 17px; font-weight: 700; letter-spacing: -.015em;
+  font-family: var(--mk-font-display); font-size: 17px; font-weight: 600; letter-spacing: -.015em;
 }
 .mk-status {
-  font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
   color: var(--mk-accent);
 }
 .mk-status.is-partial { color: var(--mk-system); }
@@ -488,10 +439,10 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 }
 .mk-price h2 {
   font-family: var(--mk-font-display); font-size: 22px; margin: 0;
-  letter-spacing: -.02em; font-weight: 740;
+  letter-spacing: -.02em; font-weight: 600;
 }
 .mk-price .mk-price-amt {
-  font-family: var(--mk-font-display); font-size: 34px; font-weight: 760;
+  font-family: var(--mk-font-display); font-size: 34px; font-weight: 620;
   letter-spacing: -.03em; margin: 0; line-height: 1;
 }
 .mk-price .mk-price-amt span { font-size: 14px; font-weight: 600; color: var(--mk-muted); letter-spacing: 0; }
@@ -523,7 +474,7 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 }
 .mk-auth-card h1 {
   font-family: var(--mk-font-display);
-  font-size: 28px; letter-spacing: -.03em; margin: 0 0 6px; font-weight: 740;
+  font-size: 28px; letter-spacing: -.026em; margin: 0 0 6px; font-weight: 600;
 }
 .mk-auth-card .mk-auth-sub { margin: 0 0 24px; color: var(--mk-muted); font-size: 14px; }
 .mk-auth-fields { display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px; }
@@ -558,7 +509,7 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 .mk-footer-inner { display: grid; gap: 12px; }
 .mk-footer-brand {
   display: inline-flex; align-items: center; gap: 10px;
-  font-family: var(--mk-font-display); font-weight: 700; letter-spacing: -.02em;
+  font-family: var(--mk-font-display); font-weight: 600; letter-spacing: -.02em;
 }
 .mk-footer-note { margin: 0; color: var(--mk-muted); font-size: 13.5px; max-width: 48ch; }
 .mk-footer-links { display: flex; flex-wrap: wrap; gap: 8px 18px; }
@@ -577,7 +528,7 @@ ${up.md} { .mk-price-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); ga
 /* The shared Field owns the label/error wiring; only the sizing is local.
    align-items:end keeps the button's baseline on the input, not the label. */
 .mk .ad-field .fld-label {
-  font-size: 13px; font-weight: 700; letter-spacing: .02em; color: var(--mk-ink-soft);
+  font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--mk-ink-soft);
 }
 .ad-input-row { display: grid; gap: 10px; align-items: end; }
 ${up.sm} { .ad-input-row { grid-template-columns: minmax(0, 1fr) auto; } }
@@ -602,7 +553,7 @@ ${up.sm} { .ad-input-row { grid-template-columns: minmax(0, 1fr) auto; } }
   min-height: 54px; padding: 14px 26px;
   background: var(--mk-cta); color: var(--mk-cta-ink);
   border: 2px solid var(--mk-cta); border-radius: 10px;
-  font-family: inherit; font-size: 16px; font-weight: 700; letter-spacing: -.01em;
+  font-family: inherit; font-size: 16px; font-weight: 600; letter-spacing: -.01em;
   cursor: pointer; white-space: nowrap;
   transition: background var(--dur-2) var(--ease-out), transform var(--dur-1);
 }
@@ -624,7 +575,7 @@ ${up.sm} { .ad-input-row { grid-template-columns: minmax(0, 1fr) auto; } }
   display: flex; align-items: center; gap: 10px;
   font-size: 14.5px; color: var(--mk-muted); font-weight: 550;
 }
-.ad-scan-steps li.is-active { color: var(--mk-ink); font-weight: 650; }
+.ad-scan-steps li.is-active { color: var(--mk-ink); font-weight: 600; }
 .ad-scan-steps li.is-done { color: var(--mk-ink-soft); }
 .ad-scan-dot {
   width: 9px; height: 9px; border-radius: 50%; flex: none;
@@ -664,17 +615,17 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
   flex-direction: column; align-items: center; justify-content: center; gap: 0;
 }
 .ad-ring-mid b {
-  font-family: var(--mk-font-display); font-size: 36px; font-weight: 760;
+  font-family: var(--mk-font-display); font-size: 36px; font-weight: 620;
   line-height: 1; letter-spacing: -.03em; color: var(--mk-ink);
 }
 .ad-ring-mid span { font-size: 11.5px; color: var(--mk-muted); font-weight: 600; }
 .ad-result-site {
-  margin: 0 0 4px; font-size: 13px; font-weight: 650; color: var(--mk-muted);
+  margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--mk-muted);
   word-break: break-all;
 }
 .ad-result-verdict {
   font-family: var(--mk-font-display); margin: 0 0 8px;
-  font-size: clamp(22px, 3.4vw, 28px); letter-spacing: -.025em; font-weight: 740;
+  font-size: clamp(22px, 3.4vw, 28px); letter-spacing: -.024em; font-weight: 600;
 }
 .ad-result-verdict.is-good { color: var(--mk-good); }
 .ad-result-verdict.is-mixed { color: var(--mk-warn); }
@@ -682,7 +633,7 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
 .ad-result-line { margin: 0 0 12px; font-size: 15.5px; color: var(--mk-ink-soft); }
 .ad-result-counts { display: flex; flex-wrap: wrap; gap: 8px; }
 .ad-result-counts span {
-  font-size: 12.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
   border: 1px solid transparent;
 }
 .ad-result-counts .is-bad {
@@ -699,7 +650,7 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
 }
 
 .ad-sub {
-  font-family: var(--mk-font-display); font-size: 17px; font-weight: 720;
+  font-family: var(--mk-font-display); font-size: 17px; font-weight: 620;
   letter-spacing: -.02em; margin: 0 0 14px; color: var(--mk-ink);
 }
 .ad-issues { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--mk-line); }
@@ -712,10 +663,10 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
 .ad-issue.is-warn { border-left-color: var(--mk-cta); }
 .ad-issue-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .ad-issue-top strong {
-  font-family: var(--mk-font-display); font-size: 16px; font-weight: 700; letter-spacing: -.015em;
+  font-family: var(--mk-font-display); font-size: 16px; font-weight: 600; letter-spacing: -.015em;
 }
 .ad-chip {
-  font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
   padding: 4px 9px; border-radius: 5px;
 }
 .ad-chip.is-fail { color: #fff; background: var(--mk-bad); }
@@ -726,7 +677,7 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
   display: flex; gap: 8px; align-items: baseline;
 }
 .ad-issue-fix span {
-  font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
   color: var(--mk-accent); flex: none;
 }
 
@@ -747,7 +698,7 @@ ${up.sm} { .ad-result-head { grid-template-columns: auto minmax(0, 1fr); gap: 28
   background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   color: var(--mk-accent);
 }
-.ad-locked-label { font-size: 14.5px; font-weight: 620; color: var(--mk-ink-soft); }
+.ad-locked-label { font-size: 14.5px; font-weight: 600; color: var(--mk-ink-soft); }
 .ad-locked-blur {
   flex: 1; height: 9px; border-radius: 5px; margin-left: 6px;
   background: linear-gradient(90deg,
@@ -765,7 +716,7 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   display: grid; gap: 7px; align-content: start;
 }
 .ad-module strong {
-  font-family: var(--mk-font-display); font-size: 15px; font-weight: 700;
+  font-family: var(--mk-font-display); font-size: 15px; font-weight: 600;
   letter-spacing: -.015em; color: var(--mk-ink);
 }
 .ad-module p { margin: 0; font-size: 13.5px; color: var(--mk-ink-soft); }
@@ -780,14 +731,14 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 .ad-cta h4 {
   font-family: var(--mk-font-display); margin: 0 0 10px;
-  font-size: clamp(20px, 3vw, 26px); font-weight: 740; letter-spacing: -.025em; color: #fff;
+  font-size: clamp(20px, 3vw, 26px); font-weight: 600; letter-spacing: -.024em; color: #fff;
 }
 .ad-cta p { margin: 0 auto 20px; max-width: 46ch; font-size: 15px; color: #C6D4E2; }
 .ad-cta-btn {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 52px; padding: 14px 30px; border-radius: 10px;
   background: var(--mk-cta); color: var(--mk-cta-ink);
-  font-size: 16.5px; font-weight: 750; letter-spacing: -.01em; text-decoration: none;
+  font-size: 16.5px; font-weight: 620; letter-spacing: -.01em; text-decoration: none;
   transition: background var(--dur-2) var(--ease-out), transform var(--dur-1);
 }
 .ad-cta-btn:hover { background: var(--mk-cta-hover); }
@@ -796,7 +747,7 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ad-again {
   display: block; margin: 20px auto 0; padding: 10px 16px; min-height: 44px;
   background: none; border: 0; cursor: pointer; font-family: inherit;
-  font-size: 14px; font-weight: 620; color: var(--mk-accent); text-decoration: underline;
+  font-size: 14px; font-weight: 600; color: var(--mk-accent); text-decoration: underline;
 }
 @keyframes adPulse {
   0%, 100% { transform: scale(1); opacity: .9; }
@@ -817,8 +768,7 @@ ${up.md} { .ad-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mk-hero::before, .mk-viz-pulse,
-  .mk-hero-brand, .mk-hero-headline, .mk-hero-support, .mk-hero-cta, .mk-viz,
+  .mk-hero::before, .mk-hero-title, .mk-hero-support,
   .ad-scan-dot, .ad-result {
     animation: none !important;
   }

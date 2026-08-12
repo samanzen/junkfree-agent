@@ -144,7 +144,7 @@ export default function AuditWidget() {
       >
         <div className="ad-input-row">
           <Field
-            label="Enter your website to get a free SEO report"
+            label="See it on your site — free report in seconds"
             className="ad-field"
             inputClassName="ad-input"
             type="text"
