@@ -7,6 +7,28 @@ import { Panel, PanelHead } from "../_components/Panel";
 import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
 
+type PublishPlatform = "wordpress" | "webhook";
+
+type PublishForm = {
+  platform: PublishPlatform;
+  siteUrl: string;
+  username: string;
+  applicationPassword: string;
+  publishStatus: "publish" | "draft";
+  endpointUrl: string;
+  signingSecret: string;
+};
+
+const emptyPublishForm = (): PublishForm => ({
+  platform: "wordpress",
+  siteUrl: "",
+  username: "",
+  applicationPassword: "",
+  publishStatus: "publish",
+  endpointUrl: "",
+  signingSecret: "",
+});
+
 // THE INTEGRATION CENTER.
 //
 // Replaces a static list that showed "Connected"/"Not connected" derived from
@@ -143,6 +165,132 @@ const RETURN_MESSAGE: Record<string, { kind: "success" | "info" | "error"; title
   failed: { kind: "error", title: "That didn't work", detail: "We couldn't complete the connection. Please try again." },
 };
 
+function PublishingSetup({
+  form,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  form: PublishForm;
+  busy: boolean;
+  onChange: (patch: Partial<PublishForm>) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="p-conn-setup">
+      <div className="p-conn-setup-tabs" role="tablist" aria-label="Website type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "wordpress"}
+          className={`p-btn ${form.platform === "wordpress" ? "primary" : "ghost"}`}
+          onClick={() => onChange({ platform: "wordpress" })}
+          disabled={busy}
+        >
+          <span>WordPress</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "webhook"}
+          className={`p-btn ${form.platform === "webhook" ? "primary" : "ghost"}`}
+          onClick={() => onChange({ platform: "webhook" })}
+          disabled={busy}
+        >
+          <span>Webhook</span>
+        </button>
+      </div>
+
+      {form.platform === "wordpress" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            Create an <strong>Application Password</strong> in WordPress under{" "}
+            <em>Users → Profile → Application Passwords</em>, then paste it here.
+            We verify the connection before saving anything.
+          </p>
+          <Field
+            label="Website address"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://yoursite.com"
+            value={form.siteUrl}
+            onChange={(e) => onChange({ siteUrl: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="WordPress username"
+            autoComplete="username"
+            value={form.username}
+            onChange={(e) => onChange({ username: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="Application password"
+            type="password"
+            autoComplete="off"
+            value={form.applicationPassword}
+            onChange={(e) => onChange({ applicationPassword: e.target.value })}
+            disabled={busy}
+            required
+            helper="Spaces are fine — WordPress shows them that way."
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+          >
+            <option value="publish">Publish live immediately after approval</option>
+            <option value="draft">Save as a WordPress draft for a final check</option>
+          </Field>
+        </div>
+      ) : (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            For custom sites and other platforms. We POST signed change envelopes to your HTTPS
+            endpoint. You control what happens next.
+          </p>
+          <Field
+            label="Webhook URL"
+            type="url"
+            inputMode="url"
+            placeholder="https://yoursite.com/hooks/seo"
+            value={form.endpointUrl}
+            onChange={(e) => onChange({ endpointUrl: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="Signing secret"
+            type="password"
+            autoComplete="off"
+            value={form.signingSecret}
+            onChange={(e) => onChange({ signingSecret: e.target.value })}
+            disabled={busy}
+            required
+            helper="At least 16 characters. We sign every request with it."
+          />
+        </div>
+      )}
+
+      <div className="p-conn-actions">
+        <button className="p-btn primary" onClick={onSubmit} disabled={busy} data-busy={busy || undefined}>
+          <span>{busy ? "Checking connection…" : "Connect website"}</span>
+        </button>
+        <button className="p-btn ghost" onClick={onCancel} disabled={busy}>
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -151,6 +299,8 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm);
 
   const load = useCallback(async () => {
     try {
@@ -297,10 +447,64 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
   }
 
+  async function connectPublishing() {
+    setBusy("website_publishing:connect");
+    try {
+      const payload =
+        publishForm.platform === "wordpress"
+          ? {
+              brand_id: brandId,
+              action: "connect" as const,
+              platform: "wordpress" as const,
+              siteUrl: publishForm.siteUrl,
+              username: publishForm.username,
+              applicationPassword: publishForm.applicationPassword,
+              publishStatus: publishForm.publishStatus,
+            }
+          : {
+              brand_id: brandId,
+              action: "connect" as const,
+              platform: "webhook" as const,
+              endpointUrl: publishForm.endpointUrl,
+              signingSecret: publishForm.signingSecret,
+            };
+
+      const res = await authedFetch("/api/portal/publishing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't connect that website", data.detail || undefined);
+        return;
+      }
+      toast.success("Website connected", data.message || undefined);
+      setPublishOpen(false);
+      setPublishForm(emptyPublishForm());
+      await load();
+    } catch {
+      toast.error("We couldn't connect that website", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function act(row: PublicConnectionState, action: ConnectionAction) {
     // Connecting or reconnecting a Google product means signing in at Google.
     if (GOOGLE_KEYS.has(row.key) && (action === "connect" || action === "reconnect")) {
       await startGoogle(row);
+      return;
+    }
+
+    // Website publishing: open the inline setup form (never redirect away).
+    if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
+      setPublishForm((f) => ({
+        ...emptyPublishForm(),
+        platform: row.detail?.toLowerCase() === "webhook" ? "webhook" : "wordpress",
+        siteUrl: f.siteUrl,
+      }));
+      setPublishOpen(true);
       return;
     }
 
@@ -341,15 +545,11 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
           });
       const data = await res.json().catch(() => ({}));
 
-      if (data.redirect) {
-        toast.info(data.message || "Continue setup", "Taking you to the right page.");
-        window.location.href = data.redirect;
-        return;
-      }
       if (!res.ok) {
         toast.error(data.error || "That didn't work", data.detail || undefined);
         return;
       }
+      if (row.key === "website_publishing") setPublishOpen(false);
       toast.success(ACTION_LABEL[action], data.message || undefined);
       await load();
     } catch {
@@ -458,6 +658,19 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   />
                 )}
 
+                {row.key === "website_publishing" && publishOpen && (
+                  <PublishingSetup
+                    form={publishForm}
+                    busy={busy === "website_publishing:connect"}
+                    onChange={(patch) => setPublishForm((f) => ({ ...f, ...patch }))}
+                    onCancel={() => {
+                      setPublishOpen(false);
+                      setPublishForm(emptyPublishForm());
+                    }}
+                    onSubmit={connectPublishing}
+                  />
+                )}
+
                 {row.accounts?.length === 0 && row.status === "not_connected" && (
                   <div className="p-conn-note">
                     <IconAlert size={13} />
@@ -476,7 +689,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.actions.length > 0 && (
+                {row.actions.length > 0 && !(row.key === "website_publishing" && publishOpen) && (
                   <div className="p-conn-actions">
                     {row.actions.map((a) => {
                       const key = `${row.key}:${a}`;

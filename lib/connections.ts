@@ -318,20 +318,29 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       ...base, status: "not_connected", detail: null,
       why: "No website connection yet, so approved work has to be published by hand.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
+      // connect opens the in-panel WordPress / webhook setup — not a redirect
+      // to a page that used to have no credential form.
       actions: ["connect"],
     };
   }
 
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
+  const label =
+    active.provider === "wordpress"
+      ? "WordPress"
+      : active.provider === "webhook"
+        ? "Webhook"
+        : active.provider;
   return {
     ...base,
     status: "connected",
-    detail: active.provider,
+    detail: label,
     why: "Connected — approved changes can be published to your site.",
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
-    actions: ["sync_now", "reconnect", "disconnect"],
+    // No sync_now: publishing needs a draft. Reconnect re-opens the setup form.
+    actions: ["reconnect", "disconnect"],
   };
 }
 

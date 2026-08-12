@@ -9,7 +9,7 @@
 
 import fs from "fs";
 import { test, expect } from "vitest";
-import { PLATFORM_NAME, pageTitle } from "../ui/tokens";
+import { PLATFORM_NAME, PLATFORM_TAGLINE, PLATFORM_DESCRIPTION, pageTitle } from "../ui/tokens";
 
 const ROOT = process.cwd();
 const read = (p: string) => fs.readFileSync(`${ROOT}/${p}`, "utf8");
@@ -102,6 +102,25 @@ test("the platform name is declared once", () => {
     /export const PLATFORM_NAME/.test(f.code)
   );
   expect(declarations.map((d) => d.file)).toEqual(["lib/ui/tokens.ts"]);
+});
+
+test("tagline and description are declared once and consumed", () => {
+  expect(PLATFORM_TAGLINE.length).toBeGreaterThan(0);
+  expect(PLATFORM_DESCRIPTION.length).toBeGreaterThan(0);
+  const code = productionCode();
+  for (const symbol of ["PLATFORM_TAGLINE", "PLATFORM_DESCRIPTION"]) {
+    const declarations = code.filter((f) => new RegExp(`export const ${symbol}`).test(f.code));
+    expect(declarations.map((d) => d.file)).toEqual(["lib/ui/tokens.ts"]);
+  }
+  expect(read("app/layout.tsx")).toMatch(/description: PLATFORM_DESCRIPTION/);
+  expect(read("app/login/page.tsx")).toMatch(/PLATFORM_NAME/);
+  expect(read("app/login/page.tsx")).toMatch(/PLATFORM_TAGLINE/);
+  expect(read("app/portal/PortalShell.tsx")).toMatch(/PLATFORM_TAGLINE/);
+  // Competing self-descriptions that previously drifted across surfaces.
+  const offenders = code
+    .filter((f) => /Autonomous SEO Platform|AI SEO Platform/.test(f.code))
+    .map((f) => f.file);
+  expect(offenders).toEqual([]);
 });
 
 test("a tenant title combines the brand with the platform", () => {

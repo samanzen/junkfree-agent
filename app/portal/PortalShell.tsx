@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { LazyMotion, MotionConfig, domMax, m, AnimatePresence } from "framer-motion";
 import { usePortalAuth } from "@/lib/portalAuth";
 import { useDialog } from "@/lib/ui/useDialog";
-import { pageTitle } from "@/lib/ui/tokens";
+import { pageTitle, PLATFORM_TAGLINE } from "@/lib/ui/tokens";
 import { PORTAL_CSS } from "./portalTheme";
 import { EASE } from "./_components/motion";
 import BottomNav from "./_components/BottomNav";
@@ -104,7 +104,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         <span className="p-side-mark">{initials(brand?.name)}</span>
         <span className="p-side-names">
           <span className="p-side-name">{brand?.name || "Your Business"}</span>
-          <span className="p-side-sub">AI SEO Platform</span>
+          <span className="p-side-sub">{PLATFORM_TAGLINE}</span>
         </span>
       </div>
       <nav className="p-side-nav">

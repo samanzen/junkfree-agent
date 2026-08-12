@@ -18,18 +18,38 @@ import AiBriefing, { type Signal } from "./_components/AiBriefing";
 import { Stagger, StaggerItem } from "./_components/motion";
 import {
   IconLock, IconExternal, IconTraffic, IconKey, IconTarget,
-  IconLink, IconLeads, IconPhone, IconReviews, IconChevron,
-  IconCheck, IconContent,
+  IconLink, IconReviews, IconChevron, IconCheck, IconContent,
 } from "./icons";
 
 type PriorityTone = "accent" | "green" | "amber" | "red" | "pink";
 type Priority = { text: string; sub?: string; tone: PriorityTone; href?: string };
 
 // Priorities are derived strictly from real rows the platform already has.
-// If nothing needs attention we say so rather than padding the list.
-function buildPriorities(summary: PortalSummary | null, platform: PlatformData | null): Priority[] {
+// Setup gaps come first: without Search Console there is nothing useful to
+// approve. If nothing needs attention we say so rather than padding the list.
+function buildPriorities(
+  summary: PortalSummary | null,
+  platform: PlatformData | null,
+  brand: { gsc_property?: string | null; site_url?: string | null } | null,
+): Priority[] {
   const out: Priority[] = [];
   if (!summary || !platform) return out;
+
+  if (!brand?.gsc_property) {
+    out.push({
+      text: "Connect Google Search Console",
+      sub: "This is how rankings, clicks and opportunities reach your dashboard",
+      tone: "accent", href: "/portal/settings",
+    });
+  }
+
+  if (!brand?.site_url) {
+    out.push({
+      text: "Add your website address",
+      sub: "Needed before we can publish approved work to your site",
+      tone: "amber", href: "/portal/settings",
+    });
+  }
 
   const pendingDrafts = platform.drafts.filter((d) => d.status === "pending_review").length;
   if (pendingDrafts > 0) {
@@ -67,7 +87,14 @@ function buildPriorities(summary: PortalSummary | null, platform: PlatformData |
     });
   }
 
-  return out.slice(0, 4);
+  return out.slice(0, 5);
+}
+
+function pendingDraftsReady(platform: PlatformData | null): boolean {
+  if (!platform) return false;
+  return platform.drafts.some((d) =>
+    d.status === "pending_review" || d.status === "approved" || d.status === "published"
+  );
 }
 
 export default function PortalDashboard() {
@@ -89,9 +116,16 @@ export default function PortalDashboard() {
   const gbpScore: number | null = null; // no GBP integration connected yet
   const overall = computeOverallHealth([seoScore, localScore, websiteHealth]);
 
-  const priorities = buildPriorities(summary, platform);
+  const priorities = buildPriorities(summary, platform, brand);
   const reviewCount = platform?.reviews.length ?? null;
   const hasChart = (summary.chart?.length || 0) > 1;
+  const setupSteps = [
+    { done: !!brand.site_url, label: "Website", href: "/portal/settings" },
+    { done: !!brand.gsc_property, label: "Search Console", href: "/portal/settings" },
+    { done: pendingDraftsReady(platform), label: "First draft ready", href: "/portal/content" },
+  ];
+  const setupDone = setupSteps.filter((s) => s.done).length;
+  const setupComplete = setupDone === setupSteps.length;
 
   // ── Presentation-only views of data already loaded above. Nothing here
   // fetches, computes a score, or invents a figure; each line is a count or a
@@ -149,23 +183,89 @@ export default function PortalDashboard() {
         summarySlot={<AiSummary brandId={brand.id} section="business overview" brandName={brand.name} data={m} />}
       />
 
+      {/* Operating strip: what needs the customer, then what the system is doing.
+          Promoted above charts so the page answers "what should I do?" first. */}
+      <div className="p-2col p-home-operate">
+        <Panel>
+          <PanelHead
+            title="Needs your attention"
+            badge={priorities.length || undefined}
+            sub="Decisions that move your search performance forward."
+          />
+          {priorities.length > 0 ? (
+            <div className="p-priority-list">
+              {priorities.map((p, i) => {
+                const body = (
+                  <>
+                    <span className="p-priority-dot" style={{ background: `var(--${p.tone})` }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="p-priority-text">{p.text}</div>
+                      {p.sub && <div className="p-priority-sub">{p.sub}</div>}
+                    </div>
+                    {p.href && <IconChevron size={13} className="p-priority-arrow" />}
+                  </>
+                );
+                return p.href
+                  ? <Link key={i} href={p.href} className="p-priority p-priority-link">{body}</Link>
+                  : <div key={i} className="p-priority">{body}</div>;
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<IconCheck size={22} />}
+              title="You're all caught up"
+              sub="Nothing needs a decision from you right now. Your AI team keeps working and new priorities appear here automatically."
+            />
+          )}
+          {!setupComplete && (
+            <div className="p-setup">
+              <div className="p-setup-head">
+                <span>Setup progress</span>
+                <b>{setupDone} of {setupSteps.length}</b>
+              </div>
+              <div className="p-setup-track" aria-hidden="true">
+                <i style={{ width: `${(setupDone / setupSteps.length) * 100}%` }} />
+              </div>
+              <div className="p-setup-steps">
+                {setupSteps.map((s) => (
+                  <Link key={s.label} href={s.href} className={`p-setup-step ${s.done ? "done" : ""}`}>
+                    <span className="p-setup-mark">{s.done ? <IconCheck size={12} /> : null}</span>
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel>
+          <PanelHead
+            title="AI team activity"
+            sub="What ran recently — newest first."
+            action={
+              activity?.active ? (
+                <span className="p-live">
+                  <i />
+                  <span className="p-live-count">
+                    {activity.counts.running + activity.counts.queued}
+                  </span>
+                  {activity.counts.running > 0 ? "running" : "queued"}
+                </span>
+              ) : undefined
+            }
+          />
+          <AgentActivity activity={activity} loading={aLoading} />
+        </Panel>
+      </div>
+
       {/* Health scores */}
       <section>
         <SectionLabel title="Health scores" sub="Each score is built from the data we hold today." />
-        {/* Five equal cards gave the same visual weight to a measured score and
-            to a source that isn't connected — so two thirds of the row was
-            placeholder, and it read as the emptiest part of the page.
-            Measured scores keep their cards; unavailable ones collapse into a
-            single quiet line that says what would unlock them. Nothing is
-            hidden and no value is invented — absence is just no longer
-            occupying the same space as data. */}
         {(() => {
           const scores = [
             { label: "SEO Score", value: seoScore, hint: "Needs ranking data" },
             { label: "Local SEO", value: localScore, hint: "Needs citation data" },
             { label: "Website Health", value: websiteHealth, hint: "Runs with your next audit" },
-            // 100 or 0 is a yes/no, not a percentage — the hint says which, so
-            // the number is never read as a score it isn't.
             {
               label: "AI Visibility", value: aiVisibility,
               hint: aiVisibility == null
@@ -203,14 +303,11 @@ export default function PortalDashboard() {
         })()}
       </section>
 
-      {/* Performance + what needs attention */}
+      {/* Performance */}
       <div className="p-2col">
         <div className="p-stack">
           <Panel>
             <PanelHead title="Organic traffic" sub="Estimated visitors arriving from Google over time." />
-            {/* The one large data moment on this screen. At 264px the chart was
-                just another card; at 380 it reads as the page's subject and the
-                trend is actually legible. */}
             {hasChart ? (
               <TrendChart data={summary.chart} dataKey="traffic" name="Est. traffic" gradientId="pHomeTraffic" height={380} />
             ) : (
@@ -225,77 +322,24 @@ export default function PortalDashboard() {
           <Panel>
             <PanelHead title="Business metrics" sub="Live numbers from Search Console and your ranking data." />
             <Stagger className="p-kpi-grid" stagger={0.045}>
-              {/* Each metric declares its DIMENSION, which fixes its colour
-                  across the whole product — the grid is scannable by hue. */}
               <MetricCard label="Organic Traffic" value={m.organic_traffic} delta={m.traffic_delta} dimension="traffic" icon={<IconTraffic size={16} />} hint="Est. monthly visitors" series={trafficSeries} />
               <MetricCard label="Ranking Keywords" value={m.organic_keywords} delta={m.keywords_delta} dimension="keywords" icon={<IconKey size={16} />} hint="Keywords you appear for" series={keywordSeries} />
               <MetricCard label="Avg. Position" value={m.avg_position} delta={m.position_delta} dimension="position" icon={<IconTarget size={16} />} decimals={1} invert hint="Lower is better" />
               <MetricCard label="Backlinks" value={m.backlinks} delta={m.backlinks_delta} dimension="backlinks" icon={<IconLink size={16} />} hint="Sites linking to you" />
               <MetricCard label="Reviews" value={reviewCount} dimension="reviews" icon={<IconReviews size={16} />} hint="Drafted replies" />
-              <MetricCard label="Leads" locked lockedHint="Connect lead tracking" icon={<IconLeads size={16} />} />
-              <MetricCard label="Calls" locked lockedHint="Connect call tracking" icon={<IconPhone size={16} />} />
-              <MetricCard label="Conversions" locked lockedHint="Connect analytics" icon={<IconTarget size={16} />} />
             </Stagger>
+            <Link href="/portal/settings" className="p-locked-row">
+              <IconLock size={14} />
+              <div>
+                <strong>Connect lead &amp; call tracking</strong>
+                <span>Unlock leads, calls and conversions when those integrations are available.</span>
+              </div>
+              <IconChevron size={13} />
+            </Link>
           </Panel>
         </div>
 
         <div className="p-stack">
-          <Panel>
-            <PanelHead
-              title="Needs your attention"
-              badge={priorities.length || undefined}
-              sub="Ordered by impact on your rankings."
-            />
-            {priorities.length > 0 ? (
-              <div className="p-priority-list">
-                {priorities.map((p, i) => {
-                  const body = (
-                    <>
-                      <span className="p-priority-dot" style={{ background: `var(--${p.tone})` }} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div className="p-priority-text">{p.text}</div>
-                        {p.sub && <div className="p-priority-sub">{p.sub}</div>}
-                      </div>
-                      {p.href && <IconChevron size={13} className="p-priority-arrow" />}
-                    </>
-                  );
-                  return p.href
-                    ? <Link key={i} href={p.href} className="p-priority p-priority-link">{body}</Link>
-                    : <div key={i} className="p-priority">{body}</div>;
-                })}
-              </div>
-            ) : (
-              <EmptyState
-                icon={<IconCheck size={22} />}
-                title="You're all caught up"
-                sub="Nothing needs a decision from you right now. Your agents keep working in the background and new priorities appear here automatically."
-              />
-            )}
-          </Panel>
-
-          {/* What the platform is doing on its own. Sits directly under the
-              priorities because between them they answer the two questions a
-              customer actually has: what needs me, and what is the system
-              doing without me. */}
-          <Panel>
-            <PanelHead
-              title="Agent activity"
-              sub="Every job your agents have run, newest first."
-              action={
-                activity?.active ? (
-                  <span className="p-live">
-                    <i />
-                    <span className="p-live-count">
-                      {activity.counts.running + activity.counts.queued}
-                    </span>
-                    {activity.counts.running > 0 ? "running" : "queued"}
-                  </span>
-                ) : undefined
-              }
-            />
-            <AgentActivity activity={activity} loading={aLoading} />
-          </Panel>
-
           <Panel>
             <PanelHead title="This month" />
             <div className="p-ministat-row">
@@ -311,9 +355,6 @@ export default function PortalDashboard() {
               <div className="p-feed">
                 {summary.activity.recent_content.slice(0, 6).map((c, i) => (
                   <div key={i} className="p-feed-item">
-                    {/* Azure, because every item here was written by the
-                        platform's own content agent (lib/steps.ts stepContent)
-                        — not a stylistic choice, an accurate one. */}
                     <span className="p-feed-icon" style={{ background: "var(--system-soft)", color: "var(--system)" }}>
                       <IconContent size={13} />
                     </span>
@@ -336,10 +377,12 @@ export default function PortalDashboard() {
             )}
           </Panel>
 
-          <a href={brand.site_url} target="_blank" rel="noreferrer" className="p-panel p-site-card">
-            <span>View live website</span>
-            <IconExternal size={14} />
-          </a>
+          {brand.site_url ? (
+            <a href={brand.site_url} target="_blank" rel="noreferrer" className="p-panel p-site-card">
+              <span>View live website</span>
+              <IconExternal size={14} />
+            </a>
+          ) : null}
         </div>
       </div>
     </div>

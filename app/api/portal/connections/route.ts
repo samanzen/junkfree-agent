@@ -183,20 +183,31 @@ export async function POST(req: NextRequest) {
   if (key === "website_publishing") {
     if (action === "disconnect") {
       // Credentials are per-provider; clear whichever is currently stored.
-      const provider = (account === "webhook" ? "webhook" : "wordpress") as SitePlatform;
-      await disconnectIntegration(brandId, provider);
+      // Prefer an explicit account, otherwise disconnect both publish adapters
+      // so a brand cannot be left half-connected.
+      if (account === "webhook" || account === "wordpress") {
+        await disconnectIntegration(brandId, account as SitePlatform);
+      } else {
+        await Promise.all([
+          disconnectIntegration(brandId, "wordpress"),
+          disconnectIntegration(brandId, "webhook"),
+        ]);
+      }
       return NextResponse.json({
         ok: true,
         message: "Website disconnected. Approved work will need publishing by hand.",
       });
     }
-    // Connecting requires credentials, which are entered on the Website page's
-    // existing publishing panel rather than duplicated here.
-    return NextResponse.json({
-      ok: false,
-      redirect: "/portal/website",
-      message: "Website publishing is set up on the Website page.",
-    });
+    // Connect / reconnect are handled by the Connections panel posting to
+    // /api/portal/publishing (live adapter check + encrypted store). This
+    // route never redirects to a page that lacks a credential form.
+    return NextResponse.json(
+      {
+        error: "Open the website setup form on this page to connect.",
+        code: "use_publishing_form",
+      },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json(

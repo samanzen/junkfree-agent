@@ -1,5 +1,5 @@
 import { Inter } from "next/font/google";
-import { GLOBAL_CSS, PLATFORM_NAME } from "@/lib/ui/tokens";
+import { GLOBAL_CSS, PLATFORM_NAME, PLATFORM_DESCRIPTION } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
 // Inter, self-hosted by next/font at build time. This replaces THREE separate
@@ -29,7 +29,7 @@ const inter = Inter({
 // errors, and the first paint before a brand has resolved.
 export const metadata = {
   title: PLATFORM_NAME,
-  description: "Autonomous SEO operations dashboard.",
+  description: PLATFORM_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

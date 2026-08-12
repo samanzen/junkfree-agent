@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-import { touchTargetCSS, fieldCSS, down } from "@/lib/ui/tokens";
+import { touchTargetCSS, fieldCSS, down, PLATFORM_NAME, PLATFORM_TAGLINE } from "@/lib/ui/tokens";
 import Field from "@/app/_components/Field";
 
 // Where to send someone straight after they sign in. Role comes from the
@@ -53,9 +53,9 @@ export default function Login() {
       {/* Fonts come from next/font in app/layout.tsx now — no external request. */}
       <style>{CSS}</style>
       <main className="card">
-        <div className="brand"><span className="dot" /> Autonomous SEO Platform</div>
+        <div className="brand"><span className="dot" /> {PLATFORM_NAME}</div>
         <h1>Sign in</h1>
-        <p className="sub">Access your site&apos;s SEO command center.</p>
+        <p className="sub">{PLATFORM_TAGLINE}</p>
         <div className="lg-fields">
           <Field
             label="Email"
