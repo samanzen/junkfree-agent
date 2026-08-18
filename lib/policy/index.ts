@@ -108,20 +108,23 @@ export function decidePolicy(input: PolicyActionInput): PolicyDecision {
     input.riskLevel === "low" &&
     confidence >= 0.7 &&
     input.reversible &&
-    (input.qaOutcome === "PASS" || input.qaOutcome == null);
+    input.qaOutcome === "PASS";
 
   if (input.mode === "hybrid") {
     if (!isLowRiskAutoCandidate) {
       return {
         ...base,
         decision: "REQUIRE_APPROVAL",
-        reason: "Hybrid mode only auto-executes safe, reversible, high-confidence meta fixes.",
+        reason:
+          input.qaOutcome !== "PASS"
+            ? "Hybrid auto-execute requires QA PASS (missing or non-PASS QA)."
+            : "Hybrid mode only auto-executes safe, reversible, high-confidence meta fixes.",
       };
     }
     return {
       ...base,
       decision: "AUTO_EXECUTE",
-      reason: "Hybrid policy: low-risk reversible meta fix with sufficient confidence.",
+      reason: "Hybrid policy: low-risk reversible meta fix with QA PASS.",
     };
   }
 
@@ -140,7 +143,8 @@ export function decidePolicy(input: PolicyActionInput): PolicyDecision {
       reason: "Confidence below Autopilot threshold.",
     };
   }
-  if (input.qaOutcome != null && input.qaOutcome !== "PASS") {
+  // Fail closed: Autopilot never auto-executes without an explicit QA PASS.
+  if (input.qaOutcome !== "PASS") {
     return {
       ...base,
       decision: "REQUIRE_APPROVAL",
@@ -165,6 +169,6 @@ export function decidePolicy(input: PolicyActionInput): PolicyDecision {
   return {
     ...base,
     decision: "AUTO_EXECUTE",
-    reason: "Autopilot policy: within guardrails, QA clear, confidence sufficient.",
+    reason: "Autopilot policy: within guardrails, QA PASS, confidence sufficient.",
   };
 }

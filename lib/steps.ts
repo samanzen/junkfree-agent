@@ -19,12 +19,12 @@ import { executeChange, resolvePublishTarget } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
 import { runSeoManager } from "./seo-manager";
 import { buildSharedContext } from "./agents/context";
-import { recordActivity, updateAgentTask } from "./agents/store";
+import { recordActivity, updateAgentTask, linkQaResultToDraft, countPendingContentJobs } from "./agents/store";
 import { runQaCritic, canAutoPublishAfterQa } from "./qa";
 import { decidePolicy, resolveExecutionMode } from "./policy";
 import { runTechnicalExecution } from "./technical";
 import type { ProposedActionType, RiskLevel } from "./agents/contracts";
-import { clampConfidence, normalizeRisk } from "./agents/contracts";
+import { clampConfidence, normalizeRisk, MAX_MANAGER_ITEMS } from "./agents/contracts";
 
 
 async function safe<T>(fn: () => Promise<T>): Promise<T | null> {
@@ -223,6 +223,7 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   const publishTarget = await resolvePublishTarget(brand.id);
   const mode = resolveExecutionMode(brand);
   const actionType = effectiveType as ProposedActionType;
+  const pendingContent = await countPendingContentJobs(brand.id);
   const policy = decidePolicy({
     brandId: brand.id,
     mode,
@@ -233,7 +234,7 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     qaOutcome: qa.evaluation.outcome,
     adapterAvailable: publishTarget.ok,
     reversible: effectiveType === "fix_meta",
-    withinRunLimits: true,
+    withinRunLimits: pendingContent <= MAX_MANAGER_ITEMS + 4,
     requiresLivePublish: effectiveType === "new_page" || effectiveType === "new_blog",
     cannibalizationSuspected: rationale.includes("topic already exists"),
   });
@@ -261,6 +262,14 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     status,
   }).select().single();
 
+  // Link QA to draft so stepPublish can fail closed on missing PASS.
+  if (inserted?.id) {
+    await linkQaResultToDraft(brand.id, inserted.id, {
+      qaId: qa.qaId,
+      taskId: agentTaskId,
+    });
+  }
+
   await recordActivity({
     brandId: brand.id,
     runId,
@@ -276,7 +285,7 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     metadata: { draftId: inserted?.id, qa: qa.evaluation.outcome, mode },
   });
 
-  // Autopilot/Hybrid: immediately publish blog/page into content table when approved.
+  // Autopilot/Hybrid: publish blog/page into content table when approved.
   if (
     status === "approved" &&
     inserted &&
@@ -302,9 +311,14 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
       status: "success",
       metadata: { slug, draftId: inserted.id },
     });
+    // Also enqueue live adapter publish when a platform is connected.
+    if (publishTarget.ok && publishTarget.adapter.capabilities.includes("upsert_page")) {
+      await enqueue(brand.id, "publish", { draftId: inserted.id, runId, agentTaskId });
+    }
   }
 
-  // Hybrid meta auto-approve may also enqueue live publish when adapter supports it.
+  // Hybrid/Autopilot meta: pick option 0 explicitly (audited) when auto-publishing.
+  // toSiteChange refuses missing metaChoice by design — autopilot must choose.
   if (
     status === "approved" &&
     inserted &&
@@ -313,7 +327,23 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     publishTarget.ok &&
     publishTarget.adapter.capabilities.includes("update_meta")
   ) {
-    await enqueue(brand.id, "publish", { draftId: inserted.id, runId, agentTaskId });
+    await enqueue(brand.id, "publish", {
+      draftId: inserted.id,
+      runId,
+      agentTaskId,
+      metaChoice: 0,
+      autoSelectedMeta: true,
+    });
+    await recordActivity({
+      brandId: brand.id,
+      runId,
+      capability: "content",
+      eventType: "auto_meta_selected",
+      title: `Auto-selected meta option 0 for ${effectiveUrl || title}`,
+      detail: "Hybrid/Autopilot chose the first generated title/meta option.",
+      status: "info",
+      metadata: { draftId: inserted.id, metaChoice: 0 },
+    });
   }
 
   if (agentTaskId) {
@@ -511,6 +541,7 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
   const publishTarget = await resolvePublishTarget(brand.id);
   const mode = resolveExecutionMode(brand);
   const actionType = (draft.task_type as ProposedActionType) || "new_page";
+  const humanApproved = draft.status === "approved" || draft.status === "published";
   const policy = decidePolicy({
     brandId: brand.id,
     mode,
@@ -518,16 +549,16 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     actionType,
     riskLevel: draft.task_type === "fix_meta" ? "low" : "medium",
     confidence: 0.7,
-    qaOutcome: latestQa || null,
+    // Human-approved drafts: treat missing QA as PASS for policy purposes only
+    // when a human already approved. Autopilot jobs must have linked QA PASS.
+    qaOutcome: latestQa || (humanApproved ? "PASS" : null),
     adapterAvailable: publishTarget.ok,
     reversible: draft.task_type === "fix_meta",
     withinRunLimits: true,
     requiresLivePublish: true,
   });
 
-  // Human-triggered publish jobs (draft already approved) may proceed when
-  // policy says REQUIRE_APPROVAL only if the draft is already approved —
-  // Autopilot AUTO_EXECUTE also proceeds. BLOCK always stops.
+  // BLOCK always stops. Autopilot AUTO_EXECUTE without linked QA PASS stops.
   if (policy.decision === "BLOCK" || latestQa === "BLOCK") {
     await recordActivity({
       brandId: brand.id,
@@ -540,8 +571,12 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     });
     throw new Error(`stepPublish: blocked by policy/QA — ${policy.reason}`);
   }
-  if (draft.status !== "approved" && draft.status !== "published" && policy.decision !== "AUTO_EXECUTE") {
+  if (!humanApproved && policy.decision !== "AUTO_EXECUTE") {
     throw new Error(`stepPublish: draft ${draftId} is not approved`);
+  }
+  // Autopilot path must have an explicit QA PASS row linked to the draft.
+  if (!humanApproved && latestQa !== "PASS") {
+    throw new Error(`stepPublish: autopilot publish requires linked QA PASS for draft ${draftId}`);
   }
 
   const metaChoice = typeof payload.metaChoice === "number" ? payload.metaChoice : undefined;

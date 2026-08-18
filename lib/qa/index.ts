@@ -133,7 +133,7 @@ export async function runQaCritic(opts: {
   taskType: string;
   targetKeyword?: string | null;
   revisionAttempt?: number;
-}): Promise<{ evaluation: QaEvaluation; result: SpecialistResult }> {
+}): Promise<{ evaluation: QaEvaluation; result: SpecialistResult; qaId: string | null }> {
   const revisionAttempt = opts.revisionAttempt ?? 0;
   const heuristic = heuristicQaGate({
     title: opts.title,
@@ -194,7 +194,7 @@ Return ONLY JSON:
     };
   }
 
-  await recordQaResult({
+  const qaId = await recordQaResult({
     brandId: opts.brand.id,
     runId: opts.runId,
     taskId: opts.taskId,
@@ -221,7 +221,7 @@ Return ONLY JSON:
         : evaluation.outcome === "BLOCK"
           ? "blocked"
           : "warning",
-    metadata: { score: evaluation.score, draftId: opts.draftId },
+    metadata: { score: evaluation.score, draftId: opts.draftId, qaId },
   });
 
   const result = emptySpecialistResult({
@@ -233,7 +233,7 @@ Return ONLY JSON:
     status: "ok",
     confidence: clampConfidence(evaluation.score / 100),
     risk_level: evaluation.outcome === "BLOCK" ? "high" : evaluation.outcome === "REVISE" ? "medium" : "low",
-    evidence: { evaluation },
+    evidence: { evaluation, qaId },
     recommendations: evaluation.feedback ? [evaluation.feedback] : [],
     findings: [
       {
@@ -250,7 +250,7 @@ Return ONLY JSON:
     ],
   });
 
-  return { evaluation, result };
+  return { evaluation, result, qaId };
 }
 
 export function canAutoPublishAfterQa(outcome: QaOutcome): boolean {

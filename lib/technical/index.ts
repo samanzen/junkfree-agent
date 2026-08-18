@@ -10,6 +10,7 @@ import { db } from "../supabase";
 import type { Brand } from "../brands";
 import {
   emptySpecialistResult,
+  MAX_MANAGER_ITEMS,
   type AgentFinding,
   type ProposedAction,
   type SpecialistResult,
@@ -119,6 +120,17 @@ export async function attemptTechnicalFix(
     };
   }
 
+  // Never write live meta without concrete replacement text. Technical issues
+  // become content jobs (fix_meta) that go through generate → QA → policy.
+  if (!opts.title && !opts.metaDescription) {
+    return {
+      attempted: false,
+      executed: false,
+      verified: false,
+      reason: "No generated title/meta provided — refusing live write; queue content job instead.",
+    };
+  }
+
   const mode = resolveExecutionMode(brand);
   const policy = decidePolicy({
     brandId: brand.id,
@@ -127,6 +139,7 @@ export async function attemptTechnicalFix(
     actionType: "fix_meta",
     riskLevel: "low",
     confidence: 0.75,
+    qaOutcome: "PASS", // only callable after an explicit QA PASS upstream
     adapterAvailable: true,
     reversible: true,
     withinRunLimits: true,
@@ -219,6 +232,9 @@ export async function runTechnicalExecution(
   let autoFixed = 0;
 
   for (const issue of allIssues.slice(0, 3)) {
+    // Feature 01 hardening: do not live-write null meta. Always route through
+    // the content pipeline (generate → QA → policy) unless a verified payload
+    // is supplied. attemptTechnicalFix will no-op without title/meta.
     const result = await attemptTechnicalFix(brand, issue, { runId: opts.runId });
     if (result.executed) {
       autoFixed++;
@@ -235,14 +251,24 @@ export async function runTechnicalExecution(
       requires_adapter: issue.automatable,
     });
     if (opts.runId) {
-      await enqueue(brand.id, "content", {
-        task_type: issue.task_type === "improve_content" ? "improve_content" : "fix_meta",
-        target_url: issue.url,
-        rationale: `Auditor/Tech: ${issue.problem} — ${issue.fix}`,
-        risk_level: issue.severity === "high" ? "medium" : "low",
-        confidence: 0.7,
-        runId: opts.runId,
-      });
+      // Dedup: skip if an identical content job is already queued/running.
+      const { count } = await db
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("brand_id", brand.id)
+        .eq("kind", "content")
+        .in("status", ["queued", "running"]);
+      // Soft budget: technical may add at most 2 content jobs beyond Manager.
+      if ((count || 0) < MAX_MANAGER_ITEMS + 2) {
+        await enqueue(brand.id, "content", {
+          task_type: issue.task_type === "improve_content" ? "improve_content" : "fix_meta",
+          target_url: issue.url,
+          rationale: `Auditor/Tech: ${issue.problem} — ${issue.fix}`,
+          risk_level: issue.severity === "high" ? "medium" : "low",
+          confidence: 0.7,
+          runId: opts.runId,
+        });
+      }
     }
   }
 

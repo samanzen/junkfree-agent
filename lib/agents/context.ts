@@ -27,11 +27,13 @@ export type SharedAgentContext = {
   tracked_keywords: { keyword: string; status: string | null; intent: string | null }[];
   competitors: { domain: string; name: string | null }[];
   recent_findings: {
+    id?: string;
     capability: string;
     finding_type: string;
     title: string;
     summary: string | null;
     created_at: string;
+    proposed_actions?: unknown;
   }[];
   lessons: string[];
   recent_audits: { url: string; word_count: number | null; title: string | null }[];
@@ -135,11 +137,14 @@ export async function buildSharedContext(
   const recentFindings = findings
     .filter((f) => new Date(f.created_at).getTime() >= cutoff)
     .map((f) => ({
+      id: f.id,
       capability: f.capability,
       finding_type: f.finding_type,
       title: f.title,
       summary: f.summary,
       created_at: f.created_at,
+      // Keep proposed_actions so Manager can convert research into real work.
+      proposed_actions: f.proposed_actions,
     }));
 
   return {
@@ -193,7 +198,14 @@ export function projectContextFor(
         keywords: ctx.tracked_keywords.slice(0, 25),
         open_drafts: ctx.open_drafts.slice(0, 15),
         existing_pages: ctx.existing_pages.slice(0, 30),
-        findings: ctx.recent_findings.slice(0, 15),
+        findings: ctx.recent_findings.slice(0, 15).map((f) => ({
+          id: f.id,
+          capability: f.capability,
+          finding_type: f.finding_type,
+          title: f.title,
+          summary: f.summary,
+          proposed_actions: f.proposed_actions,
+        })),
         integrations: ctx.connected_integrations,
       };
     case "competitor_research":

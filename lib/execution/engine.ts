@@ -179,9 +179,7 @@ async function recordExecution(
       (change.type === "update_meta" ||
         (change.type === "upsert_page" &&
           typeof previous.title === "string" &&
-          (typeof previous.bodyMarkdown === "string" ||
-            typeof previous.content === "string" ||
-            typeof previous.body === "string")));
+          typeof previous.bodyMarkdown === "string"));
 
     const { data, error } = await db
       .from("publish_executions")

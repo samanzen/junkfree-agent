@@ -12,7 +12,7 @@ import {
 } from "../agents/contracts";
 import { decidePolicy, resolveExecutionMode } from "../policy";
 import { parseQaEvaluation, heuristicQaGate, canAutoPublishAfterQa } from "../qa";
-import { selectSpecialists, parseManagerPlan, fallbackContentItems } from "../seo-manager";
+import { selectSpecialists, parseManagerPlan, fallbackContentItems, planItemsFromFindings, mergePlanItems } from "../seo-manager";
 import { buildRollbackChange } from "../execution/rollback";
 import { prioritizeTechIssues, issueFromAuditPage } from "../technical";
 import { RENDER_THRESHOLD_WORDS } from "../auditor";
@@ -62,6 +62,20 @@ test("Hybrid auto-executes only safe meta fixes", () => {
   });
   expect(ok.decision).toBe("AUTO_EXECUTE");
 
+  const noQa = decidePolicy({
+    brandId: "a",
+    mode: "hybrid",
+    autopilotEnabled: true,
+    actionType: "fix_meta",
+    riskLevel: "low",
+    confidence: 0.9,
+    adapterAvailable: true,
+    reversible: true,
+    withinRunLimits: true,
+    qaOutcome: null,
+  });
+  expect(noQa.decision).toBe("REQUIRE_APPROVAL");
+
   const page = decidePolicy({
     brandId: "a",
     mode: "hybrid",
@@ -91,6 +105,20 @@ test("Autopilot still respects QA BLOCK and kill switch", () => {
     qaOutcome: "BLOCK",
   });
   expect(blocked.decision).toBe("BLOCK");
+
+  const missingQa = decidePolicy({
+    brandId: "a",
+    mode: "autopilot",
+    autopilotEnabled: true,
+    actionType: "fix_meta",
+    riskLevel: "low",
+    confidence: 0.9,
+    adapterAvailable: true,
+    reversible: true,
+    withinRunLimits: true,
+    qaOutcome: null,
+  });
+  expect(missingQa.decision).toBe("REQUIRE_APPROVAL");
 
   const killed = decidePolicy({
     brandId: "a",
@@ -236,13 +264,75 @@ test("rollback change builder requires prior state", () => {
     title: "Old",
     metaDescription: "desc",
   });
+  // WordPress HTML content.raw alone is NOT restorable as markdown.
   expect(
     buildRollbackChange({
       change_type: "upsert_page",
       target: "blog/x",
-      previous: { title: "T" },
+      previous: { title: "T", content: "<p>html</p>" },
     })
   ).toBeNull();
+  expect(
+    buildRollbackChange({
+      change_type: "upsert_page",
+      target: "blog/x",
+      previous: { title: "T", bodyMarkdown: "# hi" },
+    })
+  ).toMatchObject({ type: "upsert_page", bodyMarkdown: "# hi" });
+});
+
+test("research proposed_actions become Manager plan items (real handoff)", () => {
+  const { items, consumedFindingIds } = planItemsFromFindings(
+    [
+      {
+        id: "f1",
+        capability: "competitor_research",
+        proposed_actions: [
+          {
+            type: "new_page",
+            target_keyword: "junk removal toronto",
+            rationale: "Competitor gap",
+            risk_level: "medium",
+            confidence: 0.65,
+          },
+          { type: "manual", rationale: "Directory submit" },
+        ],
+      },
+    ],
+    3
+  );
+  expect(items).toHaveLength(1);
+  expect(items[0].task_type).toBe("new_page");
+  expect(items[0].target_keyword).toBe("junk removal toronto");
+  expect(consumedFindingIds).toEqual(["f1"]);
+
+  const merged = mergePlanItems(items, fallbackContentItems({ striking: [{ query: "a", page: "/a" }] }, 2), 2);
+  expect(merged.length).toBeGreaterThanOrEqual(1);
+  expect(merged.length).toBeLessThanOrEqual(2);
+});
+
+test("pipeline wires QA link, metaChoice, and finding handoff", () => {
+  const steps = fs.readFileSync("lib/steps.ts", "utf8");
+  expect(steps).toMatch(/linkQaResultToDraft/);
+  expect(steps).toMatch(/metaChoice:\s*0/);
+  expect(steps).toMatch(/autopilot publish requires linked QA PASS/);
+  const manager = fs.readFileSync("lib/seo-manager/index.ts", "utf8");
+  expect(manager).toMatch(/planItemsFromFindings/);
+  expect(manager).toMatch(/consumeFindings/);
+  const tech = fs.readFileSync("lib/technical/index.ts", "utf8");
+  expect(tech).toMatch(/No generated title\/meta provided/);
+});
+
+test("tenant isolation helpers always filter brand_id", () => {
+  const store = fs.readFileSync("lib/agents/store.ts", "utf8");
+  expect(store).toMatch(/\.eq\("brand_id", brandId\)/);
+  expect(store).toMatch(/consumeFindings/);
+  expect(store).toMatch(/linkQaResultToDraft/);
+  const activity = fs.readFileSync("app/api/portal/activity/route.ts", "utf8");
+  expect(activity).toMatch(/requireBrandAccess/);
+  const rollback = fs.readFileSync("app/api/execution/rollback/route.ts", "utf8");
+  expect(rollback).toMatch(/requireBrandAccess/);
+  expect(fs.existsSync("supabase/014_feature01_hardening.sql")).toBe(true);
 });
 
 test("technical issues are prioritized by severity then impact", () => {

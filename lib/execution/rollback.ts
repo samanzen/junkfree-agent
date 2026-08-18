@@ -32,18 +32,20 @@ export function buildRollbackChange(row: {
     };
   }
   if (row.change_type === "upsert_page") {
-    // Restoring a page requires prior title/body. If the adapter only stored
-    // remote ids without content, we cannot safely roll back.
+    // Only restore when we have markdown (or an explicit bodyMarkdown). HTML
+    // from WordPress content.raw must NOT be fed back through markdownToHtml.
     const title = row.previous.title;
-    const body = row.previous.bodyMarkdown ?? row.previous.content ?? row.previous.body;
-    if (typeof title !== "string" || typeof body !== "string") return null;
+    const bodyMarkdown = row.previous.bodyMarkdown;
+    if (typeof title !== "string" || typeof bodyMarkdown !== "string") {
+      return null;
+    }
     return {
       type: "upsert_page",
       slug: row.target,
       title,
       metaDescription:
         (row.previous.metaDescription as string | null | undefined) ?? null,
-      bodyMarkdown: body,
+      bodyMarkdown,
     };
   }
   return null;
@@ -67,6 +69,9 @@ export async function assessRollback(
   }
   if (data.rollback_status === "rolled_back") {
     return { ok: false, reason: "Already rolled back.", code: "already" };
+  }
+  if (data.rollback_status === "rolling_back") {
+    return { ok: false, reason: "Rollback already in progress.", code: "already" };
   }
   if (data.status !== "succeeded") {
     return { ok: false, reason: "Only successful executions can be rolled back.", code: "unsupported" };
@@ -108,6 +113,19 @@ export async function rollbackExecution(
 
   const brand = await getBrandById(brandId);
   if (!brand) return { ok: false, error: "Brand not found." };
+
+  // Atomic claim: only one rollback may proceed.
+  const { data: claimed, error: claimErr } = await db
+    .from("publish_executions")
+    .update({ rollback_status: "rolling_back" })
+    .eq("id", executionId)
+    .eq("brand_id", brandId)
+    .eq("rollback_status", "available")
+    .select("id")
+    .maybeSingle();
+  if (claimErr || !claimed) {
+    return { ok: false, error: claimErr?.message || "Rollback already in progress or unavailable." };
+  }
 
   const outcome = await executeChange(brand, eligibility.change, {});
   if (outcome.status === "failed") {
@@ -173,9 +191,7 @@ export async function markRollbackSupport(
     (changeType === "update_meta" ||
       (changeType === "upsert_page" &&
         typeof previous.title === "string" &&
-        (typeof previous.bodyMarkdown === "string" ||
-          typeof previous.content === "string" ||
-          typeof previous.body === "string")));
+        typeof previous.bodyMarkdown === "string"));
 
   await db
     .from("publish_executions")

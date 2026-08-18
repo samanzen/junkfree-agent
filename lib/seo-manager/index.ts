@@ -16,7 +16,6 @@ import {
   type AgentCapability,
   type ManagerPlan,
   type ManagerPlanItem,
-  type ProposedActionType,
   type RiskLevel,
 } from "../agents/contracts";
 import { buildSharedContext, contextPromptBlock } from "../agents/context";
@@ -24,6 +23,7 @@ import {
   createAgentTask,
   recordActivity,
   updateAgentTask,
+  consumeFindings,
 } from "../agents/store";
 import {
   runCompetitorResearch,
@@ -45,6 +45,71 @@ const CONTENT_TYPES = new Set(["fix_meta", "improve_content", "new_page", "new_b
 function asTaskType(v: string | undefined): TaskType | null {
   if (!v) return null;
   return CONTENT_TYPES.has(v) ? (v as TaskType) : null;
+}
+
+/** Convert research proposed_actions into Manager plan items (real handoff). */
+export function planItemsFromFindings(
+  findings: {
+    id?: string;
+    capability: string;
+    proposed_actions?: unknown;
+  }[],
+  maxItems: number
+): { items: ManagerPlanItem[]; consumedFindingIds: string[] } {
+  const items: ManagerPlanItem[] = [];
+  const consumedFindingIds: string[] = [];
+  const seen = new Set<string>();
+
+  for (const f of findings) {
+    if (items.length >= maxItems) break;
+    const actions = Array.isArray(f.proposed_actions) ? f.proposed_actions : [];
+    let used = false;
+    for (const raw of actions) {
+      if (items.length >= maxItems) break;
+      if (!raw || typeof raw !== "object") continue;
+      const a = raw as Record<string, unknown>;
+      const taskType = asTaskType(String(a.type || ""));
+      if (!taskType) continue; // skip manual/research-only actions
+      const keyword = typeof a.target_keyword === "string" ? a.target_keyword : null;
+      const url = typeof a.target_url === "string" ? a.target_url : null;
+      const key = `${taskType}|${(keyword || "").toLowerCase()}|${url || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        capability: "content",
+        objective: String(a.rationale || f.capability),
+        task_type: taskType,
+        target_url: url,
+        target_keyword: keyword,
+        rationale: String(a.rationale || `From ${f.capability} research`),
+        risk_level: normalizeRisk(a.risk_level, taskType === "fix_meta" ? "low" : "medium"),
+        confidence: clampConfidence(a.confidence, 0.65),
+        depends_on_capabilities: [f.capability as AgentCapability],
+        priority: 35,
+      });
+      used = true;
+    }
+    if (used && f.id) consumedFindingIds.push(f.id);
+  }
+  return { items, consumedFindingIds };
+}
+
+export function mergePlanItems(
+  primary: ManagerPlanItem[],
+  secondary: ManagerPlanItem[],
+  maxItems: number
+): ManagerPlanItem[] {
+  const seen = new Set<string>();
+  const out: ManagerPlanItem[] = [];
+  for (const item of [...primary, ...secondary]) {
+    if (out.length >= maxItems) break;
+    const key = `${item.task_type}|${(item.target_keyword || "").toLowerCase()}|${item.target_url || ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+    seen.add(key);
+  }
+  return out;
 }
 
 export function selectSpecialists(input: {
@@ -95,13 +160,14 @@ export function parseManagerPlan(raw: unknown, maxItems: number): ManagerPlan | 
   for (const it of itemsRaw) {
     if (!it || typeof it !== "object") continue;
     const row = it as Record<string, unknown>;
-    const capability = String(row.capability || "content") as AgentCapability;
     const objective = String(row.objective || row.rationale || "").trim();
     if (!objective) continue;
+    const task_type = asTaskType(String(row.task_type || ""));
+    if (row.task_type && !task_type) continue; // reject unknown task types
     items.push({
-      capability,
+      capability: "content",
       objective,
-      task_type: (row.task_type as ProposedActionType | undefined) || undefined,
+      task_type: task_type || "improve_content",
       target_url: (row.target_url as string | null | undefined) ?? null,
       target_keyword: (row.target_keyword as string | null | undefined) ?? null,
       rationale: String(row.rationale || objective),
@@ -304,19 +370,42 @@ Return ONLY JSON:
   }).catch(() => "");
 
   let plan = parseManagerPlan(extractJSON(planText), selection.contentBudget);
+
+  // Deterministic handoff: research proposed_actions become work even if the
+  // LLM plan is empty/weak. Prefer finding actions, then merge LLM items.
+  const fromFindings = planItemsFromFindings(
+    refreshed.recent_findings,
+    selection.contentBudget
+  );
+  const gscFallback = fallbackContentItems(
+    {
+      striking: striking as { query?: string; page?: string }[] | null,
+      lowCtr: lowCtr as { page?: string; query?: string }[] | null,
+    },
+    selection.contentBudget
+  );
+
   if (!plan || !plan.items.length) {
     plan = {
-      objective: "Improve organic visibility from GSC signals",
-      summary: "Manager LLM unavailable — fell back to GSC-driven content tasks.",
-      items: fallbackContentItems(
-        {
-          striking: striking as { query?: string; page?: string }[] | null,
-          lowCtr: lowCtr as { page?: string; query?: string }[] | null,
-        },
-        selection.contentBudget
-      ),
+      objective: fromFindings.items.length
+        ? "Act on research specialist opportunities"
+        : "Improve organic visibility from GSC signals",
+      summary: fromFindings.items.length
+        ? "Manager LLM unavailable — using research proposed_actions."
+        : "Manager LLM unavailable — fell back to GSC-driven content tasks.",
+      items: fromFindings.items.length ? fromFindings.items : gscFallback,
       skipped_capabilities: [],
     };
+  } else {
+    // Prefer LLM ranking but always include finding actions that fit the budget.
+    plan = {
+      ...plan,
+      items: mergePlanItems(fromFindings.items, plan.items, selection.contentBudget),
+    };
+  }
+
+  if (fromFindings.consumedFindingIds.length) {
+    await consumeFindings(brand.id, fromFindings.consumedFindingIds);
   }
 
   await recordActivity({

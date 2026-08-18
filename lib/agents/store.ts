@@ -303,3 +303,70 @@ export async function countTasksInRun(brandId: string, runId: string): Promise<n
   if (error) return 0;
   return count || 0;
 }
+
+/** Link the latest QA row for a task (or brand+run) to a draft after insert. */
+export async function linkQaResultToDraft(
+  brandId: string,
+  draftId: string,
+  opts: { qaId?: string | null; taskId?: string | null } = {}
+): Promise<void> {
+  await softWrite(async () => {
+    if (opts.qaId) {
+      const { error } = await db
+        .from("agent_qa_results")
+        .update({ draft_id: draftId })
+        .eq("id", opts.qaId)
+        .eq("brand_id", brandId);
+      if (error && !MIGRATION_MISSING.has(error.code)) {
+        console.warn(`[agent-store] linkQaResultToDraft: ${error.message}`);
+      }
+      return;
+    }
+    if (opts.taskId) {
+      const { data } = await db
+        .from("agent_qa_results")
+        .select("id")
+        .eq("brand_id", brandId)
+        .eq("task_id", opts.taskId)
+        .is("draft_id", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) {
+        await db
+          .from("agent_qa_results")
+          .update({ draft_id: draftId })
+          .eq("id", data.id)
+          .eq("brand_id", brandId);
+      }
+    }
+  });
+}
+
+/** Mark findings as consumed after Manager turns them into work. */
+export async function consumeFindings(brandId: string, findingIds: string[]): Promise<void> {
+  if (!findingIds.length) return;
+  await softWrite(async () => {
+    const { error } = await db
+      .from("agent_findings")
+      .update({ status: "consumed" })
+      .eq("brand_id", brandId)
+      .in("id", findingIds);
+    if (error && !MIGRATION_MISSING.has(error.code)) {
+      console.warn(`[agent-store] consumeFindings: ${error.message}`);
+    }
+  });
+}
+
+/** Count queued/running content jobs for a brand (run budget). */
+export async function countPendingContentJobs(brandId: string): Promise<number> {
+  const { count, error } = await db
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandId)
+    .eq("kind", "content")
+    .in("status", ["queued", "running"]);
+  if (error) return 0;
+  return count || 0;
+}
+
