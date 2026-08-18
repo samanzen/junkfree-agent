@@ -13,7 +13,7 @@
 import type { Brand } from "../brands";
 
 /** Platforms with an adapter today. Extend the union, add the file, register it. */
-export type SitePlatform = "wordpress" | "webhook";
+export type SitePlatform = "wordpress" | "webhook" | "shopify";
 
 /**
  * What an adapter is able to do. Declared per adapter and checked BEFORE a

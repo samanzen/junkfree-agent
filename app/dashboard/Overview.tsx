@@ -37,6 +37,9 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeChart, setActiveChart] = useState<"traffic" | "keywords" | "position">("traffic");
+  const [activity, setActivity] = useState<
+    { id: string; title: string; detail: string | null; decision: string | null; status: string; created_at: string; event_type: string; capability: string | null }[]
+  >([]);
 
   useEffect(() => {
     if (!brandId) return;
@@ -58,7 +61,12 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
         }
       })
       .catch(() => setLoading(false));
-  }, [brandId]);
+
+    fetch(`/api/portal/activity?brand=${brandId}`, token ? { headers: { authorization: `Bearer ${token}` } } : {})
+      .then((r) => r.json())
+      .then((d) => setActivity(d.activity || []))
+      .catch(() => setActivity([]));
+  }, [brandId, token]);
 
   if (loading) return <OvSkeleton />;
   if (!data?.current) return (
@@ -163,6 +171,25 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
           </div>
           {agent.weekly_activity.length > 1 && (
             <WeeklyBars data={agent.weekly_activity} />
+          )}
+          {activity.length > 0 && (
+            <div className="ov-activity" style={{ marginTop: 16 }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: 13, opacity: 0.8 }}>Team timeline</h4>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, maxHeight: 220, overflow: "auto" }}>
+                {activity.slice(0, 12).map((a) => (
+                  <li key={a.id} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)", fontSize: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{a.title}</div>
+                    <div style={{ opacity: 0.65 }}>
+                      {a.capability || a.event_type}
+                      {a.decision ? ` · ${a.decision}` : ""}
+                      {" · "}
+                      {new Date(a.created_at).toLocaleString()}
+                    </div>
+                    {a.detail && <div style={{ opacity: 0.55, marginTop: 2 }}>{a.detail.slice(0, 160)}</div>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </div>

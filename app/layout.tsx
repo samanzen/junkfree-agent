@@ -1,5 +1,5 @@
 import { Inter } from "next/font/google";
-import { GLOBAL_CSS, PLATFORM_NAME } from "@/lib/ui/tokens";
+import { GLOBAL_CSS, PLATFORM_DESCRIPTION, PLATFORM_NAME } from "@/lib/ui/tokens";
 import { NotifyProvider } from "./_components/Notify";
 
 // Inter, self-hosted by next/font at build time. This replaces THREE separate
@@ -28,7 +28,7 @@ const inter = Inter({
 // errors, and the first paint before a brand has resolved.
 export const metadata = {
   title: PLATFORM_NAME,
-  description: "Autonomous SEO operations dashboard.",
+  description: PLATFORM_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -37,10 +37,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>
-      <body style={{ margin: 0, fontFamily: "var(--font-sans)", background: "#0b0f14", color: "#e6edf3" }}>
-        {/* Mounted once at the root so /dashboard and /portal share one toast
-            stack and one confirm dialog, and shared components can raise either
-            without knowing which tree they are rendering in. */}
+      {/* No forced dark body — marketing (`/`) is light; product shells set their own surfaces. */}
+      <body style={{ margin: 0, fontFamily: "var(--font-sans)" }}>
         <NotifyProvider>{children}</NotifyProvider>
       </body>
     </html>

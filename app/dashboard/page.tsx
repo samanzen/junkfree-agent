@@ -23,7 +23,7 @@ const IntelligencePage = dynamic(() => import("./intelligence/IntelligencePage")
 });
 
 type JobFailure = { kind: string; error: string; finished_at: string };
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[]; active?: boolean };
+type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; execution_mode?: string | null; autopilot_enabled?: boolean | null; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[]; active?: boolean };
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
@@ -226,8 +226,20 @@ export default function Dashboard() {
     } catch { toast.error("Revision failed", "Check your connection and try again."); }
     setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
   }
-  async function toggleAuto(id: string, current: boolean) {
-    await authedFetch(`/api/brand/${id}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
+  async function setMode(id: string, mode: "approval" | "hybrid" | "autopilot") {
+    await authedFetch(`/api/brand/${id}/mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ execution_mode: mode }),
+    });
+    load();
+  }
+  async function toggleAutopilotKill(id: string, enabled: boolean) {
+    await authedFetch(`/api/brand/${id}/mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autopilot_enabled: !enabled }),
+    });
     load();
   }
   async function rowAct(table: string, id: string, status: string) {
@@ -307,7 +319,9 @@ export default function Dashboard() {
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
   const bGbp = gbp.filter((g) => g.brand_id === brandId && g.status === "pending_review");
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
-  const auto = !!brand?.auto_publish_meta;
+  const mode = (brand?.execution_mode as "approval" | "hybrid" | "autopilot" | undefined)
+    || (brand?.auto_publish_meta ? "hybrid" : "approval");
+  const autopilotOn = brand?.autopilot_enabled !== false;
 
   // The <style> has to be inside this early return too. Without it the
   // authenticating state rendered .sr markup with no stylesheet attached at
@@ -351,10 +365,20 @@ export default function Dashboard() {
             </div>
           )}
           {brand && (
-            <button className={`mode ${auto ? "auto" : ""}`} onClick={() => toggleAuto(brand.id, auto)}
-              title="Review: you approve each item. Auto: the agent publishes on its own.">
-              {auto ? "◉ Auto-publish" : "◎ Review mode"}
-            </button>
+            <div className="mode-group" title="Automation mode for this brand">
+              <button className={`mode ${mode === "approval" ? "auto" : ""}`} onClick={() => setMode(brand.id, "approval")}>◎ Approval</button>
+              <button className={`mode ${mode === "hybrid" ? "auto" : ""}`} onClick={() => setMode(brand.id, "hybrid")}>◉ Hybrid</button>
+              <button className={`mode ${mode === "autopilot" ? "auto" : ""}`} onClick={() => setMode(brand.id, "autopilot")}>✈ Autopilot</button>
+              {(mode === "hybrid" || mode === "autopilot") && (
+                <button
+                  className={`mode ${autopilotOn ? "" : "auto"}`}
+                  onClick={() => toggleAutopilotKill(brand.id, autopilotOn)}
+                  title="Emergency kill switch for auto-execution"
+                >
+                  {autopilotOn ? "Kill switch off" : "Kill switch ON"}
+                </button>
+              )}
+            </div>
           )}
           <a href={`/portal?brand=${brandId}`} className="mode" style={{ textDecoration:"none", textAlign:"center" }} title="Preview customer view">👁 Customer view</a>
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
@@ -651,8 +675,10 @@ const CSS = `
 .sr .dot.off { background:var(--line); }
 .sr .mode { background:var(--surface); border:1px solid var(--line); color:var(--muted); padding:8px 16px; border-radius:var(--radius-sm); font-family:var(--font-mono); font-size:12px; cursor:pointer; box-shadow:var(--shadow-1); }
 .sr .mode:hover { color:var(--text); }
+.sr .mode-group { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
 .sr .mode.auto { background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.35); color:var(--violet); }
-.sr .brandrow .mode:first-of-type { margin-left:auto; }
+.sr .brandrow .mode-group { margin-left:auto; }
+.sr .brandrow .mode:first-of-type { margin-left:0; }
 .sr .tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:24px; }
 .sr .tabs button { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); padding:12px 16px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:-1px; transition:all var(--dur-2) var(--ease-out); }
 .sr .tabs button:hover { color:var(--text); }

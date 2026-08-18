@@ -16,6 +16,8 @@ export type PortalBrand = {
   gbp_location_id?: string | null;
   owner_email?: string | null;
   auto_publish_meta?: boolean;
+  execution_mode?: "approval" | "hybrid" | "autopilot" | null;
+  autopilot_enabled?: boolean | null;
 };
 
 type PortalAuthState = {
@@ -50,7 +52,8 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
       const isAdmin = me.role === "admin";
 
       if (!me.brand_id && !isAdmin) {
-        setState({ loading: false, error: "No brand linked to your account. Please contact support.", isAdmin, brand: null });
+        // Self-serve customers finish brand creation on /onboarding before the portal.
+        router.replace("/onboarding");
         return;
       }
 

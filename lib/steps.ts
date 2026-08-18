@@ -2,24 +2,30 @@
 // The queue processes these one at a time. Together they equal a full run.
 
 import { callClaude, extractJSON } from "./anthropic";
-import { brandBlock, getBrandById, isLocalBusiness, type Brand } from "./brands";
+import { getBrandById, type Brand } from "./brands";
 import { db, TaskType } from "./supabase";
-import { strikingDistance, lowCtrPages, pagesByIntentSignal, fullKeywordSync } from "./gsc";
-import { writeContent, rewriteMeta, auditPage } from "./agents";
+import { pagesByIntentSignal, fullKeywordSync } from "./gsc";
+import { writeContent, rewriteMeta, auditPage, reviseDraft } from "./agents";
 import { draftGbpPost, findCitations, fixIntent } from "./local-agents";
 import { writeAnswerContent } from "./geo-agent";
-import { keywordStrategy, competitorGaps } from "./intelligence";
 import { keywordDifficulty, classifySearchIntent, keywordVolumes, geoOf, isConfigured } from "./dataforseo";
-import { activeLessons, analysePerformance } from "./learning";
+import { analysePerformance } from "./learning";
 import { snapshot } from "./metrics";
 import { auditSite, inspectPage, RENDER_THRESHOLD_WORDS, type AuditedPage } from "./auditor";
 import { canUse } from "./capabilities";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
-import { executeChange } from "./execution/engine";
+import { executeChange, resolvePublishTarget } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
+import { runSeoManager } from "./seo-manager";
+import { buildSharedContext } from "./agents/context";
+import { recordActivity, updateAgentTask, linkQaResultToDraft, countPendingContentJobs } from "./agents/store";
+import { runQaCritic, canAutoPublishAfterQa } from "./qa";
+import { decidePolicy, resolveExecutionMode } from "./policy";
+import { runTechnicalExecution } from "./technical";
+import type { ProposedActionType, RiskLevel } from "./agents/contracts";
+import { clampConfidence, normalizeRisk, MAX_MANAGER_ITEMS } from "./agents/contracts";
 
-const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
 async function safe<T>(fn: () => Promise<T>): Promise<T | null> {
   try { return await fn(); } catch { return null; }
@@ -76,100 +82,49 @@ function findExistingMatch(candidate: string | undefined | null, existing: Exist
   return null;
 }
 
-// PLAN: gather intelligence, decide tasks, and enqueue the execution jobs.
+// PLAN: SEO Manager coordinates research specialists, then enqueues content +
+// follow-on jobs. Bounded by MAX_TASKS_PER_RUN; preserves cannibalization guards.
 export async function stepPlan(brand: Brand) {
-  const gsc = brand.gsc_property;
-  const [striking, lowCtr, intentPages, strategy, recon, lessons, existing] = await Promise.all([
-    gsc ? safe(() => strikingDistance(gsc)) : Promise.resolve(null),
-    gsc ? safe(() => lowCtrPages(gsc)) : Promise.resolve(null),
-    gsc && brand.intent_notes ? safe(() => pagesByIntentSignal(gsc, "free")) : Promise.resolve(null),
-    safe(() => keywordStrategy(brand)),
-    safe(() => competitorGaps(brand)),
-    safe(() => activeLessons(brand)),
-    safe(() => existingTopics(brand.id)),
-  ]);
-  const existingList = (existing as ExistingTopic[] | null) || [];
-
-  const planText = await callClaude({
-    maxTokens: 1800,
-    user: `${brandBlock(brand)}
-
-You are the SEO operations lead. Use ALL intelligence below to choose the ${MAX_TASKS} highest-impact actions now. Favour quick wins but also build topical authority.
-
-RULES: Target paid/high-intent + long-tail keywords with real volume where known. Avoid any terms flagged as wrong-intent in the business context above.
-NEVER propose "new_page" or "new_blog" for a topic already listed in EXISTING TOPICS below — if that topic needs work, propose "improve_content" targeting its existing URL instead. Also do not propose two of your own tasks in this batch for the same or overlapping topic (keyword cannibalization) — group related keywords under one page rather than forking a near-duplicate.
-
-EXISTING TOPICS (already published or queued — do not duplicate):
-${existingList.length ? existingList.map((e) => `- "${e.title}"${e.keyword ? ` (keyword: ${e.keyword})` : ""}${e.url ? ` → ${e.url}` : ""}`).join("\n") : "none yet"}
-
-LESSONS (from measuring past results — apply them):
-${(lessons as string[])?.length ? (lessons as string[]).map((l) => "- " + l).join("\n") : "none yet"}
-KEYWORD STRATEGY:
-${JSON.stringify(strategy, null, 2)}
-COMPETITOR GAPS:
-${JSON.stringify((recon as { gaps?: unknown[] })?.gaps || [], null, 2)}
-STRIKING DISTANCE (GSC 5-20):
-${JSON.stringify(striking || [], null, 2)}
-LOW CTR PAGES:
-${JSON.stringify(lowCtr || [], null, 2)}
-
-Return ONLY JSON array of up to ${MAX_TASKS}:
-[{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...","target_keyword":"...","rationale":"..."}]`,
-  });
-  let tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
-
-  // Hard safety net — enforced regardless of whether the model followed the
-  // prompt: never let a new_page/new_blog through for a topic that already
-  // exists (redirect to improve_content on the existing URL instead), and
-  // never let two tasks in the same batch target overlapping keywords.
-  const claimedThisBatch: string[] = [];
-  tasks = tasks.map((t) => {
-    if (t.task_type !== "new_page" && t.task_type !== "new_blog") return t;
-    const match = findExistingMatch(t.target_keyword, existingList);
-    if (match) {
-      return {
-        ...t,
-        task_type: "improve_content" as TaskType,
-        target_url: match.url || t.target_url,
-        rationale: `${t.rationale} (redirected from new page — topic already exists)`,
-      };
-    }
-    const norm = normalizeTopic(t.target_keyword || "");
-    if (norm && claimedThisBatch.includes(norm)) {
-      return { ...t, task_type: "improve_content" as TaskType, rationale: `${t.rationale} (merged — overlapping keyword in this batch)` };
-    }
-    if (norm) claimedThisBatch.push(norm);
-    return t;
-  });
-
   const runId = await currentRun(brand.id);
-  await db.from("runs").update({ tasks_planned: tasks.length }).eq("id", runId);
+  const gsc = brand.gsc_property;
 
-  // Enqueue one content job per task, plus intent fixes, then the extras.
-  for (const t of tasks) await enqueue(brand.id, "content", { ...t, runId });
-  for (const p of (intentPages as { page: string; queries: string[] }[] | null)?.slice(0, 2) || [])
-    await enqueue(brand.id, "content", { task_type: "fix_meta", target_url: p.page, intent: true, queries: p.queries, runId });
-  await enqueue(brand.id, "geo", { runId });
-  // GBP posts + citation opportunities are local-SEO concepts (Google
-  // Business Profile map-pack signals, local directory outreach) — meaningless
-  // for a non-local brand, so skip them entirely rather than producing drafts
-  // nobody will use (Sprint 6.2 Phase 3).
-  if (isLocalBusiness(brand)) {
-    await enqueue(brand.id, "gbp", { runId });
-    await enqueue(brand.id, "citations", { runId });
+  // Intent-fix enqueue stays outside Manager content budget — same as before.
+  const intentPages =
+    gsc && brand.intent_notes
+      ? await safe(() => pagesByIntentSignal(gsc, "free"))
+      : null;
+
+  const { planned } = await runSeoManager(brand, runId);
+
+  for (const p of intentPages?.slice(0, 2) || []) {
+    await enqueue(brand.id, "content", {
+      task_type: "fix_meta",
+      target_url: p.page,
+      intent: true,
+      queries: p.queries,
+      runId,
+      risk_level: "low",
+      confidence: 0.7,
+    });
   }
-  await enqueue(brand.id, "audit", { runId });
-  await enqueue(brand.id, "performance", { runId });
 
-  return { planned: tasks.length };
+  return { planned };
 }
 
-// CONTENT: execute one task -> one draft.
+// CONTENT: execute one task -> one draft, then QA + policy for status/publish.
 export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   const runId = p.runId as string;
+  const agentTaskId = (p.agentTaskId as string) || null;
   const kw = (p.target_keyword as string) || "";
   const type = p.task_type as TaskType;
   let title = "", body = "";
+
+  if (agentTaskId) {
+    await updateAgentTask(brand.id, agentTaskId, {
+      status: "running",
+      started_at: new Date().toISOString(),
+    });
+  }
 
   if (p.intent) {
     const fix = await fixIntent(brand, p.target_url as string, (p.queries as string[]) || []);
@@ -179,26 +134,9 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   } else if (type === "new_page") {
     title = `Page: ${kw}`; body = await writeContent(brand, kw, "Local service page");
   } else if (type === "improve_content") {
-    // Phase 8A: this passed "" for the page's content, so auditPage() never saw
-    // the page it was auditing and returned a generic checklist of what a page
-    // targeting this keyword *should* contain. Fetching the live page first is
-    // the difference between a template and an actual audit. inspectPage is the
-    // crawler stepAudit already uses, so nothing new fetches or parses HTML.
     const auditUrl = (p.target_url as string) || "";
-    // Phase 8B: opt into JS rendering. inspectPage only pays for a render when
-    // the raw HTML comes back too short to be the real page, so a
-    // server-rendered target costs nothing extra. Gated so a future plan tier
-    // can turn it off without touching this logic.
     const render = canUse(brand, "js_rendering");
     const live = auditUrl ? await safe(() => inspectPage(auditUrl, { render })) : null;
-
-    // Only pass the fetched text if enough of it came back to be the real page.
-    // With rendering on this is now rarely the fallback path, but it still
-    // guards the cases rendering can't fix — an unreachable host, a render
-    // failure, or a page that genuinely is near-empty. Handing the agent a
-    // shell is worse than handing it nothing: it would conclude the page is
-    // almost empty and recommend rewriting content that is actually there.
-    // auditPage's prompt already handles "no content provided" explicitly.
     const readable = live && live.words >= RENDER_THRESHOLD_WORDS ? live.text : "";
     if (live && !readable) {
       console.warn(
@@ -206,34 +144,215 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
         `(render=${render}) — auditing without page content.`
       );
     }
-
     title = `Audit + rewrite: ${p.target_url || kw}`;
     body = await auditPage(brand, kw, readable);
   } else {
-    title = `Meta rewrite: ${p.target_url || kw}`; body = await rewriteMeta(brand, (p.target_url as string) || "", `Target keyword: ${kw}`);
+    title = `Meta rewrite: ${p.target_url || kw}`;
+    body = await rewriteMeta(brand, (p.target_url as string) || "", `Target keyword: ${kw}`);
   }
-  if (!body) return;
+  if (!body) {
+    if (agentTaskId) {
+      await updateAgentTask(brand.id, agentTaskId, {
+        status: "failed",
+        error: "Empty specialist output",
+        finished_at: new Date().toISOString(),
+      });
+    }
+    return;
+  }
 
-  // Auto mode: publish immediately. Review mode: wait for approval.
-  const autoMode = brand.auto_publish_meta;
+  const taskType = (p.intent ? "fix_meta" : type) as TaskType;
+  const risk = normalizeRisk(p.risk_level, taskType === "fix_meta" ? "low" : "medium");
+  const confidence = clampConfidence(p.confidence, taskType === "fix_meta" ? 0.75 : 0.6);
+
+  // Cannibalization guard for new pages/blogs (hard safety net).
+  let effectiveType = taskType;
+  let effectiveUrl = (p.target_url as string) || null;
+  let rationale = (p.rationale as string) || "Search-intent qualification.";
+  if (effectiveType === "new_page" || effectiveType === "new_blog") {
+    const existing = await existingTopics(brand.id);
+    const match = findExistingMatch(kw, existing);
+    if (match) {
+      effectiveType = "improve_content";
+      effectiveUrl = match.url || effectiveUrl;
+      rationale = `${rationale} (redirected from new page — topic already exists)`;
+    }
+  }
+
+  const ctx = await buildSharedContext(brand, { runId, objective: title });
+  let qa = await runQaCritic({
+    brand,
+    ctx,
+    runId,
+    taskId: agentTaskId,
+    title,
+    body,
+    taskType: effectiveType,
+    targetKeyword: kw || null,
+    revisionAttempt: 0,
+  });
+
+  // Bounded single revision attempt on REVISE.
+  if (qa.evaluation.outcome === "REVISE" && !p.intent) {
+    const revised = await reviseDraft(brand, body, qa.evaluation.feedback).catch(() => "");
+    if (revised) {
+      body = revised;
+      qa = await runQaCritic({
+        brand,
+        ctx,
+        runId,
+        taskId: agentTaskId,
+        title,
+        body,
+        taskType: effectiveType,
+        targetKeyword: kw || null,
+        revisionAttempt: 1,
+      });
+      await recordActivity({
+        brandId: brand.id,
+        runId,
+        taskId: agentTaskId,
+        capability: "content",
+        eventType: "content_revised",
+        title: `Revised after QA: ${title.slice(0, 80)}`,
+        status: "info",
+      });
+    }
+  }
+
+  const publishTarget = await resolvePublishTarget(brand.id);
+  const mode = resolveExecutionMode(brand);
+  const actionType = effectiveType as ProposedActionType;
+  const pendingContent = await countPendingContentJobs(brand.id);
+  const policy = decidePolicy({
+    brandId: brand.id,
+    mode,
+    autopilotEnabled: brand.autopilot_enabled !== false,
+    actionType,
+    riskLevel: risk as RiskLevel,
+    confidence,
+    qaOutcome: qa.evaluation.outcome,
+    adapterAvailable: publishTarget.ok,
+    reversible: effectiveType === "fix_meta",
+    withinRunLimits: pendingContent <= MAX_MANAGER_ITEMS + 4,
+    requiresLivePublish: effectiveType === "new_page" || effectiveType === "new_blog",
+    cannibalizationSuspected: rationale.includes("topic already exists"),
+  });
+
+  // Draft status: BLOCK → pending_review (never auto). AUTO_EXECUTE may approve.
+  // improve_content is never live-publishable via toSiteChange — keep pending/approved only.
+  let status: "pending_review" | "approved" | "published" = "pending_review";
+  if (qa.evaluation.outcome === "BLOCK" || policy.decision === "BLOCK") {
+    status = "pending_review";
+  } else if (policy.decision === "AUTO_EXECUTE" && canAutoPublishAfterQa(qa.evaluation.outcome)) {
+    status = "approved";
+  } else {
+    status = "pending_review";
+  }
+
   const { data: inserted } = await db.from("drafts").insert({
-    brand_id: brand.id, run_id: runId, task_type: p.intent ? "fix_meta" : type,
-    target_url: (p.target_url as string) || null, target_keyword: kw || null,
-    title, body, rationale: (p.rationale as string) || "Search-intent qualification.",
-    status: autoMode ? "approved" : "pending_review",
+    brand_id: brand.id,
+    run_id: runId,
+    task_type: effectiveType,
+    target_url: effectiveUrl,
+    target_keyword: kw || null,
+    title,
+    body,
+    rationale: `${rationale} | policy: ${policy.decision} (${policy.reason}) | QA: ${qa.evaluation.outcome}`,
+    status,
   }).select().single();
 
-  // In auto mode, immediately publish blog/page content live.
-  if (autoMode && inserted && (type === "new_blog" || type === "new_page")) {
+  // Link QA to draft so stepPublish can fail closed on missing PASS.
+  if (inserted?.id) {
+    await linkQaResultToDraft(brand.id, inserted.id, {
+      qaId: qa.qaId,
+      taskId: agentTaskId,
+    });
+  }
+
+  await recordActivity({
+    brandId: brand.id,
+    runId,
+    taskId: agentTaskId,
+    capability: "content",
+    eventType: status === "approved" ? "auto_approved" : "draft_queued",
+    title: status === "approved"
+      ? `Auto-approved: ${title.slice(0, 80)}`
+      : `Waiting for approval: ${title.slice(0, 80)}`,
+    detail: policy.reason,
+    decision: policy.decision,
+    status: status === "approved" ? "success" : "waiting",
+    metadata: { draftId: inserted?.id, qa: qa.evaluation.outcome, mode },
+  });
+
+  // Autopilot/Hybrid: publish blog/page into content table when approved.
+  if (
+    status === "approved" &&
+    inserted &&
+    (effectiveType === "new_blog" || effectiveType === "new_page") &&
+    policy.decision === "AUTO_EXECUTE"
+  ) {
     const raw = kw || title.replace(/^(Blog|Page):\s*/i, "");
     const base = slugify(raw);
-    const slug = type === "new_page" ? base : `blog/${base}`;
+    const slug = effectiveType === "new_page" ? base : `blog/${base}`;
     const { title: cleanTitle, body: cleanBody } = splitFrontMatter(body, title);
     await db.from("content").upsert(
       { slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() },
       { onConflict: "brand_id,slug" }
     );
     await db.from("drafts").update({ status: "published" }).eq("id", inserted.id);
+    await recordActivity({
+      brandId: brand.id,
+      runId,
+      capability: "content",
+      eventType: "auto_published",
+      title: `Auto-published: ${cleanTitle.slice(0, 80)}`,
+      decision: policy.reason,
+      status: "success",
+      metadata: { slug, draftId: inserted.id },
+    });
+    // Also enqueue live adapter publish when a platform is connected.
+    if (publishTarget.ok && publishTarget.adapter.capabilities.includes("upsert_page")) {
+      await enqueue(brand.id, "publish", { draftId: inserted.id, runId, agentTaskId });
+    }
+  }
+
+  // Hybrid/Autopilot meta: pick option 0 explicitly (audited) when auto-publishing.
+  // toSiteChange refuses missing metaChoice by design — autopilot must choose.
+  if (
+    status === "approved" &&
+    inserted &&
+    effectiveType === "fix_meta" &&
+    policy.decision === "AUTO_EXECUTE" &&
+    publishTarget.ok &&
+    publishTarget.adapter.capabilities.includes("update_meta")
+  ) {
+    await enqueue(brand.id, "publish", {
+      draftId: inserted.id,
+      runId,
+      agentTaskId,
+      metaChoice: 0,
+      autoSelectedMeta: true,
+    });
+    await recordActivity({
+      brandId: brand.id,
+      runId,
+      capability: "content",
+      eventType: "auto_meta_selected",
+      title: `Auto-selected meta option 0 for ${effectiveUrl || title}`,
+      detail: "Hybrid/Autopilot chose the first generated title/meta option.",
+      status: "info",
+      metadata: { draftId: inserted.id, metaChoice: 0 },
+    });
+  }
+
+  if (agentTaskId) {
+    await updateAgentTask(brand.id, agentTaskId, {
+      status: qa.evaluation.outcome === "BLOCK" ? "blocked" : "done",
+      finished_at: new Date().toISOString(),
+      result_summary: `${policy.decision} / QA ${qa.evaluation.outcome}`,
+      revision_count: qa.evaluation.outcome === "REVISE" ? 1 : 0,
+    });
   }
 }
 
@@ -331,16 +450,21 @@ export async function stepAudit(brand: Brand, runId: string) {
     });
   }
 
-  // Queue the top 2 highest-severity content fixes as improvement tasks.
-  const high = issues.filter((i) => i.severity === "high").slice(0, 2);
-  for (const issue of high) {
-    await enqueue(brand.id, "content", {
-      task_type: issue.task_type === "improve_content" ? "improve_content" : "fix_meta",
-      target_url: issue.url,
-      rationale: `Auditor: ${issue.problem} — ${issue.fix}`,
-      runId,
-    });
-  }
+  // Feature 01: detect → prioritize → fix → verify (where adapters allow).
+  const fromAi: import("./technical").TechIssue[] = issues.map((i) => ({
+    url: i.url,
+    problem: i.problem,
+    severity: (i.severity === "high" || i.severity === "medium" || i.severity === "low"
+      ? i.severity
+      : "medium") as "high" | "medium" | "low",
+    fix: i.fix,
+    task_type: i.task_type === "improve_content" ? "improve_content" : "fix_meta",
+    automatable: i.task_type !== "improve_content",
+    impact: i.severity === "high" ? 90 : i.severity === "medium" ? 60 : 30,
+  }));
+  await safe(() =>
+    runTechnicalExecution(brand, pages, { runId, extraIssues: fromAi })
+  );
 }
 
 // 100 minus weighted deductions per issue severity found during the day's
@@ -400,6 +524,59 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
   }
   if (draft.status === "dismissed") {
     throw new Error(`stepPublish: draft ${draftId} was dismissed and must not be published`);
+  }
+
+  // Feature 01: policy + latest QA gate before any live-site change.
+  const latestQa = await safe(async () => {
+    const { data } = await db
+      .from("agent_qa_results")
+      .select("outcome")
+      .eq("brand_id", brand.id)
+      .eq("draft_id", draftId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return data?.outcome as "PASS" | "REVISE" | "BLOCK" | undefined;
+  });
+  const publishTarget = await resolvePublishTarget(brand.id);
+  const mode = resolveExecutionMode(brand);
+  const actionType = (draft.task_type as ProposedActionType) || "new_page";
+  const humanApproved = draft.status === "approved" || draft.status === "published";
+  const policy = decidePolicy({
+    brandId: brand.id,
+    mode,
+    autopilotEnabled: brand.autopilot_enabled !== false,
+    actionType,
+    riskLevel: draft.task_type === "fix_meta" ? "low" : "medium",
+    confidence: 0.7,
+    // Human-approved drafts: treat missing QA as PASS for policy purposes only
+    // when a human already approved. Autopilot jobs must have linked QA PASS.
+    qaOutcome: latestQa || (humanApproved ? "PASS" : null),
+    adapterAvailable: publishTarget.ok,
+    reversible: draft.task_type === "fix_meta",
+    withinRunLimits: true,
+    requiresLivePublish: true,
+  });
+
+  // BLOCK always stops. Autopilot AUTO_EXECUTE without linked QA PASS stops.
+  if (policy.decision === "BLOCK" || latestQa === "BLOCK") {
+    await recordActivity({
+      brandId: brand.id,
+      capability: "qa_critic",
+      eventType: "publish_blocked",
+      title: `Publish blocked for draft ${draftId}`,
+      detail: policy.reason,
+      decision: policy.decision,
+      status: "blocked",
+    });
+    throw new Error(`stepPublish: blocked by policy/QA — ${policy.reason}`);
+  }
+  if (!humanApproved && policy.decision !== "AUTO_EXECUTE") {
+    throw new Error(`stepPublish: draft ${draftId} is not approved`);
+  }
+  // Autopilot path must have an explicit QA PASS row linked to the draft.
+  if (!humanApproved && latestQa !== "PASS") {
+    throw new Error(`stepPublish: autopilot publish requires linked QA PASS for draft ${draftId}`);
   }
 
   const metaChoice = typeof payload.metaChoice === "number" ? payload.metaChoice : undefined;

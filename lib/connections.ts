@@ -274,7 +274,7 @@ async function lastSuccessfulSync(brandId: string, kinds: string[]): Promise<str
 }
 
 /**
- * Website publishing (WordPress / webhook).
+ * Website publishing (WordPress / Shopify / webhook).
  *
  * Credentials live in brand_integrations and the adapters already exist in
  * lib/execution. This reports their state; the live credential check stays in
@@ -323,15 +323,24 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   }
 
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
+  const label =
+    active.provider === "wordpress"
+      ? "WordPress"
+      : active.provider === "shopify"
+        ? "Shopify"
+        : active.provider === "webhook"
+          ? "Webhook"
+          : active.provider;
   return {
     ...base,
     status: "connected",
-    detail: active.provider,
+    detail: label,
     why: "Connected — approved changes can be published to your site.",
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
-    actions: ["sync_now", "reconnect", "disconnect"],
+    // No sync_now: publishing needs a draft. Reconnect re-opens the setup form.
+    actions: ["reconnect", "disconnect"],
   };
 }
 

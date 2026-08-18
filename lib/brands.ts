@@ -15,6 +15,8 @@ export type BusinessModel =
   | "national_brand"
   | "content_publisher";
 
+import type { ExecutionMode } from "./agents/contracts";
+
 export type Brand = {
   id: string;
   slug: string;
@@ -29,6 +31,10 @@ export type Brand = {
   competitors: string | null;
   intent_notes: string | null;
   auto_publish_meta: boolean;
+  /** Feature 01 automation mode. Absent until migration 013; resolve via policy. */
+  execution_mode?: ExecutionMode | null;
+  /** Emergency kill switch for Hybrid/Autopilot auto-execution. */
+  autopilot_enabled?: boolean | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;
