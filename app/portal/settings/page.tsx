@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { usePortalAuth } from "@/lib/portalAuth";
+import { authedFetch } from "@/lib/authedFetch";
 import PageHeader from "../_components/PageHeader";
 import SubNav from "../_components/SubNav";
 import ConnectCard from "../_components/ConnectCard";
@@ -9,10 +10,11 @@ import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger } from "../_components/motion";
 import { IconExternal } from "../icons";
 
-type Tab = "business" | "connections" | "notifications" | "security";
+type Tab = "business" | "automation" | "connections" | "notifications" | "security";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "business", label: "Business" },
+  { key: "automation", label: "Automation" },
   { key: "connections", label: "Connections" },
   { key: "notifications", label: "Notifications" },
   { key: "security", label: "Security" },
@@ -20,26 +22,36 @@ const TABS: { key: Tab; label: string }[] = [
 
 const isTab = (v: string | null): v is Tab => TABS.some((t) => t.key === v);
 
-export default function SettingsPage() {
-  const { brand } = usePortalAuth();
-  const [tab, setTab] = useState<Tab>("business");
+type ActivityRow = {
+  id: string;
+  title: string;
+  detail: string | null;
+  decision: string | null;
+  status: string;
+  created_at: string;
+  event_type: string;
+  capability: string | null;
+};
 
-  // Restore the tab from the URL.
-  //
-  // Returning from a Google sign-in lands on /portal/settings?tab=connections,
-  // but the tab used to be local state seeded with "business", so the customer
-  // was dropped on Business having just connected something on Connections.
-  //
-  // Read in an effect rather than in the initial state: this page is
-  // prerendered, so touching window during render would break the build, and
-  // seeding differently on server and client would be a hydration mismatch.
+export default function SettingsPage() {
+  const { brand, isAdmin } = usePortalAuth();
+  const [tab, setTab] = useState<Tab>("business");
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [mode, setModeState] = useState<"approval" | "hybrid" | "autopilot">("approval");
+  const [savingMode, setSavingMode] = useState(false);
+
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("tab");
     if (isTab(wanted)) setTab(wanted);
   }, []);
 
-  // Keep the URL in step when the customer switches tabs, so a refresh, a
-  // back button or a shared link all stay where they were.
+  useEffect(() => {
+    if (!brand) return;
+    setModeState(
+      brand.execution_mode || (brand.auto_publish_meta ? "hybrid" : "approval")
+    );
+  }, [brand]);
+
   const goToTab = useCallback((next: Tab) => {
     setTab(next);
     const params = new URLSearchParams(window.location.search);
@@ -47,7 +59,32 @@ export default function SettingsPage() {
     window.history.replaceState({}, "", `${window.location.pathname}?${params}`);
   }, []);
 
+  useEffect(() => {
+    if (!brand?.id || tab !== "automation") return;
+    authedFetch(`/api/portal/activity?brand=${brand.id}`)
+      .then((r) => r.json())
+      .then((d) => setActivity(d.activity || []))
+      .catch(() => setActivity([]));
+  }, [brand?.id, tab]);
+
   if (!brand) return null;
+
+  async function setMode(next: "approval" | "hybrid" | "autopilot") {
+    if (!brand) return;
+    setSavingMode(true);
+    try {
+      await authedFetch(`/api/brand/${brand.id}/mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ execution_mode: next }),
+      });
+      setModeState(next);
+      brand.execution_mode = next;
+      brand.auto_publish_meta = next !== "approval";
+    } finally {
+      setSavingMode(false);
+    }
+  }
 
   return (
     <div className="p-stack">
@@ -87,11 +124,79 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {tab === "automation" && (
+        <div className="p-stack">
+          <Panel>
+            <PanelHead
+              title="Automation mode"
+              sub="Controls how far your SEO team can go without asking. Approval is safest; Autopilot still respects QA and safety limits."
+            />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {([
+                ["approval", "Approval", "Research and drafts only — you publish."],
+                ["hybrid", "Hybrid", "Safe meta fixes may auto-run; bigger changes wait."],
+                ["autopilot", "Autopilot", "Full loop within policy, QA, and quotas."],
+              ] as const).map(([key, label, desc]) => (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={savingMode}
+                  onClick={() => setMode(key)}
+                  style={{
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: mode === key ? "2px solid currentColor" : "1px solid rgba(0,0,0,0.06)",
+                    background: mode === key ? "rgba(0,0,0,0.04)" : "transparent",
+                    cursor: "pointer",
+                    maxWidth: 220,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>{label}</div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>{desc}</div>
+                </button>
+              ))}
+            </div>
+            {!isAdmin && (
+              <p style={{ fontSize: 12, opacity: 0.65, margin: 0 }}>
+                Mode changes apply to your brand immediately. You can switch back to Approval anytime.
+              </p>
+            )}
+          </Panel>
+
+          <Panel>
+            <PanelHead
+              title="What the team is doing"
+              sub="Concise decisions and outcomes — not raw model reasoning."
+            />
+            {activity.length === 0 ? (
+              <p style={{ opacity: 0.65, margin: 0 }}>
+                No autonomous activity recorded yet. Run the agents to populate this feed.
+              </p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {activity.slice(0, 25).map((a) => (
+                  <li key={a.id} style={{ padding: "10px 0", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                    <div style={{ fontWeight: 600 }}>{a.title}</div>
+                    <div style={{ fontSize: 12, opacity: 0.65 }}>
+                      {a.capability || a.event_type}
+                      {a.decision ? ` · ${a.decision}` : ""}
+                      {" · "}
+                      {new Date(a.created_at).toLocaleString()}
+                    </div>
+                    {a.detail && (
+                      <div style={{ fontSize: 12, opacity: 0.55, marginTop: 4 }}>{a.detail}</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+      )}
+
       {tab === "connections" && (
         <div className="p-stack">
-          {/* Was a static list derived from two brand columns: it could not
-              report freshness, could not act, and could not explain itself.
-              Every one of those is now live — see lib/connections.ts. */}
           <ConnectionsPanel brandId={brand.id} />
         </div>
       )}

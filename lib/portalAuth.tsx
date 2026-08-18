@@ -16,6 +16,8 @@ export type PortalBrand = {
   gbp_location_id?: string | null;
   owner_email?: string | null;
   auto_publish_meta?: boolean;
+  execution_mode?: "approval" | "hybrid" | "autopilot" | null;
+  autopilot_enabled?: boolean | null;
 };
 
 type PortalAuthState = {
