@@ -2,28 +2,74 @@
 import Link from "next/link";
 import MarketingShell, { TALK_TO_US_HREF } from "@/app/_components/MarketingShell";
 import { PLATFORM_NAME, TRIAL_DAYS } from "@/lib/ui/tokens";
-import { PLAN_CAPACITY, type PlanKey } from "@/lib/capabilities";
 
 // Pricing is sold as execution capacity — how much the AI OS can run —
 // not as Semrush-style toolkit SKUs. Stripe amounts stay in env; labels here
-// describe the capacity package each plan unlocks.
+// describe the capacity package each plan unlocks. Kept local so marketing
+// can ship without requiring the full billing entitlement system.
+
+type PlanKey = "founding" | "growth" | "managed";
+
+const PLANS: Record<
+  PlanKey,
+  {
+    label: string;
+    tagline: string;
+    priceLabel: string;
+    priceHint: string;
+    bullets: string[];
+  }
+> = {
+  founding: {
+    label: "Founding",
+    tagline: "One brand. Full AI loop. Approve and ship.",
+    priceLabel: "Early access",
+    priceHint: "Per brand · locked founding rate when billing is live",
+    bullets: [
+      "Up to 2 full agent runs / day",
+      "Track 500 keywords",
+      "25 AI visibility prompts",
+      "5 competitors in gap analysis",
+      "2 AI images / day",
+      "Approve → publish to WordPress / Shopify",
+      "Review reply automation + GBP posts",
+      "Conversion signals when Analytics is connected",
+    ],
+  },
+  growth: {
+    label: "Growth",
+    tagline: "More runs, more keywords, deeper AI visibility.",
+    priceLabel: "Scale",
+    priceHint: "Higher throughput for ongoing agent work",
+    bullets: [
+      "Up to 8 full agent runs / day",
+      "Track 2,000 keywords",
+      "100 AI visibility prompts",
+      "15 competitors in gap analysis",
+      "10 AI images / day",
+      "Approve → publish to WordPress / Shopify",
+      "Review reply automation + GBP posts",
+      "Conversion signals when Analytics is connected",
+      "Higher API throughput for ongoing agent work",
+    ],
+  },
+  managed: {
+    label: "Managed",
+    tagline: "Human operators alongside the platform.",
+    priceLabel: "Custom",
+    priceHint: "Sales-led · operators + platform capacity",
+    bullets: [
+      "Custom agent-run capacity",
+      "Custom keyword and prompt limits",
+      "Approve → publish to WordPress / Shopify",
+      "Review reply automation + GBP posts",
+      "Conversion signals when Analytics is connected",
+      "Human operators alongside the platform",
+    ],
+  },
+};
 
 const ORDER: PlanKey[] = ["founding", "growth", "managed"];
-
-function bullets(plan: PlanKey): string[] {
-  const c = PLAN_CAPACITY[plan];
-  const q = c.quotas;
-  return [
-    `Up to ${q.agent_runs_per_day} full agent runs / day`,
-    `Track ${q.tracked_keywords.toLocaleString()} keywords`,
-    `${q.ai_prompts} AI visibility prompts`,
-    `${q.competitors} competitors in gap analysis`,
-    `${q.images_per_day} AI images / day`,
-    "Approve → publish to WordPress / Shopify",
-    "Review reply automation + GBP posts",
-    "Conversion signals when Analytics is connected",
-  ];
-}
 
 export default function PricingPage() {
   return (
@@ -44,7 +90,7 @@ export default function PricingPage() {
 
           <div className="mk-price-grid">
             {ORDER.map((key) => {
-              const plan = PLAN_CAPACITY[key];
+              const plan = PLANS[key];
               const featured = key === "founding";
               return (
                 <article key={key} className={`mk-price${featured ? " is-featured" : ""}`}>
@@ -54,14 +100,12 @@ export default function PricingPage() {
                   </p>
                   <p>{plan.tagline}</p>
                   <ul>
-                    {bullets(key).map((b) => (
+                    {plan.bullets.map((b) => (
                       <li key={b}>{b}</li>
                     ))}
                     {key === "founding" && (
                       <li>{TRIAL_DAYS}-day trial · founding rate locked when billing goes live</li>
                     )}
-                    {key === "growth" && <li>Higher API throughput for ongoing agent work</li>}
-                    {key === "managed" && <li>Human operators alongside the platform</li>}
                   </ul>
                   {key === "managed" ? (
                     <a href={TALK_TO_US_HREF} className="mk-btn mk-btn-secondary">
@@ -100,7 +144,7 @@ export default function PricingPage() {
           <p className="mk-price-note">
             Start a trial to create your account and brand workspace. Card checkout unlocks when
             Stripe is configured — until then there are no surprise auto-charges.{" "}
-            {PLAN_CAPACITY.founding.priceHint}.
+            {PLANS.founding.priceHint}.
           </p>
         </div>
       </main>

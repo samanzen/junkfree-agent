@@ -76,7 +76,7 @@ export async function fetchDomainIntel(finalUrl: string): Promise<AuditDomainInt
     const [overview, backlinks, ranked] = await Promise.all([
       domainOverview(domain).catch(() => null),
       backlinksSummary(domain).catch(() => null),
-      rankedKeywords(domain, {}, RANKED_FETCH_LIMIT).catch(
+      rankedKeywords(domain, {}).catch(
         () => [] as { keyword: string; position: number; volume: number | null }[]
       ),
     ]);
