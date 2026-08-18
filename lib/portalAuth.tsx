@@ -52,7 +52,8 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
       const isAdmin = me.role === "admin";
 
       if (!me.brand_id && !isAdmin) {
-        setState({ loading: false, error: "No brand linked to your account. Please contact support.", isAdmin, brand: null });
+        // Self-serve customers finish brand creation on /onboarding before the portal.
+        router.replace("/onboarding");
         return;
       }
 

@@ -23,6 +23,23 @@
 // lives here so that decision is one edit, not a search across the codebase.
 export const PLATFORM_NAME = "SEO Platform";
 
+/**
+ * Short product line shown under the mark (sidebar, login, marketing).
+ * Kept separate from PLATFORM_NAME so renaming the product does not force
+ * every surface to reuse the same sentence.
+ */
+export const PLATFORM_TAGLINE = "AI SEO operating system";
+
+/** Root metadata / marketing one-liner. Promise must stay ≤ shipped reality. */
+export const PLATFORM_DESCRIPTION =
+  "Your AI SEO team — connect your site, approve the work, publish safely, and measure the results.";
+
+/**
+ * Free trial length, in days.
+ * Centralised because it appears in marketing copy, signup, and pricing.
+ */
+export const TRIAL_DAYS = 14;
+
 /** "Acme Roofing | SEO Platform", or just the platform name when no tenant is resolved. */
 export function pageTitle(tenantName?: string | null): string {
   return tenantName ? `${tenantName} | ${PLATFORM_NAME}` : PLATFORM_NAME;
