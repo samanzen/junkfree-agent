@@ -68,11 +68,20 @@ export async function POST(req: NextRequest) {
   if (limited) return limited;
 
   const cleanDomain = normalizeCompetitorDomain(domain);
+  if (!cleanDomain || !cleanDomain.includes(".")) {
+    return NextResponse.json(
+      {
+        error:
+          "Enter a website domain like competitor.com — a business name alone won’t work.",
+      },
+      { status: 400 }
+    );
+  }
   if (!isTrackableCompetitor(cleanDomain)) {
     return NextResponse.json(
       {
         error:
-          "That is not a competitor. Add another business in your industry (e.g. another moving company) — not Facebook, Yelp, or an unrelated vertical.",
+          "That isn’t a competitor site. Add another business in your industry — not Facebook, Yelp, or a directory.",
       },
       { status: 400 }
     );
