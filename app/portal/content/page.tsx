@@ -15,8 +15,10 @@ import { Stagger, fadeUp, EASE } from "../_components/motion";
 import { IconContent, IconSparkle, IconCheck } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
-import { displayWorkTitle, queueHintFor } from "@/lib/recommendations/preview";
+import { decisionWhy, displayWorkTitle, plannedPageUrl } from "@/lib/recommendations/preview";
 import { useToast } from "@/app/_components/Notify";
+import Field from "@/app/_components/Field";
+import { authedFetch } from "@/lib/authedFetch";
 import { m } from "framer-motion";
 
 type Tab = "review" | "published" | "google" | "scheduled" | "writer";
@@ -169,23 +171,47 @@ export default function ContentPage() {
 }
 
 function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: string; siteUrl: string }) {
+  const href = plannedPageUrl({
+    taskType: draft.task_type,
+    title: draft.title,
+    targetUrl: draft.target_url,
+    targetKeyword: draft.target_keyword,
+    siteUrl,
+  });
   return (
     <PreviewPlanCard
       kind={TYPE_LABEL[draft.task_type] || draft.task_type}
       title={displayWorkTitle(draft.title)}
-      hint={queueHintFor(draft.task_type, { body: draft.body })}
+      href={href}
+      why={decisionWhy("draft", draft.rationale)}
       meta={
         <>
           {draft.target_keyword && <span>🎯 {draft.target_keyword}</span>}
           <span>{new Date(draft.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
         </>
       }
-      work={{ title: draft.title, body: draft.body, taskType: draft.task_type, targetUrl: draft.target_url }}
+      work={{
+        title: draft.title,
+        body: draft.body,
+        taskType: draft.task_type,
+        targetUrl: draft.target_url,
+        targetKeyword: draft.target_keyword,
+        rationale: draft.rationale,
+        plannedUrl: href,
+      }}
       brandName={brandName}
       siteUrl={siteUrl}
       approveLabel="Approve & publish"
       onApprove={() => approveDraft(draft.id)}
       onDismiss={() => dismissDraft(draft.id)}
+      onFeedback={async (text) => {
+        const res = await authedFetch(`/api/drafts/${draft.id}/revise`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ feedback: text }),
+        });
+        return res.ok;
+      }}
     />
   );
 }
@@ -195,7 +221,7 @@ function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: strin
     <PreviewPlanCard
       kind="Google post"
       title={post.title || "Google Business Profile post"}
-      hint={queueHintFor("google_post", { brandName })}
+      why={decisionWhy("google_post", null)}
       meta={<span>{new Date(post.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
       work={{ title: post.title || "Google post", body: post.body, taskType: "google_post", cta: post.cta || "" }}
       brandName={brandName}
@@ -208,11 +234,12 @@ function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: strin
 }
 
 function PreviewPlanCard({
-  kind, title, hint, meta, work, brandName, siteUrl, approveLabel, onApprove, onDismiss,
+  kind, title, href, why, meta, work, brandName, siteUrl, approveLabel, onApprove, onDismiss, onFeedback,
 }: {
   kind: string;
   title: string;
-  hint: string;
+  href?: string | null;
+  why?: string | null;
   meta?: ReactNode;
   work: WorkPreviewModel;
   brandName: string;
@@ -220,11 +247,15 @@ function PreviewPlanCard({
   approveLabel: string;
   onApprove: () => Promise<boolean>;
   onDismiss: () => Promise<boolean>;
+  onFeedback?: (text: string) => Promise<boolean>;
 }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<"" | "approved" | "dismissed">("");
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
 
   async function run(which: "approve" | "dismiss") {
     setBusy(true);
@@ -233,6 +264,20 @@ function PreviewPlanCard({
     if (ok) {
       setDone(which === "approve" ? "approved" : "dismissed");
       setOpen(false);
+    } else {
+      toast.error("That didn't go through", "Please try again in a moment.");
+    }
+  }
+
+  async function sendFeedback() {
+    if (!onFeedback || !feedbackText.trim()) return;
+    setBusy(true);
+    const ok = await onFeedback(feedbackText.trim());
+    setBusy(false);
+    if (ok) {
+      toast.success("Draft revised", "The agent has rewritten it with your feedback.");
+      setFeedbackText("");
+      setFeedbackOpen(false);
     } else {
       toast.error("That didn't go through", "Please try again in a moment.");
     }
@@ -263,15 +308,47 @@ function PreviewPlanCard({
           <div style={{ minWidth: 0 }}>
             <span className="p-chip">{kind}</span>
             <h3 className="p-approve-title">{title}</h3>
+            {href && (
+              <a className="p-approve-url" href={href} target="_blank" rel="noreferrer">{href}</a>
+            )}
             {meta && <div className="p-approve-meta">{meta}</div>}
           </div>
         </div>
-        <p style={{ margin: "0 0 4px", fontSize: 13.5, lineHeight: 1.6, color: "var(--text2)" }}>{hint}</p>
+        {whyOpen && why && <p className="p-approve-why">{why}</p>}
+        {feedbackOpen && onFeedback && (
+          <div style={{ display: "flex", gap: 8, margin: "8px 0 4px", alignItems: "flex-end" }}>
+            <Field
+              hideLabel
+              label="Feedback for the agent"
+              value={feedbackText}
+              disabled={busy}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void sendFeedback(); }}
+              placeholder="Tell the agent what to change…"
+            />
+            <button type="button" className="p-btn primary" disabled={busy} onClick={() => void sendFeedback()}>
+              {busy ? "…" : "Send"}
+            </button>
+          </div>
+        )}
         <div className="p-approve-foot">
           <div className="p-approve-actions">
             <m.button type="button" className="p-btn primary" onClick={() => setOpen(true)} whileTap={{ scale: 0.97 }}>
               Preview
             </m.button>
+            <m.button type="button" className="p-btn primary" disabled={busy} onClick={() => void run("approve")} whileTap={{ scale: 0.97 }}>
+              {busy ? "…" : approveLabel.startsWith("Approve") ? "Approve" : approveLabel}
+            </m.button>
+            {onFeedback && (
+              <m.button type="button" className="p-btn ghost" onClick={() => { setFeedbackOpen((v) => !v); setWhyOpen(false); }} whileTap={{ scale: 0.97 }}>
+                Feedback
+              </m.button>
+            )}
+            {why && (
+              <m.button type="button" className="p-btn ghost" onClick={() => { setWhyOpen((v) => !v); setFeedbackOpen(false); }} whileTap={{ scale: 0.97 }}>
+                Why
+              </m.button>
+            )}
           </div>
         </div>
       </m.article>
@@ -283,8 +360,15 @@ function PreviewPlanCard({
         work={work}
         approveLabel={approveLabel}
         busy={busy}
+        why={why}
         onApprove={() => { void run("approve"); }}
         onDecline={() => { void run("dismiss"); }}
+        feedback={onFeedback ? {
+          value: feedbackText,
+          onChange: setFeedbackText,
+          onSend: () => { void sendFeedback(); },
+          sending: busy,
+        } : undefined}
       />
     </>
   );

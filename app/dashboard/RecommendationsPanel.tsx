@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import Field from "@/app/_components/Field";
 import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
-import { displayWorkTitle, queueHintFor } from "@/lib/recommendations/preview";
+import { decisionWhy, displayWorkTitle, plannedPageUrl } from "@/lib/recommendations/preview";
 import {
   RECOMMENDATION_SECTIONS,
   isSectionAutopilot,
@@ -16,6 +17,7 @@ type Draft = {
   brand_id: string;
   task_type: string;
   target_url: string | null;
+  target_keyword?: string | null;
   title: string;
   body: string;
   rationale: string;
@@ -96,6 +98,8 @@ export default function RecommendationsPanel({
   const [preview, setPreview] = useState<WorkPreviewModel | null>(null);
   const [previewId, setPreviewId] = useState<string>("");
   const [previewKind, setPreviewKind] = useState<"draft" | "gbp" | null>(null);
+  const [whyId, setWhyId] = useState("");
+  const [cardFeedbackId, setCardFeedbackId] = useState("");
   const autopilot = readAutopilotMap(brand);
   const sectionAuto = isSectionAutopilot(brand, section);
 
@@ -108,8 +112,22 @@ export default function RecommendationsPanel({
       setPreviewKind(null);
       return;
     }
-    setPreview({ title: d.title, body: d.body, taskType: d.task_type, targetUrl: d.target_url });
-  }, [drafts, previewId, previewKind]);
+    setPreview({
+      title: d.title,
+      body: d.body,
+      taskType: d.task_type,
+      targetUrl: d.target_url,
+      targetKeyword: d.target_keyword,
+      rationale: d.rationale,
+      plannedUrl: plannedPageUrl({
+        taskType: d.task_type,
+        title: d.title,
+        targetUrl: d.target_url,
+        targetKeyword: d.target_keyword,
+        siteUrl: brand.site_url,
+      }),
+    });
+  }, [drafts, previewId, previewKind, brand.site_url]);
 
   const pageDrafts = useMemo(
     () => drafts.filter((d) => sectionForTaskType(d.task_type) === "pages"),
@@ -195,30 +213,96 @@ export default function RecommendationsPanel({
 
       {section !== "google_posts" && section !== "backlinks" && (
         <>
-          {sectionDrafts.map((d) => (
-            <article className="card" key={d.id}>
-              <div className="meta">
-                <span className="kind">{LABEL[d.task_type] || d.task_type}</span>
-                <span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span>
-              </div>
-              <h3>{displayWorkTitle(d.title)}</h3>
-              <p className="why">{queueHintFor(d.task_type, { body: d.body })}</p>
-              <div className="acts">
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setPreviewKind("draft");
-                    setPreviewId(d.id);
-                    setPreview({ title: d.title, body: d.body, taskType: d.task_type, targetUrl: d.target_url });
-                    onFeedbackFor(d.id);
-                    onFeedbackText("");
-                  }}
-                >
-                  Preview
-                </button>
-              </div>
-            </article>
-          ))}
+          {sectionDrafts.map((d) => {
+            const href = plannedPageUrl({
+              taskType: d.task_type,
+              title: d.title,
+              targetUrl: d.target_url,
+              targetKeyword: d.target_keyword,
+              siteUrl: brand.site_url,
+            });
+            const why = decisionWhy("draft", d.rationale);
+            return (
+              <article className="card" key={d.id}>
+                <div className="meta">
+                  <span className="kind">{LABEL[d.task_type] || d.task_type}</span>
+                  <span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span>
+                </div>
+                <h3>{displayWorkTitle(d.title)}</h3>
+                {href ? (
+                  <a className="link" href={href} target="_blank" rel="noreferrer">{href}</a>
+                ) : null}
+                <div className="acts">
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPreviewKind("draft");
+                      setPreviewId(d.id);
+                      setPreview({
+                        title: d.title,
+                        body: d.body,
+                        taskType: d.task_type,
+                        targetUrl: d.target_url,
+                        targetKeyword: d.target_keyword,
+                        rationale: d.rationale,
+                        plannedUrl: href,
+                      });
+                      onFeedbackFor(d.id);
+                      onFeedbackText("");
+                    }}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={busy === d.id}
+                    onClick={() => onDraftAct(d.id, d.status === "approved" ? "publish" : "approve")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      const open = cardFeedbackId !== d.id;
+                      setCardFeedbackId(open ? d.id : "");
+                      setWhyId("");
+                      onFeedbackFor(d.id);
+                      if (open) onFeedbackText("");
+                    }}
+                  >
+                    Feedback
+                  </button>
+                  {why && (
+                    <button
+                      className="ghost"
+                      onClick={() => { setWhyId(whyId === d.id ? "" : d.id); setCardFeedbackId(""); }}
+                    >
+                      Why
+                    </button>
+                  )}
+                </div>
+                {whyId === d.id && why && <p className="why">{why}</p>}
+                {cardFeedbackId === d.id && (
+                  <div className="fb">
+                    <Field
+                      hideLabel
+                      label="Feedback for the agent"
+                      className="fb-input-wrap"
+                      autoFocus
+                      value={feedbackText}
+                      disabled={busy === d.id}
+                      onChange={(e) => onFeedbackText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") onSendFeedback(d.id); }}
+                      placeholder="Tell the agent what to change…"
+                    />
+                    <button className="primary" disabled={busy === d.id} onClick={() => onSendFeedback(d.id)}>
+                      {busy === d.id ? "Revising…" : "Send"}
+                    </button>
+                  </div>
+                )}
+              </article>
+            );
+          })}
           {sectionDrafts.length === 0 && (
             <Empty
               icon="✦"
@@ -232,27 +316,45 @@ export default function RecommendationsPanel({
 
       {section === "google_posts" && (
         <>
-          {pendingGbp.map((g) => (
-            <article className="card" key={g.id}>
-              <div className="meta">
-                <span className="kind">google business post</span>
-              </div>
-              <h3>{g.title}</h3>
-              <p className="why">{queueHintFor("google_post", { brandName: brand.name })}</p>
-              <div className="acts">
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setPreviewKind("gbp");
-                    setPreviewId(g.id);
-                    setPreview({ title: g.title, body: g.body, taskType: "google_post", cta: g.cta });
-                  }}
-                >
-                  Preview
-                </button>
-              </div>
-            </article>
-          ))}
+          {pendingGbp.map((g) => {
+            const why = decisionWhy("google_post", null);
+            return (
+              <article className="card" key={g.id}>
+                <div className="meta">
+                  <span className="kind">google business post</span>
+                </div>
+                <h3>{g.title}</h3>
+                <div className="acts">
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPreviewKind("gbp");
+                      setPreviewId(g.id);
+                      setPreview({ title: g.title, body: g.body, taskType: "google_post", cta: g.cta, rationale: why });
+                    }}
+                  >
+                    Preview
+                  </button>
+                  <button
+                    className="primary"
+                    disabled={busy === g.id}
+                    onClick={() => onRowAct("gbp_posts", g.id, "approved")}
+                  >
+                    Approve
+                  </button>
+                  {why && (
+                    <button
+                      className="ghost"
+                      onClick={() => setWhyId(whyId === g.id ? "" : g.id)}
+                    >
+                      Why
+                    </button>
+                  )}
+                </div>
+                {whyId === g.id && why && <p className="why">{why}</p>}
+              </article>
+            );
+          })}
           {pendingGbp.length === 0 && (
             <Empty
               icon="📍"
@@ -266,31 +368,39 @@ export default function RecommendationsPanel({
 
       {section === "backlinks" && (
         <>
-          {pendingCites.map((c) => (
-            <article className="card row" key={c.id}>
-              <div>
-                <div className="meta">
-                  <strong>{c.name}</strong>
-                  <span className="kind">{c.category}</span>
-                  <span className="prio">P{c.priority}</span>
+          {pendingCites.map((c) => {
+            const why = decisionWhy("backlink", c.rationale);
+            return (
+              <article className="card row" key={c.id}>
+                <div>
+                  <div className="meta">
+                    <strong>{c.name}</strong>
+                    <span className="kind">{c.category}</span>
+                    <span className="prio">P{c.priority}</span>
+                  </div>
+                  {c.url && (
+                    <a className="link" href={c.url} target="_blank" rel="noreferrer">
+                      {c.url}
+                    </a>
+                  )}
+                  {whyId === c.id && why && <p className="why">{why}</p>}
                 </div>
-                <p className="why">{c.rationale}</p>
-                {c.url && (
-                  <a className="link" href={c.url} target="_blank" rel="noreferrer">
-                    {c.url}
-                  </a>
-                )}
-              </div>
-              <div className="acts">
-                <button className="primary" onClick={() => onRowAct("citations", c.id, "live")}>
-                  Approve
-                </button>
-                <button className="ghost" onClick={() => onRowAct("citations", c.id, "skipped")}>
-                  Decline
-                </button>
-              </div>
-            </article>
-          ))}
+                <div className="acts">
+                  <button className="primary" onClick={() => onRowAct("citations", c.id, "live")}>
+                    Approve
+                  </button>
+                  <button className="ghost" onClick={() => onRowAct("citations", c.id, "skipped")}>
+                    Decline
+                  </button>
+                  {why && (
+                    <button className="ghost" onClick={() => setWhyId(whyId === c.id ? "" : c.id)}>
+                      Why
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
           {pendingCites.length === 0 && (
             <Empty
               icon="🔗"
@@ -328,6 +438,9 @@ export default function RecommendationsPanel({
               ? () => { onDraftAct(previewId, "approve?action=dismiss"); setPreview(null); }
               : undefined
         }
+        why={previewKind === "gbp"
+          ? decisionWhy("google_post", preview?.rationale)
+          : decisionWhy("draft", preview?.rationale)}
         feedback={previewKind === "draft" ? {
           value: feedbackText,
           onChange: onFeedbackText,
@@ -354,4 +467,8 @@ const REC_CSS = `
 .rec-tab.on .rec-count { background:rgba(108,92,231,.15); color:#6C5CE7; }
 .rec-pill { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#8B5CF6; }
 .rec-blurb { margin:0 0 14px; font-size:12.5px; color:var(--muted); }
+.rec .link { display:block; margin:6px 0 4px; }
+.rec .acts + .why, .rec .acts + .fb { margin-top:12px; }
+.fb { display:flex; gap:8px; margin-top:12px; align-items:flex-end; }
+.fb-input-wrap { flex:1; min-width:0; }
 `;

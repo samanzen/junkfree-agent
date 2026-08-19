@@ -698,6 +698,8 @@ ${down.md} {
 .p-approve:hover { border-color:var(--line-strong); box-shadow:var(--sh-2); }
 .p-approve-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:13px; }
 .p-approve-title { font-size:15px; font-weight:660; margin:8px 0 0; line-height:1.4; letter-spacing:-.022em; }
+.p-approve-url { display:block; font-size:12.5px; color:var(--accent); margin-top:6px; word-break:break-all; }
+.p-approve-why { font-size:13.5px; line-height:1.6; color:var(--text2); margin:0 0 12px; }
 .p-approve-meta { font-size:12px; color:var(--muted); margin-top:7px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .p-approve-body { background:var(--surface2); border:1px solid var(--line-soft); border-radius:var(--r-sm); padding:16px; font-size:13px; line-height:1.72; color:var(--text2); white-space:pre-wrap; word-break:break-word; }
 .p-approve-more { background:none; border:0; color:var(--accent); font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:10px 0 0; }

@@ -3,19 +3,23 @@ import path from "path";
 import { test, expect } from "vitest";
 import {
   absolutizeMarkdownImages,
+  decisionWhy,
   displayWorkTitle,
   firstMarkdownImage,
   metaFromBody,
   pageFromBody,
+  plannedPageUrl,
   postTextWithoutImages,
   previewKindFor,
-  queueHintFor,
   resolvePreviewSrc,
+  rewritePlanFromBody,
 } from "./preview";
 
 test("queue titles drop the agent prefix", () => {
   expect(displayWorkTitle("Page: junk removal calgary")).toBe("junk removal calgary");
   expect(displayWorkTitle("Blog: spring clean-out")).toBe("spring clean-out");
+  expect(displayWorkTitle("Audit + rewrite: https://www.junkfree.ca/blog/furniture-disposal-vancouver"))
+    .toBe("furniture disposal vancouver");
 });
 
 test("fix_meta and title/meta JSON are a search-result preview, not a page", () => {
@@ -25,9 +29,10 @@ test("fix_meta and title/meta JSON are a search-result preview, not a page", () 
   expect(metaFromBody(body)?.titles[0]).toBe("Junk removal in Calgary");
 });
 
-test("an audit JSON is not rendered as if it were a live page", () => {
+test("improve_content is always a plan, even when the body is messy JSON", () => {
   const body = JSON.stringify({ score: 40, checks: [{ item: "H1", status: "fail", fix: "Add one" }] });
   expect(previewKindFor("improve_content", body)).toBe("audit");
+  expect(previewKindFor("improve_content", "not json at all")).toBe("audit");
 });
 
 test("page drafts keep TITLE TAG / META off the article body", () => {
@@ -54,20 +59,60 @@ test("relative preview images pick up the brand site origin", () => {
     .toBe("![Yard](https://junkfree.ca/uploads/yard.jpg)");
 });
 
-test("queue copy depends on what Preview will actually open", () => {
-  expect(queueHintFor("new_page")).toMatch(/actual page/i);
-  expect(queueHintFor("fix_meta")).toMatch(/search result/i);
-  expect(queueHintFor("google_post", { brandName: "Junk Free" })).toMatch(/Junk Free/);
-  expect(queueHintFor("improve_content", {
-    body: JSON.stringify({ score: 40, checks: [{ item: "H1" }] }),
-  })).toMatch(/audit/i);
+test("new pages and blogs advertise the URL they will actually publish to", () => {
+  expect(plannedPageUrl({
+    taskType: "new_page",
+    title: "Page: same-day junk removal Vancouver",
+    targetKeyword: "same-day junk removal Vancouver",
+    siteUrl: "https://www.junkfree.ca",
+  })).toBe("https://www.junkfree.ca/same-day-junk-removal-vancouver");
+  expect(plannedPageUrl({
+    taskType: "new_blog",
+    title: "Blog: furniture disposal",
+    targetKeyword: "furniture disposal vancouver",
+    siteUrl: "https://www.junkfree.ca/",
+  })).toBe("https://www.junkfree.ca/blog/furniture-disposal-vancouver");
+  expect(plannedPageUrl({
+    taskType: "improve_content",
+    title: "Audit + rewrite: https://www.junkfree.ca/blog/furniture-disposal-vancouver",
+    targetUrl: "https://www.junkfree.ca/blog/furniture-disposal-vancouver",
+    siteUrl: "https://www.junkfree.ca",
+  })).toBe("https://www.junkfree.ca/blog/furniture-disposal-vancouver");
 });
 
-test("recommendation queues show a title and Preview, not the draft body", () => {
+test("a rewrite plan is numbered English, never JSON", () => {
+  const body = JSON.stringify({
+    score: 48,
+    checks: [
+      { item: "Title tag", status: "fail", fix: "No title tag content provided. Create one using the paid-intent keyword." },
+      { item: "Meta description", status: "fail", fix: "No meta description present. Write one leading with pricing transparency." },
+      { item: "H1", status: "pass", fix: "Looks fine" },
+    ],
+  });
+  const plan = rewritePlanFromBody(body, { keyword: "furniture disposal", url: "https://x.ca/p" });
+  expect(plan.steps).toHaveLength(2);
+  expect(plan.steps[0].n).toBe(1);
+  expect(plan.steps[0].title.toLowerCase()).toMatch(/title/);
+  expect(plan.steps[0].detail.toLowerCase()).toMatch(/google title/);
+  expect(plan.steps[0].detail.toLowerCase()).not.toMatch(/paid-intent/);
+  expect(plan.intro).not.toMatch(/\{/);
+  expect(JSON.stringify(plan)).not.toMatch(/"score"/);
+});
+
+test("boilerplate why-copy is rewritten for a customer", () => {
+  expect(decisionWhy("draft", "Search-intent qualification.")).toMatch(/ready to book/);
+  expect(decisionWhy("google_post", null)).toMatch(/Business Profile/);
+  expect(decisionWhy("backlink", "Chamber listing that competitors already have.")).toMatch(/Chamber/);
+});
+
+test("recommendation queues show title, URL, Preview, Approve and Why — not the draft body", () => {
   const rec = fs.readFileSync(path.join(process.cwd(), "app/dashboard/RecommendationsPanel.tsx"), "utf8");
   expect(rec).toContain("WorkPreview");
   expect(rec).toMatch(/>\s*Preview\s*</);
+  expect(rec).toMatch(/>\s*Approve\s*</);
+  expect(rec).toMatch(/>\s*Why\s*</);
   expect(rec).not.toContain("DraftBody");
+  expect(rec).not.toMatch(/Open Preview to see/);
   expect(rec).not.toMatch(/<pre[\s>]/);
   expect(rec).not.toMatch(/\{d\.body\}/);
   expect(rec).not.toMatch(/\{g\.body\}/);
@@ -75,6 +120,9 @@ test("recommendation queues show a title and Preview, not the draft body", () =>
   const portal = fs.readFileSync(path.join(process.cwd(), "app/portal/content/page.tsx"), "utf8");
   expect(portal).toContain("WorkPreview");
   expect(portal).toMatch(/>\s*Preview\s*</);
+  expect(portal).toContain('"Approve"');
+  expect(portal).toMatch(/>\s*Why\s*</);
+  expect(portal).not.toMatch(/Open Preview to see/);
   expect(portal).not.toMatch(/body=\{draft\.body\}/);
   expect(portal).not.toMatch(/body=\{post\.body\}/);
 });

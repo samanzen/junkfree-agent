@@ -39,7 +39,7 @@ type Brand = {
   active?: boolean;
 };
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
-type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
+type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; target_keyword?: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
 
