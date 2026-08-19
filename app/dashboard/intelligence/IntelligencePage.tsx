@@ -215,7 +215,7 @@ const CSS = `
 .kt-sub { margin:4px 0 0; font-size:13.5px; color:#6B768D; }
 .kt-count-pill { background:#FFF4EF; color:#FF6A3D; font-size:12px; font-weight:700; padding:6px 10px; border-radius:var(--radius-full); }
 .kt-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.kt-card { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:14px 16px; text-align:left; font:inherit; cursor:pointer; transition:box-shadow .15s ease, border-color .15s ease, transform .12s ease; width:100%; }
+.kt-card { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:14px 16px; text-align:left; font:inherit; cursor:pointer; transition:box-shadow var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out); width:100%; }
 .kt-card:hover { box-shadow:var(--shadow-1); }
 .kt-card.on { box-shadow:0 0 0 2px rgba(255,106,61,.35); }
 .kt-card.up { border-color:#BBF7D0; background:linear-gradient(180deg,#F0FDF4,#fff); }
