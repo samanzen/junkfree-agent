@@ -212,7 +212,12 @@ export async function domainOverview(domain: string, geo: Geo = {}): Promise<{ o
   const item = (data?.tasks?.[0]?.result?.[0] as { items?: { metrics?: { organic?: { etv?: number; count?: number } } }[] })?.items?.[0];
   const organic = item?.metrics?.organic;
   if (!organic) return null;
-  return { organic_traffic: Math.round(organic.etv || 0), organic_keywords: organic.count ?? null };
+  // Never coerce missing etv to 0 — that made Got Junk / rivals look like zero traffic.
+  const etv = organic.etv;
+  return {
+    organic_traffic: typeof etv === "number" ? Math.round(etv) : null,
+    organic_keywords: typeof organic.count === "number" ? organic.count : null,
+  };
 }
 
 // Backlinks summary: total backlinks + referring domains.

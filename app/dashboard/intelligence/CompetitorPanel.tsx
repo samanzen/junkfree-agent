@@ -1,8 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Fragment } from "react";
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -109,6 +112,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   const [gaps, setGaps] = useState<KwRow[]>([]);
   const [overlap, setOverlap] = useState<KwRow[]>([]);
   const [page, setPage] = useState(0);
+  const autoRefreshTried = useRef(false);
 
   const load = useCallback(async () => {
     if (!brandId) return;
@@ -141,11 +145,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
       }).then((res) => res.json());
       if (r.error) setStatusMsg(r.error);
       else {
-        setStatusMsg(
-          r.refreshed
-            ? `Updated metrics for ${r.refreshed} competitor${r.refreshed === 1 ? "" : "s"}.`
-            : "Report refreshed."
-        );
+        setStatusMsg(r.message || "Report refreshed.");
         await load();
       }
     } catch {
@@ -153,6 +153,78 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
     }
     setRefreshing(false);
   }
+
+  // Pull live metrics once when the table is empty (after add / first visit).
+  useEffect(() => {
+    if (loading || refreshing || !competitors.length || autoRefreshTried.current) return;
+    const empty = competitors.every(
+      (c) =>
+        c.last_organic_traffic == null &&
+        c.last_backlinks == null &&
+        c.last_common_keywords == null &&
+        c.last_keyword_gap == null
+    );
+    if (!empty) return;
+    autoRefreshTried.current = true;
+    let cancelled = false;
+    (async () => {
+      setRefreshing(true);
+      try {
+        const r = await authedFetch("/api/intelligence/competitors/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brand_id: brandId }),
+        }).then((res) => res.json());
+        if (!cancelled) {
+          setStatusMsg(r.message || (r.error ? String(r.error) : "Report refreshed."));
+          await load();
+        }
+      } catch {
+        if (!cancelled) setStatusMsg("Couldn’t auto-refresh metrics — click Refresh report.");
+      } finally {
+        if (!cancelled) setRefreshing(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, competitors, loading, refreshing, load]);
+
+  useEffect(() => {
+    autoRefreshTried.current = false;
+  }, [brandId]);
+
+  const trafficBars = useMemo(() => {
+    const rows: { name: string; traffic: number; fill: string; you?: boolean }[] = [];
+    if (you?.organic_traffic != null && you.organic_traffic > 0) {
+      rows.push({
+        name: `${you.domain} (You)`,
+        traffic: you.organic_traffic,
+        fill: YOU_COLOR,
+        you: true,
+      });
+    }
+    competitors.forEach((c, i) => {
+      if (c.last_organic_traffic != null && c.last_organic_traffic > 0) {
+        rows.push({
+          name: c.domain,
+          traffic: c.last_organic_traffic,
+          fill: COMP_COLORS[i % COMP_COLORS.length],
+        });
+      }
+    });
+    return rows.sort((a, b) => b.traffic - a.traffic);
+  }, [you, competitors]);
+
+  const youHistory = useMemo(() => {
+    return (you?.history || [])
+      .filter((h) => h.organic_traffic != null && h.organic_traffic > 0)
+      .map((h) => ({
+        date: h.date,
+        label: shortDate(h.date),
+        traffic: h.organic_traffic,
+      }));
+  }, [you]);
 
   async function add(explicitDomain?: string, confirmed = false) {
     const raw = (explicitDomain || domain).trim();
@@ -314,44 +386,6 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
     ]);
   }
 
-  const chartSeries = useMemo(() => {
-    const history = you?.history?.length
-      ? you.history
-      : you?.organic_traffic != null
-        ? [{ date: new Date().toISOString(), organic_traffic: you.organic_traffic }]
-        : [];
-
-    if (!history.length && competitors.every((c) => c.last_organic_traffic == null)) {
-      return { data: [] as Record<string, string | number>[], keys: [] as { key: string; label: string; color: string }[] };
-    }
-
-    const dates = history.length > 0 ? history.map((h) => h.date) : [new Date().toISOString()];
-    const youKey = "you";
-    const keys: { key: string; label: string; color: string }[] = [
-      { key: youKey, label: `${you?.domain || "You"} (You)`, color: YOU_COLOR },
-      ...competitors.map((c, i) => ({
-        key: `c_${c.id}`,
-        label: c.domain,
-        color: COMP_COLORS[i % COMP_COLORS.length],
-      })),
-    ];
-
-    const data = dates.map((date, idx) => {
-      const row: Record<string, string | number> = { date, label: shortDate(date) };
-      row[youKey] =
-        history[idx]?.organic_traffic ??
-        history[history.length - 1]?.organic_traffic ??
-        you?.organic_traffic ??
-        0;
-      for (const c of competitors) {
-        row[`c_${c.id}`] = c.last_organic_traffic ?? 0;
-      }
-      return row;
-    });
-
-    return { data, keys };
-  }, [you, competitors]);
-
   const needsRefresh = competitors.some(
     (c) =>
       c.last_organic_traffic == null &&
@@ -449,41 +483,82 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
             </span>
           )}
         </div>
-        {loading ? (
-          <div className="cp-empty">Loading chart…</div>
-        ) : chartSeries.data.length === 0 ? (
+        {loading || refreshing ? (
+          <div className="cp-empty">{refreshing ? "Pulling live traffic from DataForSEO…" : "Loading chart…"}</div>
+        ) : trafficBars.length === 0 && youHistory.length === 0 ? (
           <div className="cp-empty">
-            Add competitors and refresh the report to see organic traffic compared over time.
+            Add competitors and click <strong>Refresh report</strong> to pull estimated organic traffic.
+            We never show fake zeros — empty means metrics haven’t been fetched yet.
           </div>
         ) : (
-          <div className="cp-chart">
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartSeries.data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F6" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9AA3B2" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#9AA3B2" }} tickFormatter={(v) => fmtNum(Number(v))} width={52} />
-                <Tooltip
-                  formatter={(value, name) => [fmtNum(Number(value)), String(name)]}
-                  labelFormatter={(_, payload) => {
-                    const raw = payload?.[0]?.payload?.date;
-                    return raw ? shortDate(String(raw)) : "";
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {chartSeries.keys.map((k) => (
-                  <Line
-                    key={k.key}
-                    type="monotone"
-                    dataKey={k.key}
-                    name={k.label}
-                    stroke={k.color}
-                    strokeWidth={k.key === "you" ? 2.5 : 2}
-                    dot={false}
-                    activeDot={{ r: 4 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="cp-charts">
+            {trafficBars.length > 0 && (
+              <div className="cp-chart">
+                <div className="cp-chart-label">Estimated monthly organic traffic (you vs rivals)</div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={trafficBars} margin={{ top: 8, right: 12, left: 0, bottom: 48 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F6" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11, fill: "#6B768D" }}
+                      interval={0}
+                      angle={-20}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#9AA3B2" }}
+                      tickFormatter={(v) => fmtNum(Number(v))}
+                      width={52}
+                    />
+                    <Tooltip formatter={(value) => [fmtNum(Number(value)), "Est. traffic"]} />
+                    <Bar dataKey="traffic" radius={[4, 4, 0, 0]}>
+                      {trafficBars.map((r) => (
+                        <Cell key={r.name} fill={r.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {youHistory.length > 1 && (
+              <div className="cp-chart">
+                <div className="cp-chart-label">Your organic traffic over time</div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={youHistory} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#EEF1F6" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#9AA3B2" }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "#9AA3B2" }}
+                      tickFormatter={(v) => fmtNum(Number(v))}
+                      width={52}
+                    />
+                    <Tooltip
+                      formatter={(value) => [fmtNum(Number(value)), "Your traffic"]}
+                      labelFormatter={(_, payload) => {
+                        const raw = payload?.[0]?.payload?.date;
+                        return raw ? shortDate(String(raw)) : "";
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="traffic"
+                      name={`${you?.domain || "You"} (You)`}
+                      stroke={YOU_COLOR}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {trafficBars.length === 0 && youHistory.length > 0 && (
+              <div className="cp-hint" style={{ marginTop: 8 }}>
+                Rival traffic isn’t loaded yet — click <strong>Refresh report</strong>.
+              </div>
+            )}
           </div>
         )}
       </section>

@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
 
   // Migration 018 may not be applied yet — fall back to older columns.
   let rawCompetitors: Array<Record<string, unknown>> = [];
+  let columnsReady = !fullRes.error;
   if (fullRes.error) {
     const basicRes = await db
       .from("competitors")
@@ -75,7 +76,7 @@ export async function GET(req: NextRequest) {
       .select("organic_traffic, organic_keywords, backlinks, captured_at")
       .eq("brand_id", brandId)
       .order("captured_at", { ascending: true })
-      .limit(24),
+      .limit(48),
     db
       .from("tracked_keywords")
       .select("id", { count: "exact", head: true })
@@ -103,7 +104,18 @@ export async function GET(req: NextRequest) {
     }
   })();
 
-  const latestYou = snaps?.[snaps.length - 1] || null;
+  // Prefer the latest non-null traffic snapshot so a bad 0 insert doesn't wipe the pill.
+  const historyRaw = (snaps || []).map((s) => ({
+    date: s.captured_at as string,
+    organic_traffic: s.organic_traffic as number | null,
+  }));
+  const history = historyRaw.filter(
+    (h) => h.organic_traffic != null && Number(h.organic_traffic) > 0
+  );
+  const latestYou =
+    [...(snaps || [])].reverse().find((s) => s.organic_traffic != null && Number(s.organic_traffic) > 0) ||
+    snaps?.[snaps.length - 1] ||
+    null;
 
   return NextResponse.json({
     you: {
@@ -112,13 +124,14 @@ export async function GET(req: NextRequest) {
       organic_traffic: latestYou?.organic_traffic ?? null,
       organic_keywords: latestYou?.organic_keywords ?? brandKwCount ?? null,
       backlinks: latestYou?.backlinks ?? null,
-      history: (snaps || []).map((s) => ({
-        date: s.captured_at,
-        organic_traffic: s.organic_traffic ?? 0,
+      history: history.map((h) => ({
+        date: h.date,
+        organic_traffic: Number(h.organic_traffic) || 0,
       })),
     },
     competitors,
     brand_keyword_count: brandKwCount || 0,
+    columns_ready: columnsReady,
   });
 }
 
@@ -158,6 +171,8 @@ export async function POST(req: NextRequest) {
     .eq("active", true);
 
   const updated: string[] = [];
+  const failed: string[] = [];
+
   for (const c of competitors || []) {
     const [overview, backlinks, ranked] = await Promise.all([
       domainOverview(c.domain, geo).catch(() => null),
@@ -171,26 +186,45 @@ export async function POST(req: NextRequest) {
       (k) => k.keyword && !brandKwSet.has(k.keyword.toLowerCase()) && k.position <= 20
     ).length;
 
-    await db
-      .from("competitors")
-      .update({
-        last_keyword_count: rankedList.length || overview?.organic_keywords || null,
-        last_organic_traffic: overview?.organic_traffic ?? null,
-        last_backlinks: backlinks?.backlinks ?? null,
-        last_common_keywords: common,
-        last_keyword_gap: gap,
-        last_checked_at: new Date().toISOString(),
-      })
-      .eq("id", c.id);
-    updated.push(c.id);
+    // Only write fields we actually fetched — never stamp fake zeros.
+    const patch: Record<string, unknown> = {
+      last_common_keywords: common,
+      last_keyword_gap: gap,
+      last_checked_at: new Date().toISOString(),
+    };
+    if (rankedList.length) patch.last_keyword_count = rankedList.length;
+    else if (overview?.organic_keywords != null) patch.last_keyword_count = overview.organic_keywords;
+    if (overview?.organic_traffic != null) patch.last_organic_traffic = overview.organic_traffic;
+    if (backlinks?.backlinks != null) patch.last_backlinks = backlinks.backlinks;
+
+    const { error } = await db.from("competitors").update(patch).eq("id", c.id);
+    if (error) {
+      // Migration 018 missing — try minimal patch.
+      await db
+        .from("competitors")
+        .update({
+          last_keyword_count: (patch.last_keyword_count as number | undefined) ?? null,
+          last_checked_at: patch.last_checked_at,
+        })
+        .eq("id", c.id);
+      failed.push(c.domain);
+    } else if (overview?.organic_traffic == null && backlinks?.backlinks == null) {
+      failed.push(c.domain);
+      updated.push(c.id);
+    } else {
+      updated.push(c.id);
+    }
   }
 
-  // Also refresh "you" into metric_snapshots if we can resolve domain overview
+  // Refresh "you" only when we have a real traffic number — never insert a 0 snap.
   try {
     const host = new URL(brand.site_url).hostname.replace(/^www\./, "");
     const youOverview = await domainOverview(host, geo).catch(() => null);
     const youBacklinks = await backlinksSummary(host).catch(() => null);
-    if (youOverview || youBacklinks) {
+    if (
+      (youOverview?.organic_traffic != null && youOverview.organic_traffic > 0) ||
+      youBacklinks?.backlinks != null
+    ) {
       await db.from("metric_snapshots").insert({
         brand_id,
         organic_traffic: youOverview?.organic_traffic ?? null,
@@ -204,5 +238,12 @@ export async function POST(req: NextRequest) {
     /* site_url parse / insert optional */
   }
 
-  return NextResponse.json({ ok: true, refreshed: updated.length });
+  return NextResponse.json({
+    ok: true,
+    refreshed: updated.length,
+    failed_domains: failed,
+    message: failed.length
+      ? `Updated ${updated.length} rival(s). Couldn’t pull live traffic for: ${failed.join(", ")}.`
+      : `Updated metrics for ${updated.length} competitor${updated.length === 1 ? "" : "s"}.`,
+  });
 }

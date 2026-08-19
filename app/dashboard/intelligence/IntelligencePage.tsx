@@ -330,7 +330,9 @@ const CSS = `
 .cp-card-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
 .cp-card-head h4 { margin:0; font-size:15px; font-weight:700; color:#12172A; }
 .cp-you-pill { font-size:12px; font-weight:600; color:#FF6A3D; background:#FFF4EF; padding:4px 10px; border-radius:var(--radius-full); }
-.cp-chart { width:100%; min-height:280px; }
+.cp-chart { width:100%; min-height:200px; }
+.cp-charts { display:flex; flex-direction:column; gap:18px; }
+.cp-chart-label { font-size:12px; font-weight:600; color:#6B768D; margin-bottom:6px; }
 .cp-table-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .cp-table { width:100%; border-collapse:collapse; }
 .cp-table th { text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; color:#9AA3B2; padding:10px 10px; border-bottom:1px solid #E7EAF0; letter-spacing:.04em; }
