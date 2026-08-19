@@ -123,24 +123,25 @@ export default function RecommendationActions({
           <article key={`${kw.keyword}-${i}`} className={`rec-action-card ${mode}`}>
             <div className="rec-action-left">
               <div className="rec-action-kw">{kw.keyword}</div>
-              <div className="rec-action-rank">
-                {mode === "issues" && kw.previous_position != null && kw.current_position != null ? (
-                  <RankChange
-                    previous={kw.previous_position}
-                    current={kw.current_position}
-                    change={kw.change}
-                    direction="down"
-                  />
-                ) : mode === "opportunities" && kw.position != null ? (
-                  <RankChange current={kw.position} />
-                ) : null}
-              </div>
               {kw.search_volume != null && (
                 <div className="rec-action-vol">~{kw.search_volume.toLocaleString()} searches / month</div>
               )}
               {kw.ai_opportunity_reason && (
                 <p className="rec-action-why">{kw.ai_opportunity_reason}</p>
               )}
+            </div>
+            <div className="rec-action-mid">
+              {mode === "issues" && kw.previous_position != null && kw.current_position != null ? (
+                <RankChange
+                  previous={kw.previous_position}
+                  current={kw.current_position}
+                  change={kw.change}
+                  direction="down"
+                  label="Google ranking"
+                />
+              ) : mode === "opportunities" && kw.position != null ? (
+                <RankChange current={kw.position} label="Google ranking" />
+              ) : null}
             </div>
             <div className="rec-action-right">
               {doAutomatically ? (

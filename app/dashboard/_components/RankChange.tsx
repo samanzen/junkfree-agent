@@ -1,10 +1,12 @@
 "use client";
 
-/** Ubersuggest-style rank movement: muted old → arrow → bold new + colored delta. */
+/**
+ * Ubersuggest-style rank movement:
+ *   muted old  →(orange)  bold new   ▲ +3 (green) / ▼ −3 (red)
+ */
 
 function fmtPos(n: number): string {
-  const r = Math.round(n);
-  return String(r);
+  return String(Math.round(n));
 }
 
 function fmtDelta(n: number): number {
@@ -14,10 +16,10 @@ function fmtDelta(n: number): number {
 type Props = {
   previous?: number | null;
   current?: number | null;
-  /** Positive = improved (rank number went down). If omitted, inferred from previous/current. */
   change?: number | null;
-  /** Force direction when only one side is known. */
   direction?: "up" | "down";
+  /** Small label above the numbers — Ubersuggest uses "Desktop Ranking". */
+  label?: string;
   className?: string;
 };
 
@@ -26,6 +28,7 @@ export default function RankChange({
   current,
   change,
   direction,
+  label = "Google ranking",
   className = "",
 }: Props) {
   if (previous == null && current == null) return null;
@@ -44,43 +47,54 @@ export default function RankChange({
 
   return (
     <div className={`rk ${dir} ${className}`.trim()}>
-      <div className="rk-track" aria-label="Ranking change">
+      {label ? <div className="rk-label">{label}</div> : null}
+      <div className="rk-row" aria-label="Ranking change">
         {previous != null && <span className="rk-old">{fmtPos(previous)}</span>}
-        {previous != null && current != null && <span className="rk-arrow" aria-hidden="true">→</span>}
+        {previous != null && current != null && (
+          <span className="rk-arrow" aria-hidden="true">
+            →
+          </span>
+        )}
         {current != null && <span className="rk-new">{fmtPos(current)}</span>}
+        {dir !== "flat" && delta != null && (
+          <span className={`rk-delta ${dir}`}>
+            <span className="rk-tri" aria-hidden="true">
+              {dir === "up" ? "▲" : "▼"}
+            </span>
+            {dir === "up" ? `+${delta}` : `−${delta}`}
+          </span>
+        )}
       </div>
-      {dir !== "flat" && delta != null && (
-        <span className={`rk-delta ${dir}`}>
-          <span className="rk-tri" aria-hidden="true">{dir === "up" ? "▲" : "▼"}</span>
-          {dir === "up" ? `+${delta}` : `−${delta}`}
-        </span>
-      )}
       <style>{CSS}</style>
     </div>
   );
 }
 
 const CSS = `
-.rk { display:inline-flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.rk-track {
-  display:inline-flex; align-items:center; gap:10px;
-  background:#F3F5F8; border-radius:var(--radius-sm); padding:8px 14px;
+.rk { display:inline-flex; flex-direction:column; align-items:flex-end; gap:3px; }
+.rk-label {
+  font-size:10.5px; font-weight:600; color:#9AA3B2;
+  text-transform:none; letter-spacing:0; line-height:1.2;
+}
+.rk-row {
+  display:inline-flex; align-items:center; gap:8px;
+  font-variant-numeric:tabular-nums;
 }
 .rk-old {
-  font-size:20px; font-weight:600; color:#9AA3B2; letter-spacing:-.02em;
-  font-variant-numeric:tabular-nums;
+  font-size:18px; font-weight:500; color:#A0A8B8; letter-spacing:-.02em;
 }
-.rk-arrow { color:#94A3B8; font-size:16px; font-weight:600; }
+.rk-arrow {
+  color:#FF6A3D; font-size:15px; font-weight:700; line-height:1;
+  transform:translateY(-1px);
+}
 .rk-new {
-  font-size:22px; font-weight:700; color:#12172A; letter-spacing:-.03em;
-  font-variant-numeric:tabular-nums;
+  font-size:20px; font-weight:700; color:#12172A; letter-spacing:-.03em;
 }
 .rk-delta {
-  display:inline-flex; align-items:center; gap:4px;
-  font-size:13px; font-weight:700; padding:5px 10px; border-radius:var(--radius-full);
-  font-variant-numeric:tabular-nums;
+  display:inline-flex; align-items:center; gap:3px;
+  font-size:13px; font-weight:700; margin-left:2px;
 }
-.rk-delta.up { color:#059669; background:rgba(16,185,129,.12); }
-.rk-delta.down { color:#DC2626; background:rgba(239,68,68,.12); }
-.rk-tri { font-size:10px; line-height:1; }
+.rk-delta.up { color:#16A34A; }
+.rk-delta.down { color:#DC2626; }
+.rk-tri { font-size:9px; line-height:1; }
 `;

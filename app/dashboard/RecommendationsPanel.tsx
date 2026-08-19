@@ -396,13 +396,14 @@ const REC_CSS = `
 .rec-action-intro.auto { background:#ECFDF5; border:1px solid #A7F3D0; border-radius:var(--radius-sm); padding:10px 12px; color:#065F46; }
 .rec-action-loading,.rec-action-empty { padding:28px; text-align:center; color:#8A93A6; font-size:13px; background:#fff; border:1px dashed #E7EAF0; border-radius:var(--radius-md); }
 .rec-action-list { display:flex; flex-direction:column; gap:10px; }
-.rec-action-card { display:flex; justify-content:space-between; gap:14px; align-items:center; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:14px 16px; border-left:4px solid #CBD5E1; }
-.rec-action-card.issues { border-left-color:#E17055; background:linear-gradient(90deg,#FFF8F6,#fff 40%); }
-.rec-action-card.opportunities { border-left-color:#00B894; background:linear-gradient(90deg,#F3FFFB,#fff 40%); }
-.rec-action-kw { font-size:14.5px; font-weight:700; color:#12172A; margin-bottom:8px; }
-.rec-action-rank { margin:0 0 6px; }
-.rec-action-vol { font-size:12px; color:#9AA3B2; margin-top:4px; }
-.rec-action-why { margin:8px 0 0; font-size:12.5px; color:#4F46E5; line-height:1.4; }
+.rec-action-card { display:flex; justify-content:space-between; gap:16px; align-items:center; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:16px 18px; }
+.rec-action-card.issues { border-color:#FECACA; }
+.rec-action-card.opportunities { border-color:#A7F3D0; }
+.rec-action-left { flex:1; min-width:0; }
+.rec-action-kw { font-size:14.5px; font-weight:700; color:#12172A; margin-bottom:4px; }
+.rec-action-mid { flex-shrink:0; padding:0 8px; }
+.rec-action-vol { font-size:12px; color:#9AA3B2; margin-top:2px; }
+.rec-action-why { margin:8px 0 0; font-size:12.5px; color:#64748B; line-height:1.4; }
 .rec-action-right { flex-shrink:0; }
 .rec-action-auto-badge { font-size:11.5px; font-weight:700; color:#047857; background:#ECFDF5; padding:6px 10px; border-radius:var(--radius-full); }
 `;

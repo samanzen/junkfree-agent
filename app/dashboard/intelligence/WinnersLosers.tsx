@@ -124,25 +124,27 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
             <div key={i} className={`wl-row tone-${tab}`}>
               <div className="wl-row-left">
                 <span className="wl-kw">{kw.keyword}</span>
-                <div className="wl-rank">
-                  {(tab === "gains" || tab === "drops") &&
-                  kw.previous_position != null &&
-                  kw.current_position != null ? (
-                    <RankChange
-                      previous={kw.previous_position}
-                      current={kw.current_position}
-                      change={kw.change}
-                      direction={tab === "gains" ? "up" : "down"}
-                    />
-                  ) : (
-                    <RankChange
-                      current={kw.current_position ?? kw.position ?? kw.last_position}
-                    />
-                  )}
-                </div>
                 <span className="wl-plain">{plainLine(tab, kw)}</span>
                 {kw.search_volume != null && (
                   <span className="wl-vol">~{kw.search_volume.toLocaleString()} searches / month</span>
+                )}
+              </div>
+              <div className="wl-row-right">
+                {(tab === "gains" || tab === "drops") &&
+                kw.previous_position != null &&
+                kw.current_position != null ? (
+                  <RankChange
+                    previous={kw.previous_position}
+                    current={kw.current_position}
+                    change={kw.change}
+                    direction={tab === "gains" ? "up" : "down"}
+                    label="Google ranking"
+                  />
+                ) : (
+                  <RankChange
+                    current={kw.current_position ?? kw.position ?? kw.last_position}
+                    label="Google ranking"
+                  />
                 )}
               </div>
             </div>

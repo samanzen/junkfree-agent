@@ -167,13 +167,13 @@ const CSS = `
 .wl-tab { background:transparent; border:0; border-bottom:2px solid transparent; color:#8A93A6; padding:12px 16px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; margin-bottom:-1px; display:flex; align-items:center; gap:6px; }
 .wl-count { font-size:11px; background:#F0F2F5; color:#6A7280; padding:1px 6px; border-radius:var(--radius-xs); }
 .wl-list { display:flex; flex-direction:column; }
-.wl-row { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #F5F7FA; gap:12px; }
+.wl-row { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #F5F7FA; gap:16px; }
 .wl-row:last-child { border-bottom:0; }
 .wl-row-left { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
-.wl-kw { font-size:14px; font-weight:600; color:#1A2030; }
-.wl-rank { margin:8px 0 6px; }
+.wl-row-right { flex-shrink:0; }
+.wl-kw { font-size:14px; font-weight:700; color:#1A2030; }
 .wl-vol { font-size:12px; color:#9AA3B2; }
-.wl-plain { font-size:12.5px; color:#4A5568; line-height:1.4; }
+.wl-plain { font-size:12.5px; color:#64748B; line-height:1.4; }
 .wl-empty, .wl-loading,
 .pd-loading, .pd-empty,
 .kt-empty,
