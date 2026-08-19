@@ -78,6 +78,17 @@ function findExistingMatch(candidate: string | undefined | null, existing: Exist
 
 // PLAN: gather intelligence, decide tasks, and enqueue the execution jobs.
 export async function stepPlan(brand: Brand) {
+  // If the review queue is already full, do not pile on more content drafts.
+  // Operators were seeing the same July suggestions forever because new runs
+  // kept adding near-duplicates while old pending_review rows were never
+  // dismissed. Meta/intent fixes below still run when backlog is high.
+  const { count: openDraftCount } = await db
+    .from("drafts")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brand.id)
+    .eq("status", "pending_review");
+  const backlogFull = (openDraftCount || 0) >= Math.max(MAX_TASKS * 2, 6);
+
   const gsc = brand.gsc_property;
   const [striking, lowCtr, intentPages, strategy, recon, lessons, existing] = await Promise.all([
     gsc ? safe(() => strikingDistance(gsc)) : Promise.resolve(null),
@@ -90,14 +101,18 @@ export async function stepPlan(brand: Brand) {
   ]);
   const existingList = (existing as ExistingTopic[] | null) || [];
 
-  const planText = await callClaude({
-    maxTokens: 1800,
-    user: `${brandBlock(brand)}
+  let tasks: { task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[] = [];
+
+  if (!backlogFull) {
+    const planText = await callClaude({
+      maxTokens: 1800,
+      user: `${brandBlock(brand)}
 
 You are the SEO operations lead. Use ALL intelligence below to choose the ${MAX_TASKS} highest-impact actions now. Favour quick wins but also build topical authority.
 
 RULES: Target paid/high-intent + long-tail keywords with real volume where known. Avoid any terms flagged as wrong-intent in the business context above.
 NEVER propose "new_page" or "new_blog" for a topic already listed in EXISTING TOPICS below — if that topic needs work, propose "improve_content" targeting its existing URL instead. Also do not propose two of your own tasks in this batch for the same or overlapping topic (keyword cannibalization) — group related keywords under one page rather than forking a near-duplicate.
+If a topic already has a pending draft, skip it entirely (do not propose improve_content for it either).
 
 EXISTING TOPICS (already published or queued — do not duplicate):
 ${existingList.length ? existingList.map((e) => `- "${e.title}"${e.keyword ? ` (keyword: ${e.keyword})` : ""}${e.url ? ` → ${e.url}` : ""}`).join("\n") : "none yet"}
@@ -115,32 +130,41 @@ ${JSON.stringify(lowCtr || [], null, 2)}
 
 Return ONLY JSON array of up to ${MAX_TASKS}:
 [{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...","target_keyword":"...","rationale":"..."}]`,
-  });
-  let tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
+    });
+    tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
 
-  // Hard safety net — enforced regardless of whether the model followed the
-  // prompt: never let a new_page/new_blog through for a topic that already
-  // exists (redirect to improve_content on the existing URL instead), and
-  // never let two tasks in the same batch target overlapping keywords.
-  const claimedThisBatch: string[] = [];
-  tasks = tasks.map((t) => {
-    if (t.task_type !== "new_page" && t.task_type !== "new_blog") return t;
-    const match = findExistingMatch(t.target_keyword, existingList);
-    if (match) {
-      return {
-        ...t,
-        task_type: "improve_content" as TaskType,
-        target_url: match.url || t.target_url,
-        rationale: `${t.rationale} (redirected from new page — topic already exists)`,
-      };
-    }
-    const norm = normalizeTopic(t.target_keyword || "");
-    if (norm && claimedThisBatch.includes(norm)) {
-      return { ...t, task_type: "improve_content" as TaskType, rationale: `${t.rationale} (merged — overlapping keyword in this batch)` };
-    }
-    if (norm) claimedThisBatch.push(norm);
-    return t;
-  });
+    // Hard safety net — never enqueue a second open draft for an overlapping
+    // topic, and never create new_page/new_blog when published content exists.
+    const claimedThisBatch: string[] = [];
+    const openDraftTopics = existingList.filter((e) => !!e.keyword);
+    tasks = tasks.flatMap((t) => {
+      const norm = normalizeTopic(t.target_keyword || t.target_url || "");
+      if (norm && claimedThisBatch.includes(norm)) return [];
+
+      // Already has an open draft for this keyword/topic → skip (don't stack).
+      if (findExistingMatch(t.target_keyword, openDraftTopics)) return [];
+
+      if (t.task_type === "new_page" || t.task_type === "new_blog") {
+        const published = findExistingMatch(t.target_keyword, existingList.filter((e) => !e.keyword));
+        if (published) {
+          if (norm) claimedThisBatch.push(norm);
+          return [{
+            ...t,
+            task_type: "improve_content" as TaskType,
+            target_url: published.url || t.target_url,
+            rationale: `${t.rationale} (redirected from new page — topic already exists)`,
+          }];
+        }
+      }
+
+      if (norm) claimedThisBatch.push(norm);
+      return [t];
+    });
+  } else {
+    console.log(
+      `[stepPlan] ${brand.slug}: skipping new content plan — ${openDraftCount} pending_review drafts (backlog gate)`
+    );
+  }
 
   const runId = await currentRun(brand.id);
   await db.from("runs").update({ tasks_planned: tasks.length }).eq("id", runId);
@@ -161,7 +185,7 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
   await enqueue(brand.id, "audit", { runId });
   await enqueue(brand.id, "performance", { runId });
 
-  return { planned: tasks.length };
+  return { planned: tasks.length, backlog_gated: backlogFull };
 }
 
 // CONTENT: execute one task -> one draft.
@@ -169,6 +193,18 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   const runId = p.runId as string;
   const kw = (p.target_keyword as string) || "";
   const type = p.task_type as TaskType;
+
+  // Final guard: if an open draft already covers this keyword, do not insert
+  // another review card (this is what produced "junk removal cost" twice).
+  if (kw && !p.intent) {
+    const existing = await existingTopics(brand.id);
+    const openDrafts = existing.filter((e) => !!e.keyword);
+    if (findExistingMatch(kw, openDrafts)) {
+      console.log(`[stepContent] ${brand.slug}: skip duplicate draft for "${kw}"`);
+      return;
+    }
+  }
+
   let title = "", body = "";
 
   if (p.intent) {
@@ -666,24 +702,26 @@ export async function stepRankEnrich(brand: Brand) {
   // --- DataForSEO: volume + CPC (confirmed endpoint) ---
   const geo = geoOf(brand);
   const volumeData = await keywordVolumes(keywords, geo).catch(() => []);
-  const volumeMap = new Map(volumeData.map((v) => [v.keyword, v]));
+  const volumeMap = new Map(volumeData.map((v) => [v.keyword.toLowerCase(), v]));
 
   // --- DataForSEO: difficulty (unverified endpoint, fails gracefully) ---
   const difficultyData = await keywordDifficulty(keywords, geo).catch(() => []);
-  const difficultyMap = new Map(difficultyData.map((d) => [d.keyword, d.difficulty]));
+  const difficultyMap = new Map(
+    difficultyData.map((d) => [d.keyword.toLowerCase(), d.difficulty])
+  );
 
   // --- DataForSEO: intent (unverified endpoint, fails gracefully) ---
   const intentData = await classifySearchIntent(keywords, geo).catch(() => []);
-  const intentMap = new Map(intentData.map((i) => [i.keyword, i.intent]));
+  const intentMap = new Map(intentData.map((i) => [i.keyword.toLowerCase(), i.intent]));
 
   // --- AI opportunity scoring (Claude) ---
   // Process in a single batch prompt for efficiency
   const kwContext = toEnrich.map((k) => ({
     keyword: k.keyword,
     position: k.best_position,
-    volume: volumeMap.get(k.keyword)?.volume ?? null,
-    difficulty: difficultyMap.get(k.keyword) ?? null,
-    intent: intentMap.get(k.keyword) ?? null,
+    volume: volumeMap.get(k.keyword.toLowerCase())?.volume ?? null,
+    difficulty: difficultyMap.get(k.keyword.toLowerCase()) ?? null,
+    intent: intentMap.get(k.keyword.toLowerCase()) ?? null,
     status: k.status,
   }));
 
@@ -750,7 +788,7 @@ Return ONLY JSON array:
     console.log(`[stepRankEnrich] ${brand.slug}: scored ${aiScores.length}/${toEnrich.length} keyword(s)`);
   }
 
-  const aiMap = new Map(aiScores.map((s) => [s.keyword, s]));
+  const aiMap = new Map(aiScores.map((s) => [s.keyword.toLowerCase(), s]));
 
   // --- Compute traffic + revenue opportunity ---
   const brandData = brand as Brand & {
@@ -766,9 +804,10 @@ Return ONLY JSON array:
   // --- Upsert enriched data ---
   const now = new Date().toISOString();
   for (const kw of toEnrich) {
-    const vol = volumeMap.get(kw.keyword);
+    const key = kw.keyword.toLowerCase();
+    const vol = volumeMap.get(key);
     const volume = vol?.volume ?? kw.search_volume;
-    const ai = aiMap.get(kw.keyword);
+    const ai = aiMap.get(key);
 
     // Traffic opportunity: estimated clicks if ranking #1
     const estimatedClicks = volume
@@ -787,8 +826,8 @@ Return ONLY JSON array:
     await db.from("tracked_keywords").update({
       search_volume: volume ?? undefined,
       cpc: vol?.cpc ?? undefined,
-      keyword_difficulty: difficultyMap.get(kw.keyword) ?? undefined,
-      search_intent: intentMap.get(kw.keyword) ?? undefined,
+      keyword_difficulty: difficultyMap.get(key) ?? undefined,
+      search_intent: intentMap.get(key) ?? undefined,
       ai_opportunity_score: ai?.score ?? undefined,
       ai_opportunity_reason: ai?.reason ?? undefined,
       estimated_monthly_clicks: estimatedClicks ?? undefined,

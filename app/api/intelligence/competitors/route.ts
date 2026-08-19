@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
-import { rankedKeywords } from "@/lib/dataforseo";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
+import { isTrackableCompetitor, normalizeCompetitorDomain } from "@/lib/competitors/filter";
 
 export const maxDuration = 60;
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const brandId = url.searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
-const accessErr = requireBrandAccess(auth, brandId);
+  const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
 
   // Rate limit AFTER authorisation, so an unauthorised caller can never
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (!brand_id || !domain) {
     return NextResponse.json({ error: "brand_id and domain required" }, { status: 400 });
   }
-const accessErr = requireBrandAccess(auth, brand_id);
+  const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
 
   // Rate limit AFTER authorisation, so an unauthorised caller can never
@@ -67,7 +67,16 @@ const accessErr = requireBrandAccess(auth, brand_id);
   const limited = await enforceRate(brand_id!, "external");
   if (limited) return limited;
 
-  const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
+  const cleanDomain = normalizeCompetitorDomain(domain);
+  if (!isTrackableCompetitor(cleanDomain)) {
+    return NextResponse.json(
+      {
+        error:
+          "That looks like a social network or directory, not a competing business. Add a real competitor domain (e.g. a rival junk-removal company).",
+      },
+      { status: 400 }
+    );
+  }
 
   const { data, error } = await db.from("competitors").upsert({
     brand_id,

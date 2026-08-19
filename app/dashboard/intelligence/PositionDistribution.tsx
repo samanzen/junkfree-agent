@@ -49,6 +49,11 @@ export default function PositionDistribution({ brandId }: { brandId: string }) {
 
   return (
     <div className="pd">
+      <p style={{ margin: "0 0 14px", fontSize: 13, color: "#6A7280", lineHeight: 1.45, maxWidth: 52 * 16 }}>
+        How many of your tracked keywords sit in each Google ranking band.
+        <strong style={{ color: "#3D4654", fontWeight: 600 }}> Top 3</strong> means page-one positions 1–3;
+        <strong style={{ color: "#3D4654", fontWeight: 600 }}> Almost page 1</strong> is positions 11–20 — the easiest wins to push up.
+      </p>
       {/* Breakdown bars */}
       <div className="pd-breakdown">
         {breakdown.map((b) => {

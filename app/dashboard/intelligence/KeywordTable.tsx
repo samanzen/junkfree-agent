@@ -12,7 +12,8 @@ import Field from "@/app/_components/Field";
 
 type Kw = {
   id: string; keyword: string; status: string;
-  position: number|null; best_position: number|null; worst_position: number|null;
+  position: number|null; previous_position?: number|null; change?: number|null;
+  best_position: number|null; worst_position: number|null;
   search_volume: number|null; keyword_difficulty: number|null; search_intent: string|null;
   cpc: number|null; landing_page: string|null;
   clicks: number|null; impressions: number|null; ctr: number|null;
@@ -172,8 +173,8 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                   {kw.position != null ? <span className="kt-pos-badge" style={{ background: (kw.position || 0) <= 3 ? "rgba(0,184,148,.12)" : (kw.position || 0) <= 10 ? "rgba(108,92,231,.1)" : "rgba(245,180,97,.12)", color: (kw.position || 0) <= 3 ? "#00B894" : (kw.position || 0) <= 10 ? "#6C5CE7" : "#E1A100" }}>{kw.position}</span> : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">
-                  {kw.best_position != null && kw.position != null && kw.position !== kw.best_position
-                    ? <span style={{ color: kw.position < kw.best_position ? "#00B894" : "#FF6B6B", fontSize: 12, fontWeight: 600 }}>{kw.position < kw.best_position ? "▲" : "▼"} {Math.abs(kw.position - kw.best_position)}</span>
+                  {kw.change != null && kw.change !== 0
+                    ? <span style={{ color: kw.change > 0 ? "#00B894" : "#FF6B6B", fontSize: 12, fontWeight: 600 }}>{kw.change > 0 ? "▲" : "▼"} {Math.abs(kw.change)}</span>
                     : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.search_volume?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>

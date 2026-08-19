@@ -5,7 +5,10 @@ import ActionButton from "./ActionButton";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Kw = { keyword: string; current_position?: number; previous_position?: number; change?: number; position?: number; last_position?: number; search_volume?: number; ai_opportunity_reason?: string; landing_page?: string };
-type Data = { gains: Kw[]; drops: Kw[]; new_keywords: Kw[]; lost_keywords: Kw[]; almost_page_1: Kw[] };
+type Data = {
+  gains: Kw[]; drops: Kw[]; new_keywords: Kw[]; lost_keywords: Kw[]; almost_page_1: Kw[];
+  compared?: { current_date: string | null; previous_date: string | null };
+};
 
 export default function WinnersLosers({ brandId }: { brandId: string }) {
   const [data, setData] = useState<Data | null>(null);
@@ -42,6 +45,12 @@ export default function WinnersLosers({ brandId }: { brandId: string }) {
 
   return (
     <div className="wl">
+      {data.compared?.current_date && (
+        <p className="wl-compare-note" style={{ margin: "0 0 12px", fontSize: 12.5, color: "#6A7280" }}>
+          Comparing rankings from {data.compared.previous_date || "first sync"} → {data.compared.current_date}.
+          {!data.compared.previous_date && " Need at least two sync days before gains/drops appear."}
+        </p>
+      )}
       <div className="wl-tabs">
         {tabs.map((t) => (
           <button key={t.key} className={`wl-tab ${tab === t.key ? "on" : ""}`}
@@ -53,7 +62,11 @@ export default function WinnersLosers({ brandId }: { brandId: string }) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="wl-empty">No data yet — run the agents to sync keyword positions.</div>
+        <div className="wl-empty">
+          {data.compared?.previous_date
+            ? "No big movers between the last two sync days — check again after the next rank sync."
+            : "No movement data yet. Run agents (or wait for the daily rank sync) so we have at least two days of keyword positions to compare."}
+        </div>
       ) : (
         <div className="wl-list">
           {rows.map((kw, i) => (

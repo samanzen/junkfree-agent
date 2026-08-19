@@ -3,28 +3,25 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
 import { discoverCompetitors, geoOf } from "@/lib/dataforseo";
+import { normalizeCompetitorDomain } from "@/lib/competitors/filter";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
 // On-demand competitor auto-discovery (not run automatically on every cron —
-// this hits an unverified DataForSEO Labs endpoint, so it's a deliberate
-// user action, same cost model as the manual "Add competitor" flow). Finds
-// organic competitors for the brand's own domain, skips anything already
-// tracked, and upserts the rest as normal (editable/removable) competitor
-// rows via the existing add/remove endpoints.
+// this hits a DataForSEO Labs endpoint, so it's a deliberate user action).
+// Social networks and directories are stripped in discoverCompetitors().
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
   const { brand_id } = await req.json().catch(() => ({}));
   if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
-const accessErr = requireBrandAccess(auth, brand_id);
+  const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
 
-  // Rate limit AFTER authorisation, so an unauthorised caller can never
-  // consume a tenant's allowance.
   const limited = await enforceRate(brand_id!, "external");
   if (limited) return limited;
 
@@ -38,15 +35,19 @@ const accessErr = requireBrandAccess(auth, brand_id);
     .from("competitors")
     .select("domain")
     .eq("brand_id", brand_id);
-  const known = new Set((existing || []).map((c) => c.domain));
+  const known = new Set((existing || []).map((c) => normalizeCompetitorDomain(c.domain)));
 
   const rows = found
-    .map((f) => ({
-      brand_id,
-      domain: f.domain.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, ""),
-      name: f.domain,
-      active: true,
-    }))
+    .map((f) => {
+      const domain = normalizeCompetitorDomain(f.domain);
+      return {
+        brand_id,
+        domain,
+        name: domain,
+        active: true,
+        keyword_overlap: f.keywordOverlap,
+      };
+    })
     .filter((r) => r.domain && !known.has(r.domain));
 
   if (!rows.length) return NextResponse.json({ discovered: [] });

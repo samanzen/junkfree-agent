@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { pickLatestAndPrevious, type KeywordPosRow } from "@/lib/intelligence/movement";
 
 export const maxDuration = 30;
 
@@ -38,22 +39,41 @@ export async function GET(req: NextRequest) {
   const { data: keywords, count, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fetch latest positions for these keywords
-  const today = new Date().toISOString().slice(0, 10);
   const kwIds = (keywords || []).map((k) => k.id);
+  // Pull recent history (not just today) so a missed cron day still shows a position.
+  const lookback = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
   const { data: positions } = kwIds.length
     ? await db.from("keyword_positions")
         .select("keyword_id, position, clicks, impressions, ctr, landing_page, captured_date")
         .in("keyword_id", kwIds)
-        .eq("captured_date", today)
+        .gte("captured_date", lookback)
+        .order("captured_date", { ascending: false })
     : { data: [] };
 
-  const posMap = new Map((positions || []).map((p) => [p.keyword_id, p]));
+  const posMap = pickLatestAndPrevious((positions || []) as KeywordPosRow[]);
 
-  const rows = (keywords || []).map((kw) => ({
-    ...kw,
-    ...(posMap.get(kw.id) || { position: null, clicks: null, impressions: null, ctr: null, landing_page: null }),
-  }));
+  const rows = (keywords || []).map((kw) => {
+    const snap = posMap.get(kw.id);
+    const latest = snap?.latest;
+    const previous = snap?.previous;
+    const position = latest?.position ?? null;
+    const previous_position = previous?.position ?? null;
+    const change =
+      position != null && previous_position != null
+        ? previous_position - position // positive = improved (rank number went down)
+        : null;
+    return {
+      ...kw,
+      position,
+      previous_position,
+      change,
+      position_date: latest?.captured_date ?? null,
+      clicks: latest?.clicks ?? null,
+      impressions: latest?.impressions ?? null,
+      ctr: latest?.ctr ?? null,
+      landing_page: latest?.landing_page ?? null,
+    };
+  });
 
   return NextResponse.json({ keywords: rows, total: count || 0, page, limit });
 }

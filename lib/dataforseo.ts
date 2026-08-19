@@ -3,6 +3,11 @@
 // Basic with DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD. All calls degrade
 // gracefully (return [] if unconfigured or on error) so the agent never breaks.
 
+import {
+  filterTrackableCompetitors,
+  normalizeCompetitorDomain,
+} from "./competitors/filter";
+
 const BASE = "https://api.dataforseo.com/v3";
 
 function authHeader(): string | null {
@@ -276,6 +281,7 @@ export async function discoverCompetitors(
   domain: string,
   geo: Geo = {}
 ): Promise<{ domain: string; keywordOverlap: number | null }[]> {
+  const own = normalizeCompetitorDomain(domain);
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/competitors_domain/live",
     { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 15 }
@@ -285,12 +291,15 @@ export async function discoverCompetitors(
       | { items?: { domain?: string; intersections?: number }[] }
       | undefined
   )?.items || [];
-  return items
-    .map((it) => ({
-      domain: it.domain || "",
-      keywordOverlap: typeof it.intersections === "number" ? it.intersections : null,
-    }))
-    .filter((x) => x.domain && x.domain !== domain);
+  return filterTrackableCompetitors(
+    items
+      .map((it) => ({
+        domain: normalizeCompetitorDomain(it.domain || ""),
+        keywordOverlap: typeof it.intersections === "number" ? it.intersections : null,
+      }))
+      .filter((x) => !!x.domain),
+    own
+  );
 }
 
 // Extended domain rank info: includes domain authority-like score.
