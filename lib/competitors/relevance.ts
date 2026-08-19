@@ -1,9 +1,9 @@
 // Industry-aware competitor relevance.
 //
 // A competitor is another business in the SAME line of work fighting for the
-// same customers — e.g. other movers for a moving company. Social networks,
-// directories, and unrelated verticals (car dealers, banks, news sites) are
-// not competitors even when they rank for overlapping keywords.
+// same customers. The brand's services / niche come from the brand record —
+// this gate is not hardcoded to any vertical. Social networks, directories,
+// and unrelated industries are never competitors even with keyword overlap.
 //
 // Layering:
 //   1. Host denylist (social/directories) — lib/competitors/filter.ts
@@ -65,9 +65,10 @@ export async function keepSameIndustryCompetitors(
 You decide which domains are TRUE COMPETITORS for this business.
 
 Definition of a competitor:
-- Same (or very closely related) industry / service line
+- Same (or very closely related) industry / service line as THIS brand
 - Competes for the same paying customers
-- Examples for a moving company: other movers, junk removal, packing services — YES
+- Infer the industry from the brand block (name, services, service area) — do not assume a vertical
+- YES examples relative to THIS brand: other companies offering the same services in the same market
 - NOT competitors: Facebook, Yelp, Reddit, YouTube, news sites, banks, car dealerships,
   real-estate portals, job boards, generic blogs, government sites, or any business
   in a different industry that merely ranks for overlapping keywords
@@ -86,7 +87,7 @@ Return ONLY JSON:
 
 Rules:
 - Keep at most 8
-- Prefer local/national rivals in the same service line
+- Prefer local/national rivals in the same service line as THIS brand
 - If NONE are real rivals, return {"keep":[]}
 - Never keep social networks, directories, or unrelated industries`,
   }).catch(() => null);

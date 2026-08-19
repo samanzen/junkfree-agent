@@ -97,6 +97,8 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   const [adding, setAdding] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
+  const [suggestions, setSuggestions] = useState<{ domain: string; reason: string; title?: string | null }[]>([]);
+  const [suggestQuery, setSuggestQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [removing, setRemoving] = useState(false);
 
@@ -152,21 +154,38 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
     setRefreshing(false);
   }
 
-  async function add() {
-    if (!domain.trim()) return;
+  async function add(explicitDomain?: string, confirmed = false) {
+    const raw = (explicitDomain || domain).trim();
+    if (!raw) return;
     setAdding(true);
     setStatusMsg("");
+    if (!confirmed) setSuggestions([]);
     try {
       const res = await authedFetch("/api/intelligence/competitors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brand_id: brandId, domain: domain.trim() }),
+        body: JSON.stringify({
+          brand_id: brandId,
+          domain: raw,
+          confirm: confirmed || undefined,
+        }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) setStatusMsg(d.error || "Couldn’t add that competitor.");
-      else {
+      if (d.needs_confirmation && Array.isArray(d.suggestions)) {
+        setSuggestions(d.suggestions);
+        setSuggestQuery(d.query || raw);
+        setStatusMsg(d.message || "Did you mean one of these?");
+      } else if (!res.ok) {
+        setStatusMsg(d.error || "Couldn’t add that competitor.");
+      } else {
         setDomain("");
-        setStatusMsg("Competitor added.");
+        setSuggestions([]);
+        setSuggestQuery("");
+        setStatusMsg(
+          d.resolved_domain && d.resolved_domain !== raw
+            ? `Added ${d.resolved_domain}.`
+            : "Competitor added."
+        );
         await load();
       }
     } finally {
@@ -177,6 +196,7 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
   async function discover() {
     setDiscovering(true);
     setStatusMsg("");
+    setSuggestions([]);
     try {
       const r = await authedFetch("/api/intelligence/competitors/discover", {
         method: "POST",
@@ -184,7 +204,11 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
         body: JSON.stringify({ brand_id: brandId }),
       }).then((res) => res.json());
       const n = (r.discovered || []).length;
-      setStatusMsg(n ? `Found ${n} new competitor${n === 1 ? "" : "s"}.` : "No new competitors found.");
+      setStatusMsg(
+        n
+          ? `Found ${n} new competitor${n === 1 ? "" : "s"} in your industry.`
+          : r.message || "No new competitors found."
+      );
       if (n) await load();
     } catch {
       setStatusMsg("Discovery failed — try again later.");
@@ -369,19 +393,46 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
           className="cp-input-wrap"
           inputClassName="cp-input"
           id="cp-add-input"
-          placeholder="competitor-domain.com"
+          placeholder="competitor.com or business name"
           value={domain}
           disabled={adding}
-          onChange={(e) => setDomain(e.target.value)}
+          onChange={(e) => {
+            setDomain(e.target.value);
+            if (suggestions.length) {
+              setSuggestions([]);
+              setSuggestQuery("");
+            }
+          }}
           onKeyDown={(e) => e.key === "Enter" && add()}
         />
-        <button className="cp-btn cp-btn-primary" onClick={add} disabled={adding}>
+        <button className="cp-btn cp-btn-primary" onClick={() => add()} disabled={adding}>
           {adding ? "Adding…" : "Add"}
         </button>
         <button className="cp-btn cp-btn-blue" onClick={discover} disabled={discovering}>
           {discovering ? "Discovering…" : "Find competitors"}
         </button>
       </div>
+      {suggestions.length > 0 && (
+        <div className="cp-suggest">
+          <div className="cp-suggest-label">
+            Did you mean{suggestQuery ? ` “${suggestQuery}”` : ""}?
+          </div>
+          <div className="cp-suggest-list">
+            {suggestions.map((s) => (
+              <button
+                key={s.domain}
+                type="button"
+                className="cp-suggest-btn"
+                disabled={adding}
+                onClick={() => add(s.domain, true)}
+              >
+                <strong>{s.domain}</strong>
+                {s.title ? <span>{s.title}</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {statusMsg && <div className="cp-status">{statusMsg}</div>}
       {needsRefresh && competitors.length > 0 && (
         <div className="cp-hint">

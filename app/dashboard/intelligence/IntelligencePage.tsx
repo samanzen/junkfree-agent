@@ -318,6 +318,13 @@ const CSS = `
 .cp-btn-ghost { background:#fff; color:#4A5568; border:1px solid #E7EAF0; }
 .cp-btn-danger { background:#fff; color:#C0392B; border:1px solid #F5C6C2; }
 .cp-status { font-size:13px; color:#4A5568; }
+.cp-suggest { background:#FFF8F4; border:1px solid #FFD8C8; border-radius:var(--radius-md); padding:12px 14px; display:flex; flex-direction:column; gap:10px; }
+.cp-suggest-label { font-size:13px; font-weight:600; color:#9A3412; }
+.cp-suggest-list { display:flex; flex-wrap:wrap; gap:8px; }
+.cp-suggest-btn { display:flex; flex-direction:column; align-items:flex-start; gap:2px; background:#fff; border:1px solid #FFD8C8; border-radius:var(--radius-sm); padding:8px 12px; cursor:pointer; font-family:inherit; text-align:left; max-width:100%; }
+.cp-suggest-btn:hover { border-color:#FF6A3D; }
+.cp-suggest-btn strong { font-size:13px; color:#FF6A3D; }
+.cp-suggest-btn span { font-size:11.5px; color:#6B768D; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cp-hint { background:#FFF8F4; border:1px solid #FFD8C8; color:#9A3412; border-radius:var(--radius-md); padding:12px 14px; font-size:13px; line-height:1.45; }
 .cp-card { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:18px; }
 .cp-card-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }

@@ -12,9 +12,8 @@ export const maxDuration = 60;
 
 // On-demand competitor auto-discovery.
 // Pipeline: DataForSEO Labs → drop social/directories → overlap floor →
-// same-industry gate (Claude, using brand.services). A moving company should
-// only keep other movers / closely related local services — never Facebook
-// or a car dealership that happens to share a few keywords.
+// same-industry gate (Claude, using brand.services). Industry comes from the
+// brand record — works for any vertical, not a hardcoded niche.
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
