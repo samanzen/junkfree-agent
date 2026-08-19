@@ -6,20 +6,22 @@ import KeywordTable from "./KeywordTable";
 import WinnersLosers from "./WinnersLosers";
 import PositionDistribution from "./PositionDistribution";
 import CompetitorPanel from "./CompetitorPanel";
+import AiVisibilityPanel from "./AiVisibilityPanel";
 
-type Props = { brandId: string; brandName?: string };
+type Props = { brandId: string; brandName?: string; isAdmin?: boolean };
 
-type Section = "overview" | "keywords" | "winners" | "distribution" | "competitors";
+type Section = "overview" | "ai-visibility" | "keywords" | "winners" | "distribution" | "competitors";
 
 const SECTIONS: { key: Section; label: string }[] = [
-  { key: "overview",     label: "Overview" },
-  { key: "keywords",     label: "Keywords" },
-  { key: "winners",      label: "Winners & Losers" },
-  { key: "distribution", label: "Distribution" },
-  { key: "competitors",  label: "Competitors" },
+  { key: "overview",       label: "Overview" },
+  { key: "ai-visibility",  label: "AI visibility" },
+  { key: "keywords",       label: "Keywords" },
+  { key: "winners",        label: "Winners & Losers" },
+  { key: "distribution",   label: "Distribution" },
+  { key: "competitors",    label: "Competitors" },
 ];
 
-export default function IntelligencePage({ brandId, brandName }: Props) {
+export default function IntelligencePage({ brandId, brandName, isAdmin }: Props) {
   const [section, setSection] = useState<Section>("overview");
 
   return (
@@ -35,11 +37,12 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
       </div>
 
       <div className="ip-content">
-        {section === "overview"     && <IntelOverview brandId={brandId} brandName={brandName} />}
-        {section === "keywords"     && <KeywordTable brandId={brandId} />}
-        {section === "winners"      && <WinnersLosers brandId={brandId} />}
-        {section === "distribution" && <PositionDistribution brandId={brandId} />}
-        {section === "competitors"  && <CompetitorPanel brandId={brandId} />}
+        {section === "overview"      && <IntelOverview brandId={brandId} brandName={brandName} />}
+        {section === "ai-visibility" && <AiVisibilityPanel brandId={brandId} isAdmin={isAdmin} />}
+        {section === "keywords"      && <KeywordTable brandId={brandId} />}
+        {section === "winners"       && <WinnersLosers brandId={brandId} />}
+        {section === "distribution"  && <PositionDistribution brandId={brandId} />}
+        {section === "competitors"   && <CompetitorPanel brandId={brandId} />}
       </div>
     </div>
   );
@@ -103,7 +106,7 @@ const CSS = `
 .wl-empty, .wl-loading,
 .pd-loading, .pd-empty,
 .kt-empty,
-.air-empty { padding:40px; text-align:center; color:#9AA3B2; font-size:13px; }
+.air-empty, .av-empty { padding:40px; text-align:center; color:#9AA3B2; font-size:13px; }
 
 /* ── Position Distribution ── */
 .pd { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:20px; }
@@ -212,10 +215,59 @@ const CSS = `
 .cp-pos { background:#FFF3CD; color:#D97706; font-size:12px; font-weight:700; padding:2px 8px; border-radius:var(--radius-lg); }
 .cp-track-btn { background:#EEF2FF; color:#6C5CE7; border:0; padding:4px 12px; border-radius:var(--radius-xs); font-size:12px; font-weight:600; cursor:pointer; }
 
+/* ── AI visibility report ── */
+.av { display:flex; flex-direction:column; gap:16px; }
+.av-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.av-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.av-card { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:16px; }
+.av-label { font-size:11px; font-weight:600; color:#8A93A6; text-transform:uppercase; letter-spacing:.06em; }
+.av-val { font-size:26px; font-weight:700; letter-spacing:-.02em; line-height:1.1; color:#1A2030; }
+.av-sub { font-size:12px; color:#8A93A6; margin-top:6px; }
+.av-tabs { display:flex; gap:2px; border-bottom:1px solid #E7EAF0; overflow-x:auto; }
+.av-tab { background:transparent; border:0; border-bottom:2px solid transparent; color:#8A93A6; padding:10px 14px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; margin-bottom:-1px; display:inline-flex; align-items:center; gap:6px; }
+.av-tab.on { color:#6C5CE7; border-bottom-color:#6C5CE7; }
+.av-run { background:#6C5CE7; color:#fff; border:0; padding:8px 14px; border-radius:var(--radius-sm); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+.av-run:disabled { opacity:.45; cursor:default; }
+.av-summary { font-size:13.5px; color:#4A5568; line-height:1.6; background:#F8F7FF; border:1px solid #E0E7FF; border-radius:var(--radius-sm); padding:14px 16px; }
+.av-assist { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
+.av-assist-card { background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:14px; }
+.av-assist-name { font-size:13.5px; font-weight:700; color:#1A2030; }
+.av-assist-rate { font-size:22px; font-weight:700; margin:8px 0 4px; }
+.av-assist-meta { font-size:11.5px; color:#9AA3B2; }
+.av-chip { font-size:11px; font-weight:600; padding:2px 8px; border-radius:var(--radius-lg); }
+.av-chip.off { background:#F0F2F5; color:#8A93A6; }
+.av-chip.err { background:rgba(255,107,107,.1); color:#FF6B6B; }
+.av-table { width:100%; border-collapse:collapse; }
+.av-table th { text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#8A93A6; padding:8px 10px; border-bottom:1px solid #E7EAF0; background:#F9FAFB; }
+.av-table td { padding:10px; font-size:13px; border-bottom:1px solid #F5F7FA; color:#1A2030; vertical-align:top; }
+.av-prompt { font-weight:600; }
+.av-muted { color:#9AA3B2; font-size:12px; }
+.av-seg { display:flex; flex-direction:column; gap:8px; }
+.av-seg-row { display:flex; align-items:center; gap:12px; }
+.av-seg-label { width:140px; font-size:12.5px; font-weight:600; color:#6A7280; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.av-seg-track { flex:1; height:8px; background:#F0F2F5; border-radius:4px; overflow:hidden; }
+.av-seg-fill { height:100%; border-radius:4px; background:#6C5CE7; }
+.av-seg-val { width:72px; text-align:right; font-size:12px; font-weight:700; }
+.av-trend { display:flex; align-items:flex-end; gap:6px; height:72px; }
+.av-trend-bar { flex:1; background:#EEF2FF; border-radius:var(--radius-xs) var(--radius-xs) 0 0; min-height:4px; position:relative; }
+.av-trend-fill { position:absolute; left:0; right:0; bottom:0; background:#6C5CE7; border-radius:inherit; }
+.av-filter { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.av-search { flex:1; min-width:160px; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:8px 12px; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; }
+.av-dot { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:var(--radius-full); font-size:11px; font-weight:700; }
+.av-dot.yes { background:rgba(0,184,148,.12); color:#00B894; }
+.av-dot.no { background:rgba(255,107,107,.12); color:#FF6B6B; }
+.av-dot.miss { background:#F0F2F5; color:#9AA3B2; }
+.av-h { font-size:15px; font-weight:700; color:#1A2030; margin:0 0 4px; }
+.av-p { font-size:12.5px; color:#9AA3B2; margin:0 0 14px; }
+.av-banner { font-size:13px; color:#3730A3; background:#F8F7FF; border:1px solid #E0E7FF; border-radius:var(--radius-sm); padding:10px 12px; }
+.av-link { color:#6C5CE7; text-decoration:none; font-weight:600; }
+.av-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
 /* ── Responsive (Phase 1: consolidated onto the shared breakpoints) ───────── */
-${down.md} { .io-grid{grid-template-columns:repeat(2,1fr)} }
+${down.md} { .io-grid{grid-template-columns:repeat(2,1fr)} .av-kpis{grid-template-columns:repeat(2,1fr)} .av-grid2{grid-template-columns:1fr} }
 ${down.sm} {
   .io-grid{grid-template-columns:1fr}
+  .av-kpis{grid-template-columns:1fr}
   .kt-toolbar{flex-direction:column} .kt-search,.kt-add{width:100%}
   .ip-nav{overflow-x:auto;scrollbar-width:none}
   .ip-nav::-webkit-scrollbar{display:none}

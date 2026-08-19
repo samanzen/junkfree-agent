@@ -87,6 +87,13 @@ weekly cadence and its own caps rather than riding the daily pipeline.
 completed sweep. It previously held 100 or 0 from a single yes/no question asked
 of a single model, which made a percentage-suffixed KPI card out of a coin flip.
 
+The full report is **Intelligence → AI visibility** on both the admin dashboard
+and the customer portal. It is read-only: every figure is "named in 6 of 12
+questions", never a lone percentage pretending at precision. Admins can trigger
+a one-brand sweep from that page (`POST /api/cron/ai-visibility`); customers
+wait for the weekly cron. The report covers assistants, questions, places,
+languages, competitors, cited pages and the questions nobody named you for.
+
 ## Env
 
 See `.env.example`. Key switches:

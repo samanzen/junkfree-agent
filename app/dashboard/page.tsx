@@ -382,7 +382,7 @@ export default function Dashboard() {
         {loading && <p className="muted" role="status" aria-live="polite">Loading signal…</p>}
 
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
-        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
+        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} isAdmin={role === "admin"} />}
 
         {!loading && tab === "recommendations" && brand && (
           <RecommendationsPanel
