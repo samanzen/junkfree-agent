@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./intelligence/ActionButton";
+import RankChange from "./_components/RankChange";
 
 type Kw = {
   keyword: string;
@@ -122,20 +123,21 @@ export default function RecommendationActions({
           <article key={`${kw.keyword}-${i}`} className={`rec-action-card ${mode}`}>
             <div className="rec-action-left">
               <div className="rec-action-kw">{kw.keyword}</div>
-              <div className="rec-action-meta">
-                {mode === "issues" && kw.previous_position != null && kw.current_position != null && (
-                  <span>
-                    Dropped #{kw.previous_position} → #{kw.current_position}
-                    {kw.change != null ? ` (▼${kw.change})` : ""}
-                  </span>
-                )}
-                {mode === "opportunities" && kw.position != null && (
-                  <span>Currently #{kw.position} — one push from page 1</span>
-                )}
-                {kw.search_volume != null && (
-                  <span> · ~{kw.search_volume.toLocaleString()}/mo</span>
-                )}
+              <div className="rec-action-rank">
+                {mode === "issues" && kw.previous_position != null && kw.current_position != null ? (
+                  <RankChange
+                    previous={kw.previous_position}
+                    current={kw.current_position}
+                    change={kw.change}
+                    direction="down"
+                  />
+                ) : mode === "opportunities" && kw.position != null ? (
+                  <RankChange current={kw.position} />
+                ) : null}
               </div>
+              {kw.search_volume != null && (
+                <div className="rec-action-vol">~{kw.search_volume.toLocaleString()} searches / month</div>
+              )}
               {kw.ai_opportunity_reason && (
                 <p className="rec-action-why">{kw.ai_opportunity_reason}</p>
               )}

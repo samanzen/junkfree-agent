@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     .map(([kw, r]) => ({
       keyword: kw, current_position: r.position,
       previous_position: prevMap.get(kw)!,
-      change: prevMap.get(kw)! - r.position,
+      change: Math.round(prevMap.get(kw)! - r.position),
       ...metaMap.get(kw),
     }))
     .filter((r) => r.change >= 1)
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     .map(([kw, r]) => ({
       keyword: kw, current_position: r.position,
       previous_position: prevMap.get(kw)!,
-      change: curMap.get(kw)!.position - prevMap.get(kw)!,
+      change: Math.round(curMap.get(kw)!.position - prevMap.get(kw)!),
       ...metaMap.get(kw),
     }))
     .filter((r) => r.change >= 1)

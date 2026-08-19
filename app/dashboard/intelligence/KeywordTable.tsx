@@ -174,7 +174,14 @@ export default function KeywordTable({ brandId }: { brandId: string }) {
                 </td>
                 <td className="kt-td kt-center">
                   {kw.change != null && kw.change !== 0
-                    ? <span style={{ color: kw.change > 0 ? "#00B894" : "#FF6B6B", fontSize: 12, fontWeight: 600 }}>{kw.change > 0 ? "▲" : "▼"} {Math.abs(kw.change)}</span>
+                    ? <span style={{
+                        color: kw.change > 0 ? "#059669" : "#DC2626",
+                        background: kw.change > 0 ? "rgba(16,185,129,.12)" : "rgba(239,68,68,.12)",
+                        fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                        display: "inline-flex", alignItems: "center", gap: 3,
+                      }}>
+                        {kw.change > 0 ? "▲" : "▼"} {kw.change > 0 ? `+${Math.round(Math.abs(kw.change))}` : `−${Math.round(Math.abs(kw.change))}`}
+                      </span>
                     : <span className="kt-dash">–</span>}
                 </td>
                 <td className="kt-td kt-center">{kw.search_volume?.toLocaleString() ?? <span className="kt-dash">–</span>}</td>

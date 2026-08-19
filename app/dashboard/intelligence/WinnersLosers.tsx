@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
+import RankChange from "../_components/RankChange";
 
 type Kw = {
   keyword: string;
@@ -29,21 +30,13 @@ function fmtDate(d: string | null | undefined) {
 }
 
 function plainLine(tab: string, kw: Kw): string {
-  if (tab === "gains" && kw.previous_position != null && kw.current_position != null) {
-    return `Moved up from #${kw.previous_position} to #${kw.current_position} — more people can find you for this search.`;
-  }
-  if (tab === "drops" && kw.previous_position != null && kw.current_position != null) {
-    return `Slipped from #${kw.previous_position} to #${kw.current_position}. Fix these in AI Recommendations → Issues.`;
-  }
-  if (tab === "new" && kw.position != null) {
-    return `New ranking at #${kw.position} — you weren’t showing for this before.`;
-  }
+  if (tab === "gains") return "Moved up — more people can find you for this search.";
+  if (tab === "drops") return "Slipped. Fix these in AI Recommendations → Issues.";
+  if (tab === "new") return "New ranking — you weren’t showing for this before.";
   if (tab === "lost" && kw.last_position != null) {
-    return `Used to rank around #${kw.last_position}, now missing from recent results.`;
+    return `Used to rank around #${Math.round(kw.last_position)}, now missing from recent results.`;
   }
-  if (tab === "page1" && kw.position != null) {
-    return `Sitting at #${kw.position}. Push these in AI Recommendations → Almost page 1.`;
-  }
+  if (tab === "page1") return "One push from Google’s first page. Push in AI Recommendations → Almost page 1.";
   return kw.ai_opportunity_reason || "";
 }
 
@@ -97,7 +90,6 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
           : tab === "lost"
             ? data.lost_keywords
             : data.almost_page_1;
-  const activeColor = tabs.find((t) => t.key === tab)?.color || "#6C5CE7";
 
   return (
     <div className="wl">
@@ -132,19 +124,25 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
             <div key={i} className={`wl-row tone-${tab}`}>
               <div className="wl-row-left">
                 <span className="wl-kw">{kw.keyword}</span>
+                <div className="wl-rank">
+                  {(tab === "gains" || tab === "drops") &&
+                  kw.previous_position != null &&
+                  kw.current_position != null ? (
+                    <RankChange
+                      previous={kw.previous_position}
+                      current={kw.current_position}
+                      change={kw.change}
+                      direction={tab === "gains" ? "up" : "down"}
+                    />
+                  ) : (
+                    <RankChange
+                      current={kw.current_position ?? kw.position ?? kw.last_position}
+                    />
+                  )}
+                </div>
                 <span className="wl-plain">{plainLine(tab, kw)}</span>
                 {kw.search_volume != null && (
                   <span className="wl-vol">~{kw.search_volume.toLocaleString()} searches / month</span>
-                )}
-              </div>
-              <div className="wl-row-right">
-                {(kw.current_position != null || kw.position != null) && (
-                  <span className="wl-pos">Now #{kw.current_position ?? kw.position}</span>
-                )}
-                {kw.change != null && (
-                  <span className="wl-change" style={{ color: activeColor }}>
-                    {tab === "drops" ? `▼ ${kw.change}` : `▲ ${kw.change}`}
-                  </span>
                 )}
               </div>
             </div>

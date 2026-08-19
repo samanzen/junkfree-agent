@@ -171,12 +171,9 @@ const CSS = `
 .wl-row:last-child { border-bottom:0; }
 .wl-row-left { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
 .wl-kw { font-size:14px; font-weight:600; color:#1A2030; }
+.wl-rank { margin:8px 0 6px; }
 .wl-vol { font-size:12px; color:#9AA3B2; }
 .wl-plain { font-size:12.5px; color:#4A5568; line-height:1.4; }
-.wl-reason { font-size:12px; color:#4F46E5; }
-.wl-row-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.wl-pos { font-size:12px; background:#F0F2F5; color:#6A7280; padding:4px 8px; border-radius:var(--radius-xs); font-weight:600; }
-.wl-change { font-size:13px; font-weight:700; min-width:36px; text-align:right; }
 .wl-empty, .wl-loading,
 .pd-loading, .pd-empty,
 .kt-empty,

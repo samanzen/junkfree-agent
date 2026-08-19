@@ -399,9 +399,10 @@ const REC_CSS = `
 .rec-action-card { display:flex; justify-content:space-between; gap:14px; align-items:center; background:#fff; border:1px solid #E7EAF0; border-radius:var(--radius-md); padding:14px 16px; border-left:4px solid #CBD5E1; }
 .rec-action-card.issues { border-left-color:#E17055; background:linear-gradient(90deg,#FFF8F6,#fff 40%); }
 .rec-action-card.opportunities { border-left-color:#00B894; background:linear-gradient(90deg,#F3FFFB,#fff 40%); }
-.rec-action-kw { font-size:14.5px; font-weight:700; color:#12172A; }
-.rec-action-meta { font-size:12.5px; color:#6B768D; margin-top:3px; }
-.rec-action-why { margin:6px 0 0; font-size:12.5px; color:#4F46E5; }
+.rec-action-kw { font-size:14.5px; font-weight:700; color:#12172A; margin-bottom:8px; }
+.rec-action-rank { margin:0 0 6px; }
+.rec-action-vol { font-size:12px; color:#9AA3B2; margin-top:4px; }
+.rec-action-why { margin:8px 0 0; font-size:12.5px; color:#4F46E5; line-height:1.4; }
 .rec-action-right { flex-shrink:0; }
 .rec-action-auto-badge { font-size:11.5px; font-weight:700; color:#047857; background:#ECFDF5; padding:6px 10px; border-radius:var(--radius-full); }
 `;
