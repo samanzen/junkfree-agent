@@ -251,8 +251,10 @@ const CSS = `
 .av-trend { display:flex; align-items:flex-end; gap:6px; height:72px; }
 .av-trend-bar { flex:1; background:#EEF2FF; border-radius:var(--radius-xs) var(--radius-xs) 0 0; min-height:4px; position:relative; }
 .av-trend-fill { position:absolute; left:0; right:0; bottom:0; background:#6C5CE7; border-radius:inherit; }
-.av-filter { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-.av-search { flex:1; min-width:160px; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:8px 12px; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; }
+.av-filter { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
+.av-search-wrap { flex:1; min-width:160px; }
+.av-intent { flex:0 0 160px; }
+.av-search { width:100%; background:#fff; border:1px solid #E7EAF0; color:#1A2030; padding:8px 12px; border-radius:var(--radius-sm); font-size:13px; font-family:inherit; }
 .av-dot { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:var(--radius-full); font-size:11px; font-weight:700; }
 .av-dot.yes { background:rgba(0,184,148,.12); color:#00B894; }
 .av-dot.no { background:rgba(255,107,107,.12); color:#FF6B6B; }

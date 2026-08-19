@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import Field from "@/app/_components/Field";
 import MetricExplainer from "./MetricExplainer";
 import {
   assistantLabel,
@@ -311,12 +312,21 @@ function Questions({ report }: { report: NonNullable<AiVisibilityResponse["repor
       <h3 className="av-h">Every question we asked</h3>
       <p className="av-p">Worst first. Being cited without being named still counts as a mention.</p>
       <div className="av-filter">
-        <input className="av-search" placeholder="Search questions…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="av-search" style={{ flex: "0 0 160px" }} value={intent} onChange={(e) => setIntent(e.target.value)}>
+        <Field
+          hideLabel
+          label="Search questions"
+          type="search"
+          className="av-search-wrap"
+          inputClassName="av-search"
+          placeholder="Search questions…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <Field as="select" hideLabel label="Filter by intent" className="av-intent" inputClassName="av-search" value={intent} onChange={(e) => setIntent(e.target.value)}>
           <option value="">All intents</option>
           {intents.map((i) => <option key={i} value={i}>{intentLabel(i)}</option>)}
-        </select>
-        <button className={`air-cat ${gapsOnly ? "on" : ""}`} onClick={() => setGapsOnly((v) => !v)} style={gapsOnly ? { borderColor: "#6C5CE7", color: "#6C5CE7" } : undefined}>
+        </Field>
+        <button type="button" className={`air-cat ${gapsOnly ? "on" : ""}`} onClick={() => setGapsOnly((v) => !v)} style={gapsOnly ? { borderColor: "#6C5CE7", color: "#6C5CE7" } : undefined}>
           Gaps only
         </button>
       </div>
