@@ -19,6 +19,7 @@ import { slugify, splitFrontMatter } from "./utils";
 import { executeChange } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
 import { isDraftAutopilot, isSectionAutopilot } from "./recommendations/sections";
+import { stepAiVisibility } from "./ai-visibility/run";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -276,17 +277,42 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   }
 }
 
-export async function stepGeo(brand: Brand) {
-  const { count } = await db.from("drafts").select("id", { count: "exact", head: true })
-    .eq("brand_id", brand.id).eq("task_type", "geo_answers");
-  if (count) return;
-  const a = await writeAnswerContent(brand);
+export async function stepGeo(brand: Brand, payload: Record<string, unknown> = {}) {
+  // A gap raised by the AI-visibility sweep names the exact question an
+  // assistant answered without us (lib/ai-visibility/analyst.ts). That is a
+  // targeted request, so it deliberately bypasses the once-per-brand guard
+  // below — the guard exists to stop the generic FAQ being written over and
+  // over, not to stop us answering a specific question we are losing.
+  const focusQuestion = typeof payload.question === "string" ? payload.question : null;
+
+  if (!focusQuestion) {
+    const { count } = await db.from("drafts").select("id", { count: "exact", head: true })
+      .eq("brand_id", brand.id).eq("task_type", "geo_answers");
+    if (count) return;
+  } else {
+    // Do not answer the same question twice: one draft per prompt key.
+    const promptKey = typeof payload.prompt_key === "string" ? payload.prompt_key : null;
+    if (promptKey) {
+      const { count } = await db.from("drafts").select("id", { count: "exact", head: true })
+        .eq("brand_id", brand.id).eq("task_type", "geo_answers").ilike("title", `%${promptKey}%`);
+      if (count) return;
+    }
+  }
+
+  const a = await writeAnswerContent(brand, focusQuestion ? { question: focusQuestion } : undefined);
   if (a?.faqs?.length) {
     const auto = isSectionAutopilot(brand, "content");
+    const promptKey = typeof payload.prompt_key === "string" ? payload.prompt_key : null;
     await db.from("drafts").insert({
-      brand_id: brand.id, task_type: "geo_answers", title: "AI-answer FAQ content (GEO/AEO)",
+      brand_id: brand.id, task_type: "geo_answers",
+      title: focusQuestion
+        // The prompt key is carried in the title so the duplicate check above
+        // can find it; drafts has no column for a prompt reference.
+        ? `AI-answer: "${focusQuestion}"${promptKey ? ` [${promptKey}]` : ""}`
+        : "AI-answer FAQ content (GEO/AEO)",
       body: a.faqs.map((f) => `**${f.q}**\n\n${f.a}`).join("\n\n"),
-      rationale: "Answer-optimized so ChatGPT/Gemini recommend the business.",
+      rationale: (typeof payload.rationale === "string" && payload.rationale)
+        || "Answer-optimized so ChatGPT/Gemini recommend the business.",
       status: auto ? "approved" : "pending_review",
     });
   }
@@ -422,13 +448,14 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
   switch (job.kind) {
     case "plan": return void (await stepPlan(b));
     case "content": return void (await stepContent(b, job.payload));
-    case "geo": return void (await stepGeo(b));
+    case "geo": return void (await stepGeo(b, job.payload));
     case "gbp": return void (await stepGbp(b));
     case "citations": return void (await stepCitations(b));
     case "audit": return void (await stepAudit(b, (job.payload.runId as string) || ""));
     case "performance": return void (await stepPerformance(b));
     case "rank_sync": return void (await stepRankSync(b));
     case "rank_enrich": return void (await stepRankEnrich(b));
+    case "ai_visibility": return void (await stepAiVisibility(b));
     case "publish": return void (await stepPublish(b, job.payload));
   }
 }

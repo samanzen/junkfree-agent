@@ -85,6 +85,16 @@ export async function triggerRankEnrich(brand: Brand): Promise<SeedResult> {
   return seedIfIdle(brand, ["rank_enrich"]);
 }
 
+// Weekly AI-visibility sweep (own cron, separate cadence).
+//
+// Keeps the narrower kind-scoped idle check rather than checkAllPending: a
+// sweep fans out only into MORE ai_visibility jobs (its own continuations), so
+// the kind-scoped check already covers it, and using the broad check would mean
+// a brand mid-way through its daily content pipeline could never start a sweep.
+export async function triggerAiVisibility(brand: Brand): Promise<SeedResult> {
+  return seedIfIdle(brand, ["ai_visibility"]);
+}
+
 export type StepResult = { done: boolean; kind?: JobKind; remaining?: number; error?: string };
 
 // Process exactly ONE queued job for a brand. Same response shape the old
