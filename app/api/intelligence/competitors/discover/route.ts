@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
         domain,
         name: domain,
         active: true,
-        keyword_overlap: f.keywordOverlap,
+        last_keyword_count: f.keywordOverlap,
+        last_checked_at: new Date().toISOString(),
       };
     })
     .filter((r) => r.domain && !known.has(r.domain));
