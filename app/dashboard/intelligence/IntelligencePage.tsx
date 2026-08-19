@@ -8,16 +8,27 @@ import WinnersLosers from "./WinnersLosers";
 import PositionDistribution from "./PositionDistribution";
 import CompetitorPanel from "./CompetitorPanel";
 import ReportAskBar from "./ReportAskBar";
+import ActivityReport from "./ActivityReport";
+import DigestReport from "./DigestReport";
 
 type Props = { brandId: string; brandName?: string };
 
-type Section = "overview" | "keywords" | "winners" | "distribution" | "competitors";
+type Section =
+  | "overview"
+  | "keywords"
+  | "winners"
+  | "distribution"
+  | "activity"
+  | "digest"
+  | "competitors";
 
 const SECTIONS: { key: Section; label: string; blurb: string }[] = [
   { key: "overview", label: "Overview", blurb: "Clicks, impressions, and rankings — where you were vs where you are." },
   { key: "keywords", label: "Keywords", blurb: "Every search term we track, with current position and change." },
-  { key: "winners", label: "What changed", blurb: "Plain-English report of rankings that moved up, down, or appeared." },
+  { key: "winners", label: "What changed", blurb: "Read-only ranking movements. Actions live in AI Recommendations." },
   { key: "distribution", label: "Visibility", blurb: "How many keywords sit on page 1, almost page 1, or further back." },
+  { key: "activity", label: "AI work", blurb: "Pages published, drafts finished, and keywords the agents worked on." },
+  { key: "digest", label: "Digest", blurb: "Colorful weekly/monthly postcard — what customers will get by email later." },
   { key: "competitors", label: "Competitors", blurb: "Side-by-side comparison of you vs rivals on shared keywords." },
 ];
 
@@ -35,7 +46,7 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
           <h2 className="rp-title">Reports</h2>
           <p className="rp-sub">
             {brandName ? `${brandName} — ` : ""}
-            The AI runs your SEO. This is the report of what happened. Spot something odd? Ask the AI below.
+            Reports only: what happened. Fix / push actions are in AI Recommendations. Spot something odd? Ask the AI below.
           </p>
         </div>
         <div className="rp-range" role="group" aria-label="Report period">
@@ -76,6 +87,8 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
         {section === "keywords" && <KeywordTable brandId={brandId} />}
         {section === "winners" && <WinnersLosers brandId={brandId} days={days} />}
         {section === "distribution" && <PositionDistribution brandId={brandId} days={days} />}
+        {section === "activity" && <ActivityReport brandId={brandId} days={days} />}
+        {section === "digest" && <DigestReport brandId={brandId} brandName={brandName} days={days} />}
         {section === "competitors" && <CompetitorPanel brandId={brandId} />}
       </div>
     </div>
@@ -264,14 +277,18 @@ ${down.md} {
   .io-grid{grid-template-columns:repeat(2,1fr)}
   .io-skel-grid{grid-template-columns:repeat(2,1fr)}
 }
+${down.md} {
+  .act-hero,.dig-stats,.act-cols{grid-template-columns:repeat(2,1fr)}
+}
 ${down.sm} {
-  .io-hero,.io-grid,.io-skel-grid{grid-template-columns:1fr}
+  .io-hero,.io-grid,.io-skel-grid,.act-hero,.dig-stats,.act-cols{grid-template-columns:1fr}
   .kt-toolbar{flex-direction:column} .kt-search,.kt-add{width:100%}
   .ip-nav{overflow-x:auto;scrollbar-width:none}
   .ip-nav::-webkit-scrollbar{display:none}
   .ip-nav-btn{white-space:nowrap;flex:0 0 auto}
   .pd-bar-label{width:110px}
   .rp-head{flex-direction:column}
+  .dig-stat{border-right:0;border-bottom:1px solid #EEF0F4}
 }
 
 ${down.md} {
@@ -299,4 +316,70 @@ ${down.md} {
 @keyframes sheetUp { from{transform:translateY(100%)} to{transform:none} }
 .kd-close { display:grid; place-items:center; }
 .kd-rbtn { display:inline-flex; align-items:center; justify-content:center; }
+
+
+/* ── Colorful report polish ── */
+.ip { background:linear-gradient(180deg,#F4F7FF 0%,#F6F8FB 120px,#F6F8FB 100%); margin:0 -8px; padding:8px 8px 24px; border-radius:var(--radius-md); }
+.rp-title { background:linear-gradient(120deg,#4F46E5,#0891B2); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.rp-range { background:linear-gradient(135deg,#fff,#EEF2FF); box-shadow:var(--shadow-1); }
+.rp-range-btn.on { background:linear-gradient(135deg,#4F46E5,#6366F1); color:#fff; }
+.ip-nav-btn.on { color:#4F46E5; border-bottom-color:#4F46E5; }
+.io-story { background:linear-gradient(135deg,#EEF2FF,#ECFEFF); border-color:#C7D2FE; }
+.io-hero-card { border:0; box-shadow:var(--shadow-2); }
+.wl { border:0; box-shadow:var(--shadow-2); overflow:hidden; }
+.wl-intro { background:linear-gradient(90deg,#F0FDF4,#EEF2FF); margin:0 !important; padding:14px 18px !important; }
+.wl-row.tone-gains { border-left:4px solid #00B894; background:linear-gradient(90deg,#F0FDF9,#fff 35%); }
+.wl-row.tone-drops { border-left:4px solid #E17055; background:linear-gradient(90deg,#FFF5F2,#fff 35%); }
+.wl-row.tone-new { border-left:4px solid #6C5CE7; background:linear-gradient(90deg,#F5F3FF,#fff 35%); }
+.wl-row.tone-lost { border-left:4px solid #94A3B8; }
+.wl-row.tone-page1 { border-left:4px solid #F5A623; background:linear-gradient(90deg,#FFF8EB,#fff 35%); }
+.pd { border:0; box-shadow:var(--shadow-2); background:linear-gradient(180deg,#fff,#F8FAFF); }
+
+.act { display:flex; flex-direction:column; gap:16px; }
+.act-hero { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.act-hero-card { border-radius:var(--radius-md); padding:18px 16px; color:#fff; box-shadow:var(--shadow-2); }
+.act-hero-card.c1 { background:linear-gradient(145deg,#0EA5E9,#0369A1); }
+.act-hero-card.c2 { background:linear-gradient(145deg,#8B5CF6,#5B21B6); }
+.act-hero-card.c3 { background:linear-gradient(145deg,#10B981,#047857); }
+.act-hero-card.c4 { background:linear-gradient(145deg,#F59E0B,#B45309); }
+.act-hero-n { font-size:32px; font-weight:700; letter-spacing:-.03em; }
+.act-hero-l { font-size:12.5px; opacity:.92; margin-top:4px; }
+.act-types h3,.act-panel h3 { margin:0 0 10px; font-size:15px; color:#12172A; }
+.act-type-row { display:flex; flex-wrap:wrap; gap:8px; }
+.act-type-chip { background:#EEF2FF; color:#3730A3; border-radius:var(--radius-full); padding:6px 12px; font-size:12.5px; }
+.act-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.act-panel { background:#fff; border-radius:var(--radius-md); padding:16px 18px; box-shadow:var(--shadow-1); border:1px solid #E7EAF0; }
+.act-panel.teal { border-top:3px solid #0EA5E9; }
+.act-panel.violet { border-top:3px solid #8B5CF6; }
+.act-panel.amber { border-top:3px solid #F59E0B; }
+.act-panel ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.act-panel li { display:flex; justify-content:space-between; gap:10px; font-size:13px; }
+.act-panel li span { color:#8A93A6; white-space:nowrap; }
+.act-muted { color:#8A93A6; font-size:13px; margin:0; }
+.act-pub-list li { align-items:center; }
+.act-badge { background:#FEF3C7; color:#92400E; font-size:11px; font-weight:700; padding:3px 8px; border-radius:var(--radius-full); }
+.act-date { color:#8A93A6; font-size:12px; }
+.act-loading,.act-empty,.dig-loading { padding:40px; text-align:center; color:#8A93A6; }
+
+.dig-card { border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-3); background:#fff; }
+.dig-banner { background:linear-gradient(125deg,#4F46E5 0%,#0891B2 55%,#10B981 100%); color:#fff; padding:28px 24px; }
+.dig-eyebrow { font-size:11px; letter-spacing:.12em; text-transform:uppercase; opacity:.85; margin-bottom:8px; }
+.dig-banner h2 { margin:0 0 6px; font-size:26px; letter-spacing:-.02em; }
+.dig-banner p { margin:0; opacity:.92; font-size:14px; max-width:48ch; }
+.dig-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:0; }
+.dig-stat { padding:18px 16px; border-right:1px solid #EEF0F4; }
+.dig-stat:last-child { border-right:0; }
+.dig-stat.a { background:#EFF6FF; }
+.dig-stat.b { background:#ECFDF5; }
+.dig-stat.c { background:#F5F3FF; }
+.dig-stat.d { background:#FFFBEB; }
+.dig-stat-n { font-size:26px; font-weight:700; color:#12172A; letter-spacing:-.02em; }
+.dig-stat-l { font-size:12px; color:#6B768D; margin-top:4px; }
+.dig-delta { margin-top:6px; font-size:12px; font-weight:700; }
+.dig-delta.up { color:#059669; }
+.dig-delta.down { color:#DC2626; }
+.dig-body { padding:20px 24px 24px; }
+.dig-body h3 { margin:0 0 10px; font-size:15px; }
+.dig-body ul { margin:0; padding-left:18px; color:#3D4654; font-size:13.5px; line-height:1.6; }
+.dig-note { margin:14px 0 0; font-size:12.5px; color:#8A93A6; line-height:1.45; }
 `;

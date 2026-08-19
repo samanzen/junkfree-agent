@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
-import ActionButton from "./ActionButton";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 
 type Kw = {
@@ -34,7 +33,7 @@ function plainLine(tab: string, kw: Kw): string {
     return `Moved up from #${kw.previous_position} to #${kw.current_position} — more people can find you for this search.`;
   }
   if (tab === "drops" && kw.previous_position != null && kw.current_position != null) {
-    return `Slipped from #${kw.previous_position} to #${kw.current_position}. Worth a closer look.`;
+    return `Slipped from #${kw.previous_position} to #${kw.current_position}. Fix these in AI Recommendations → Issues.`;
   }
   if (tab === "new" && kw.position != null) {
     return `New ranking at #${kw.position} — you weren’t showing for this before.`;
@@ -43,7 +42,7 @@ function plainLine(tab: string, kw: Kw): string {
     return `Used to rank around #${kw.last_position}, now missing from recent results.`;
   }
   if (tab === "page1" && kw.position != null) {
-    return `Sitting at #${kw.position} — one push could put this on Google’s first page.`;
+    return `Sitting at #${kw.position}. Push these in AI Recommendations → Almost page 1.`;
   }
   return kw.ai_opportunity_reason || "";
 }
@@ -82,10 +81,10 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
 
   const tabs = [
     { key: "gains" as const, label: "Moved up", count: data.gains.length, color: "#00B894" },
-    { key: "drops" as const, label: "Slipped", count: data.drops.length, color: "#FF6B6B" },
-    { key: "new" as const, label: "Newly ranking", count: data.new_keywords.length, color: "#4F46E5" },
-    { key: "lost" as const, label: "Stopped ranking", count: data.lost_keywords.length, color: "#B2BAC8" },
-    { key: "page1" as const, label: "Almost page 1", count: data.almost_page_1.length, color: "#D97706" },
+    { key: "drops" as const, label: "Slipped", count: data.drops.length, color: "#E17055" },
+    { key: "new" as const, label: "Newly ranking", count: data.new_keywords.length, color: "#6C5CE7" },
+    { key: "lost" as const, label: "Stopped ranking", count: data.lost_keywords.length, color: "#94A3B8" },
+    { key: "page1" as const, label: "Almost page 1", count: data.almost_page_1.length, color: "#F5A623" },
   ];
 
   const rows: Kw[] =
@@ -98,16 +97,15 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
           : tab === "lost"
             ? data.lost_keywords
             : data.almost_page_1;
-  const activeColor = tabs.find((t) => t.key === tab)?.color || "#4F46E5";
+  const activeColor = tabs.find((t) => t.key === tab)?.color || "#6C5CE7";
 
   return (
     <div className="wl">
       <p className="wl-intro">
-        This is a plain-English report of ranking changes from{" "}
-        <strong>{fmtDate(data.compared?.previous_date)}</strong> to{" "}
-        <strong>{fmtDate(data.compared?.current_date)}</strong>.
-        {data.compared?.days ? ` (last ${data.compared.days} days)` : ""} The AI already did the work —
-        use this to see what improved, what slipped, and what is close to page 1.
+        Read-only change report from <strong>{fmtDate(data.compared?.previous_date)}</strong> to{" "}
+        <strong>{fmtDate(data.compared?.current_date)}</strong>
+        {data.compared?.days ? ` (last ${data.compared.days} days)` : ""}. To fix slips or push almost-page-1
+        terms, use <strong>AI Recommendations</strong>.
       </p>
       <div className="wl-tabs">
         {tabs.map((t) => (
@@ -131,15 +129,12 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
       ) : (
         <div className="wl-list">
           {rows.map((kw, i) => (
-            <div key={i} className="wl-row">
+            <div key={i} className={`wl-row tone-${tab}`}>
               <div className="wl-row-left">
                 <span className="wl-kw">{kw.keyword}</span>
                 <span className="wl-plain">{plainLine(tab, kw)}</span>
                 {kw.search_volume != null && (
                   <span className="wl-vol">~{kw.search_volume.toLocaleString()} searches / month</span>
-                )}
-                {kw.ai_opportunity_reason && tab !== "gains" && tab !== "drops" && (
-                  <span className="wl-reason">{kw.ai_opportunity_reason}</span>
                 )}
               </div>
               <div className="wl-row-right">
@@ -150,32 +145,6 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
                   <span className="wl-change" style={{ color: activeColor }}>
                     {tab === "drops" ? `▼ ${kw.change}` : `▲ ${kw.change}`}
                   </span>
-                )}
-                {tab === "page1" && kw.keyword && (
-                  <ActionButton
-                    action="boost_page1"
-                    brandId={brandId}
-                    payload={{
-                      target_keyword: kw.keyword,
-                      target_url: kw.landing_page,
-                      event_label: "Page 1 boost",
-                    }}
-                    label="Ask AI to push this"
-                    variant="teal"
-                  />
-                )}
-                {tab === "drops" && kw.keyword && (
-                  <ActionButton
-                    action="improve_content"
-                    brandId={brandId}
-                    payload={{
-                      target_keyword: kw.keyword,
-                      target_url: kw.landing_page,
-                      event_label: "Content improved",
-                    }}
-                    label="Ask AI to fix"
-                    variant="ghost"
-                  />
                 )}
               </div>
             </div>
