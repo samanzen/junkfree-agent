@@ -5,20 +5,18 @@ import IntelOverview from "./IntelOverview";
 import KeywordTable from "./KeywordTable";
 import WinnersLosers from "./WinnersLosers";
 import PositionDistribution from "./PositionDistribution";
-import AIRecommendations from "./AIRecommendations";
 import CompetitorPanel from "./CompetitorPanel";
 
 type Props = { brandId: string; brandName?: string };
 
-type Section = "overview" | "keywords" | "winners" | "distribution" | "recommendations" | "competitors";
+type Section = "overview" | "keywords" | "winners" | "distribution" | "competitors";
 
 const SECTIONS: { key: Section; label: string }[] = [
-  { key: "overview",        label: "Overview" },
-  { key: "keywords",        label: "Keywords" },
-  { key: "winners",         label: "Winners & Losers" },
-  { key: "distribution",    label: "Distribution" },
-  { key: "recommendations", label: "AI Recommendations" },
-  { key: "competitors",     label: "Competitors" },
+  { key: "overview",     label: "Overview" },
+  { key: "keywords",     label: "Keywords" },
+  { key: "winners",      label: "Winners & Losers" },
+  { key: "distribution", label: "Distribution" },
+  { key: "competitors",  label: "Competitors" },
 ];
 
 export default function IntelligencePage({ brandId, brandName }: Props) {
@@ -28,7 +26,7 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
     <div className="ip">
       <style>{CSS}</style>
 
-      {/* Section nav */}
+      {/* Section nav — analytics only. Work to approve lives in Approvals. */}
       <div className="ip-nav">
         {SECTIONS.map((s) => (
           <button key={s.key} className={`ip-nav-btn ${section === s.key ? "on" : ""}`}
@@ -36,14 +34,12 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
         ))}
       </div>
 
-      {/* Content */}
       <div className="ip-content">
-        {section === "overview"        && <IntelOverview brandId={brandId} brandName={brandName} />}
-        {section === "keywords"        && <KeywordTable brandId={brandId} />}
-        {section === "winners"         && <WinnersLosers brandId={brandId} />}
-        {section === "distribution"    && <PositionDistribution brandId={brandId} />}
-        {section === "recommendations" && <AIRecommendations brandId={brandId} />}
-        {section === "competitors"     && <CompetitorPanel brandId={brandId} />}
+        {section === "overview"     && <IntelOverview brandId={brandId} brandName={brandName} />}
+        {section === "keywords"     && <KeywordTable brandId={brandId} />}
+        {section === "winners"      && <WinnersLosers brandId={brandId} />}
+        {section === "distribution" && <PositionDistribution brandId={brandId} />}
+        {section === "competitors"  && <CompetitorPanel brandId={brandId} />}
       </div>
     </div>
   );

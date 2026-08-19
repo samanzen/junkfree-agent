@@ -40,7 +40,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"overview" | "content" | "gbp" | "citations" | "intelligence" | "brands">("overview");
+  const [tab, setTab] = useState<"overview" | "approvals" | "intelligence" | "brands">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -203,9 +203,6 @@ export default function Dashboard() {
   // the view stuck on a tab whose button just disappeared.
   const activeBrand = brands.find((b) => b.id === brandId);
   const activeBrandIsLocal = !activeBrand?.business_model || activeBrand.business_model === "local_service";
-  useEffect(() => {
-    if (!activeBrandIsLocal && (tab === "gbp" || tab === "citations")) setTab("overview");
-  }, [activeBrandIsLocal, tab]);
 
   async function signOut() { await supabaseBrowser().auth.signOut(); router.push("/login"); }
 
@@ -307,6 +304,7 @@ export default function Dashboard() {
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
   const bGbp = gbp.filter((g) => g.brand_id === brandId && g.status === "pending_review");
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
+  const approvalCount = bDrafts.length + (activeBrandIsLocal ? bGbp.length + bCites.length : 0);
   const auto = !!brand?.auto_publish_meta;
 
   // The <style> has to be inside this early return too. Without it the
@@ -352,24 +350,23 @@ export default function Dashboard() {
           )}
           {brand && (
             <button className={`mode ${auto ? "auto" : ""}`} onClick={() => toggleAuto(brand.id, auto)}
-              title="Review: you approve each item. Auto: the agent publishes on its own.">
-              {auto ? "◉ Auto-publish" : "◎ Review mode"}
+              title="Approval: you approve each item in Approvals. Autopilot: safe items publish without waiting on you.">
+              {auto ? "◉ Autopilot" : "◎ Approval mode"}
             </button>
           )}
           <a href={`/portal?brand=${brandId}`} className="mode" style={{ textDecoration:"none", textAlign:"center" }} title="Preview customer view">👁 Customer view</a>
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 
-        {/* role="tablist" + aria-selected: these swap the panel below rather
-            than navigating, so tab semantics are correct here (aria-current
-            would claim a page change that never happens). Counts are given an
-            accessible name so "Content 5" is not announced as "Content five". */}
+        {/* One work queue (Approvals) + Intelligence analytics. No second
+            "suggestions" surface — agents write drafts here; you approve,
+            dismiss, or turn Autopilot on. */}
         <nav className="tabs" role="tablist" aria-label="Dashboard sections">
           <button role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
-          <button role="tab" aria-selected={tab === "intelligence"} className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}><span aria-hidden="true">🧠</span> Intelligence</button>
-          <button role="tab" aria-selected={tab === "content"} className={tab === "content" ? "on" : ""} onClick={() => setTab("content")}>Content<span aria-label={`${bDrafts.length} waiting`}>{bDrafts.length}</span></button>
-          {activeBrandIsLocal && <button role="tab" aria-selected={tab === "gbp"} className={tab === "gbp" ? "on" : ""} onClick={() => setTab("gbp")}>Google posts<span aria-label={`${bGbp.length} waiting`}>{bGbp.length}</span></button>}
-          {activeBrandIsLocal && <button role="tab" aria-selected={tab === "citations"} className={tab === "citations" ? "on" : ""} onClick={() => setTab("citations")}>Backlinks<span aria-label={`${bCites.length} waiting`}>{bCites.length}</span></button>}
+          <button role="tab" aria-selected={tab === "approvals"} className={tab === "approvals" ? "on" : ""} onClick={() => setTab("approvals")}>
+            Approvals<span aria-label={`${approvalCount} waiting`}>{approvalCount}</span>
+          </button>
+          <button role="tab" aria-selected={tab === "intelligence"} className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>Intelligence</button>
           {role === "admin" && <button role="tab" aria-selected={tab === "brands"} className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span aria-label={`${allBrands.length} total`}>{allBrands.length}</span></button>}
         </nav>
 
@@ -379,73 +376,82 @@ export default function Dashboard() {
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
         {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
 
-        {!loading && tab === "content" && (bDrafts.length ? bDrafts.map((d) => (
-          <article className="card" key={d.id}>
-            <div className="meta"><span className="kind">{LABEL[d.task_type] || d.task_type}</span><span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span></div>
-            <h3>{d.title}</h3>
-            <p className="why">{d.rationale}</p>
-            <DraftBody body={d.body} />
-            <div className="acts">
-              {d.status === "pending_review" && <button className="primary" onClick={() => draftAct(d.id, "approve")}>Approve &amp; publish</button>}
-              {d.status === "approved" && <button className="primary" onClick={() => draftAct(d.id, "publish")}>Publish</button>}
-              <button className="ghost" onClick={() => draftAct(d.id, "approve?action=dismiss")}>Dismiss</button>
-              <button className="ghost" onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }}>Give feedback</button>
-            </div>
-            {feedbackFor === d.id && (
-              <div className="fb">
-                <Field
-                  hideLabel label="Feedback for the agent" className="fb-input-wrap"
-                  autoFocus value={feedbackText} disabled={busy === d.id}
-                  onChange={(e) => setFeedbackText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
-                  placeholder="Tell the agent what to change — shorter, different tone, add local detail…" />
-                <button className="primary" onClick={() => sendFeedback(d.id)} disabled={busy === d.id}>{busy === d.id ? "Revising…" : "Send"}</button>
-              </div>
+        {!loading && tab === "approvals" && (
+          <>
+            {auto && (
+              <p className="muted" style={{ marginBottom: 12 }}>
+                Autopilot is on — safe items can publish without waiting in this queue. Turn on Approval mode if you want to review everything first.
+              </p>
             )}
-          </article>
-        )) : <Empty
-          icon="✍"
-          title="No content waiting"
-          body="When the agents plan and write work for this brand, drafts land here for you to review before anything goes live."
-          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
-        />)}
+            {!auto && approvalCount > 0 && (
+              <p className="muted" style={{ marginBottom: 12 }}>
+                One inbox: approve to publish, dismiss to decline. Intelligence is for data only — it no longer has a second suggestion list.
+              </p>
+            )}
 
-        {!loading && tab === "gbp" && (bGbp.length ? bGbp.map((g) => (
-          <article className="card" key={g.id}>
-            <div className="meta"><span className="kind">google business post</span></div>
-            <h3>{g.title}</h3>
-            <DraftBody body={g.body} />
-            <p className="why">Call to action: {g.cta}</p>
-            <div className="acts">
-              <button className="primary" onClick={() => rowAct("gbp_posts", g.id, "approved")}>Mark posted</button>
-              <button className="ghost" onClick={() => rowAct("gbp_posts", g.id, "dismissed")}>Dismiss</button>
-            </div>
-          </article>
-        )) : <Empty
-          icon="📍"
-          title="No Google posts drafted"
-          body="Posts for this brand's Google Business Profile appear here once the agents run their local SEO pass."
-          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
-        />)}
+            {bDrafts.map((d) => (
+              <article className="card" key={d.id}>
+                <div className="meta"><span className="kind">{LABEL[d.task_type] || d.task_type}</span><span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span></div>
+                <h3>{d.title}</h3>
+                <p className="why">{d.rationale}</p>
+                <DraftBody body={d.body} />
+                <div className="acts">
+                  {d.status === "pending_review" && <button className="primary" onClick={() => draftAct(d.id, "approve")}>Approve &amp; publish</button>}
+                  {d.status === "approved" && <button className="primary" onClick={() => draftAct(d.id, "publish")}>Publish</button>}
+                  <button className="ghost" onClick={() => draftAct(d.id, "approve?action=dismiss")}>Decline</button>
+                  <button className="ghost" onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }}>Give feedback</button>
+                </div>
+                {feedbackFor === d.id && (
+                  <div className="fb">
+                    <Field
+                      hideLabel label="Feedback for the agent" className="fb-input-wrap"
+                      autoFocus value={feedbackText} disabled={busy === d.id}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
+                      placeholder="Tell the agent what to change — shorter, different tone, add local detail…" />
+                    <button className="primary" onClick={() => sendFeedback(d.id)} disabled={busy === d.id}>{busy === d.id ? "Revising…" : "Send"}</button>
+                  </div>
+                )}
+              </article>
+            ))}
 
-        {!loading && tab === "citations" && (bCites.length ? bCites.map((c) => (
-          <article className="card row" key={c.id}>
-            <div>
-              <div className="meta"><strong>{c.name}</strong><span className="kind">{c.category}</span><span className="prio">P{c.priority}</span></div>
-              <p className="why">{c.rationale}</p>
-              {c.url && <a className="link" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>}
-            </div>
-            <div className="acts">
-              <button className="primary" onClick={() => rowAct("citations", c.id, "live")}>Done</button>
-              <button className="ghost" onClick={() => rowAct("citations", c.id, "skipped")}>Skip</button>
-            </div>
-          </article>
-        )) : <Empty
-          icon="🔗"
-          title="No backlink opportunities yet"
-          body="The agents search for directories and citation sources worth a listing. Results appear here, ranked by how much they help."
-          action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
-        />)}
+            {activeBrandIsLocal && bGbp.map((g) => (
+              <article className="card" key={g.id}>
+                <div className="meta"><span className="kind">google business post</span></div>
+                <h3>{g.title}</h3>
+                <DraftBody body={g.body} />
+                <p className="why">Call to action: {g.cta}</p>
+                <div className="acts">
+                  <button className="primary" onClick={() => rowAct("gbp_posts", g.id, "approved")}>Approve</button>
+                  <button className="ghost" onClick={() => rowAct("gbp_posts", g.id, "dismissed")}>Decline</button>
+                </div>
+              </article>
+            ))}
+
+            {activeBrandIsLocal && bCites.map((c) => (
+              <article className="card row" key={c.id}>
+                <div>
+                  <div className="meta"><strong>{c.name}</strong><span className="kind">{c.category}</span><span className="prio">P{c.priority}</span></div>
+                  <p className="why">{c.rationale}</p>
+                  {c.url && <a className="link" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>}
+                </div>
+                <div className="acts">
+                  <button className="primary" onClick={() => rowAct("citations", c.id, "live")}>Approve</button>
+                  <button className="ghost" onClick={() => rowAct("citations", c.id, "skipped")}>Decline</button>
+                </div>
+              </article>
+            ))}
+
+            {approvalCount === 0 && (
+              <Empty
+                icon="✓"
+                title="Nothing waiting for approval"
+                body="When agents finish work, it lands here. Approve to publish, Decline to skip, or switch to Autopilot so safe items ship on their own."
+                action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
+              />
+            )}
+          </>
+        )}
 
         {tab === "brands" && role === "admin" && (
           <>
