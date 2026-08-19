@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { authedFetch } from "@/lib/authedFetch";
 import DataStatus, { type DataStatusKind } from "./DataStatus";
 import { useChartTouch } from "@/lib/ui/useChartTouch";
@@ -14,6 +14,13 @@ type Snap = {
   top_100: number;
   not_ranked: number;
   total_clicks: number;
+};
+
+const PIE_COLORS = {
+  top3: "#00CEC9",
+  top10: "#F1C40F",
+  top100: "#74B9FF",
+  none: "#FD79A8",
 };
 
 export default function PositionDistribution({
@@ -49,37 +56,25 @@ export default function PositionDistribution({
   if (loading) return <div className="pd-loading">Building visibility report…</div>;
   if (!latest) return <DataStatus status={status === "ok" ? "never_synced" : status} />;
 
-  const page1 = latest.top_10;
+  const top3 = latest.top_3;
+  const top10Only = Math.max(0, latest.top_10 - latest.top_3);
+  const top100Only = Math.max(0, latest.top_100 - latest.top_10);
+  const notRanking = latest.not_ranked;
   const almost = Math.max(0, latest.top_20 - latest.top_10);
-  const deeper = Math.max(0, latest.top_100 - latest.top_20);
+  const page1 = latest.top_10;
   const page1Before = earliest ? earliest.top_10 : null;
 
-  const breakdown = [
-    {
-      label: "Page 1 (positions 1–10)",
-      hint: "Best place to be — people actually click these.",
-      count: page1,
-      color: "#00B894",
-    },
-    {
-      label: "Almost page 1 (11–20)",
-      hint: "Close wins — a small push can get them onto page 1.",
-      count: almost,
-      color: "#D97706",
-    },
-    {
-      label: "Further back (21–100)",
-      hint: "Harder to get clicks, but still tracked.",
-      count: deeper,
-      color: "#6366F1",
-    },
-    {
-      label: "Not ranking yet",
-      hint: "Searches we track where Google doesn’t show you yet.",
-      count: latest.not_ranked,
-      color: "#CBD5E1",
-    },
-  ];
+  const pie = [
+    { name: "Top 3", value: top3, color: PIE_COLORS.top3 },
+    { name: "Top 10", value: top10Only, color: PIE_COLORS.top10 },
+    { name: "Top 100", value: top100Only, color: PIE_COLORS.top100 },
+    { name: "Not ranking", value: notRanking, color: PIE_COLORS.none },
+  ].filter((p) => p.value > 0);
+
+  const pieOrEmpty =
+    pie.length > 0
+      ? pie
+      : [{ name: "No data", value: 1, color: "#E7EAF0" }];
 
   const chartData = data.map((s) => ({
     date: new Date(s.captured_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
@@ -99,36 +94,68 @@ export default function PositionDistribution({
       <h3 className="pd-headline">Visibility report</h3>
       <p className="pd-explain">{story}</p>
 
-      <div className="pd-breakdown">
-        {breakdown.map((b) => {
-          const total = breakdown.reduce((s, x) => s + x.count, 0);
-          const pct = total ? Math.round((b.count / total) * 100) : 0;
-          return (
-            <div key={b.label}>
-              <div className="pd-bar-row">
-                <span className="pd-bar-label">{b.label}</span>
-                <div className="pd-bar-track">
-                  <div className="pd-bar-fill" style={{ width: `${pct}%`, background: b.color }} />
+      <div className="pd-grid">
+        <div className="pd-panel">
+          <div className="pd-panel-title">Current search result rankings</div>
+          <div className="pd-pie-wrap">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={pieOrEmpty}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={58}
+                  outerRadius={88}
+                  paddingAngle={2}
+                >
+                  {pieOrEmpty.map((p) => (
+                    <Cell key={p.name} fill={p.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => [Number(v).toLocaleString(), "Keywords"]} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pd-pie-legend">
+              {[
+                { label: "Top 3", count: top3, color: PIE_COLORS.top3 },
+                { label: "Top 10", count: top10Only, color: PIE_COLORS.top10 },
+                { label: "Top 100", count: top100Only, color: PIE_COLORS.top100 },
+                { label: "Not ranking", count: notRanking, color: PIE_COLORS.none },
+              ].map((b) => (
+                <div key={b.label} className="pd-leg">
+                  <span className="pd-leg-dot" style={{ background: b.color }} />
+                  <span className="pd-leg-label">{b.label}</span>
+                  <span className="pd-leg-n">{b.count}</span>
                 </div>
-                <span className="pd-bar-count">
-                  {b.count} · {pct}%
-                </span>
-              </div>
-              <p style={{ margin: "2px 0 0 0", fontSize: 12, color: "#8A93A6", paddingLeft: 2 }}>{b.hint}</p>
+              ))}
             </div>
-          );
-        })}
+          </div>
+        </div>
+
+        <div className="pd-panel pd-almost">
+          <div className="pd-panel-title">Almost page 1</div>
+          <div className="pd-almost-n">{almost}</div>
+          <p className="pd-almost-copy">
+            Keywords sitting in positions 11–20. Ubersuggest doesn’t highlight this — we do, because one push can
+            put them on Google’s first page. Fix them in AI Recommendations → Almost page 1.
+          </p>
+        </div>
       </div>
 
       {chartData.length > 1 && (
-        <div>
+        <div className="pd-panel" style={{ marginTop: 14 }}>
           <div className="pd-chart-label">How page-1 visibility changed (last {days} days)</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
               <XAxis {...t.xAxis} dataKey="date" tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "#9AA3B2", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <Tooltip {...t.tooltip} contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }} />
+              <Tooltip
+                {...t.tooltip}
+                contentStyle={{ background: "#fff", border: "1px solid #E7EAF0", borderRadius: 8, fontSize: 11 }}
+              />
               <Bar dataKey="On page 1" fill="#00B894" radius={[3, 3, 0, 0]} />
               <Bar dataKey="Almost page 1" fill="#D97706" radius={[3, 3, 0, 0]} />
             </BarChart>

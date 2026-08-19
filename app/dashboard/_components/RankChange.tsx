@@ -20,6 +20,8 @@ type Props = {
   direction?: "up" | "down";
   /** Small label above the numbers — Ubersuggest uses "Desktop Ranking". */
   label?: string;
+  /** Compact row for dense tables. */
+  size?: "md" | "sm";
   className?: string;
 };
 
@@ -29,6 +31,7 @@ export default function RankChange({
   change,
   direction,
   label = "Google ranking",
+  size = "md",
   className = "",
 }: Props) {
   if (previous == null && current == null) return null;
@@ -46,7 +49,7 @@ export default function RankChange({
   }
 
   return (
-    <div className={`rk ${dir} ${className}`.trim()}>
+    <div className={`rk ${dir} ${size === "sm" ? "sm" : ""} ${className}`.trim()}>
       {label ? <div className="rk-label">{label}</div> : null}
       <div className="rk-row" aria-label="Ranking change">
         {previous != null && <span className="rk-old">{fmtPos(previous)}</span>}
@@ -97,4 +100,10 @@ const CSS = `
 .rk-delta.up { color:#16A34A; }
 .rk-delta.down { color:#DC2626; }
 .rk-tri { font-size:9px; line-height:1; }
+.rk.sm { align-items:flex-start; gap:0; }
+.rk.sm .rk-old { font-size:13px; }
+.rk.sm .rk-arrow { font-size:12px; }
+.rk.sm .rk-new { font-size:14px; }
+.rk.sm .rk-delta { font-size:12px; }
+.rk.sm .rk-row { gap:5px; }
 `;

@@ -39,24 +39,34 @@ export async function GET(req: NextRequest) {
   const metaMap = new Map((metadata || []).map((m) => [m.keyword, m]));
   const allCurrent = [...curMap.entries()];
 
-  const gains = allCurrent
-    .filter(([kw]) => prevMap.has(kw) && curMap.get(kw)!.position < prevMap.get(kw)!)
+  const gainsAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position < prevMap.get(kw)!
+  );
+  const dropsAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position > prevMap.get(kw)!
+  );
+  const unchangedAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position === prevMap.get(kw)!
+  );
+
+  const gains = gainsAll
     .map(([kw, r]) => ({
       keyword: kw, current_position: r.position,
       previous_position: prevMap.get(kw)!,
       change: Math.round(prevMap.get(kw)! - r.position),
+      landing_page: r.landing_page,
       ...metaMap.get(kw),
     }))
     .filter((r) => r.change >= 1)
     .sort((a, b) => b.change - a.change)
     .slice(0, 15);
 
-  const drops = allCurrent
-    .filter(([kw]) => prevMap.has(kw) && curMap.get(kw)!.position > prevMap.get(kw)!)
+  const drops = dropsAll
     .map(([kw, r]) => ({
       keyword: kw, current_position: r.position,
       previous_position: prevMap.get(kw)!,
       change: Math.round(curMap.get(kw)!.position - prevMap.get(kw)!),
+      landing_page: r.landing_page,
       ...metaMap.get(kw),
     }))
     .filter((r) => r.change >= 1)
@@ -65,7 +75,7 @@ export async function GET(req: NextRequest) {
 
   const newKeywords = allCurrent
     .filter(([kw]) => !prevMap.has(kw))
-    .map(([kw, r]) => ({ keyword: kw, position: r.position, ...metaMap.get(kw) }))
+    .map(([kw, r]) => ({ keyword: kw, position: r.position, landing_page: r.landing_page, ...metaMap.get(kw) }))
     .sort((a, b) => (a.position || 100) - (b.position || 100))
     .slice(0, 15);
 
@@ -86,6 +96,14 @@ export async function GET(req: NextRequest) {
     new_keywords: newKeywords,
     lost_keywords: lostKeywords,
     almost_page_1: almostPage1,
+    summary: {
+      moved_up: gainsAll.length,
+      moved_down: dropsAll.length,
+      unchanged: unchangedAll.length,
+      newly_ranking: allCurrent.filter(([kw]) => !prevMap.has(kw)).length,
+      almost_page_1: allCurrent.filter(([, r]) => r.position >= 11 && r.position <= 20).length,
+      tracked: allCurrent.length,
+    },
     compared: { current_date: currentDate, previous_date: previousDate, days },
   });
 }

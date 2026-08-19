@@ -21,12 +21,30 @@ type Data = {
   new_keywords: Kw[];
   lost_keywords: Kw[];
   almost_page_1: Kw[];
+  summary?: {
+    moved_up: number;
+    moved_down: number;
+    unchanged: number;
+    newly_ranking: number;
+    almost_page_1: number;
+  };
   compared?: { current_date: string | null; previous_date: string | null; days?: number };
 };
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "the start of this period";
   return new Date(d + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function shortUrl(u: string | null | undefined): string {
+  if (!u) return "";
+  try {
+    const parsed = new URL(u.startsWith("http") ? u : `https://${u}`);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    return `${parsed.hostname.replace(/^www\./, "")}${path}`.slice(0, 52);
+  } catch {
+    return u.slice(0, 52);
+  }
 }
 
 function plainLine(tab: string, kw: Kw): string {
@@ -93,6 +111,25 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
 
   return (
     <div className="wl">
+      <div className="wl-cards">
+        <div className="wl-card up">
+          <div className="wl-card-label">Moved up</div>
+          <div className="wl-card-n">
+            <span>▲</span> {data.summary?.moved_up ?? data.gains.length}
+          </div>
+        </div>
+        <div className="wl-card down">
+          <div className="wl-card-label">Moved down</div>
+          <div className="wl-card-n">
+            <span>▼</span> {data.summary?.moved_down ?? data.drops.length}
+          </div>
+        </div>
+        <div className="wl-card flat">
+          <div className="wl-card-label">Unchanged</div>
+          <div className="wl-card-n">{data.summary?.unchanged ?? "—"}</div>
+        </div>
+      </div>
+
       <p className="wl-intro">
         Read-only change report from <strong>{fmtDate(data.compared?.previous_date)}</strong> to{" "}
         <strong>{fmtDate(data.compared?.current_date)}</strong>
@@ -125,9 +162,23 @@ export default function WinnersLosers({ brandId, days = 30 }: { brandId: string;
               <div className="wl-row-left">
                 <span className="wl-kw">{kw.keyword}</span>
                 <span className="wl-plain">{plainLine(tab, kw)}</span>
-                {kw.search_volume != null && (
-                  <span className="wl-vol">~{kw.search_volume.toLocaleString()} searches / month</span>
-                )}
+                <div className="wl-meta-row">
+                  {kw.search_volume != null && (
+                    <span className="wl-vol">~{kw.search_volume.toLocaleString()} searches / month</span>
+                  )}
+                  {kw.landing_page && (
+                    <a
+                      className="wl-url"
+                      href={
+                        kw.landing_page.startsWith("http") ? kw.landing_page : `https://${kw.landing_page}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {shortUrl(kw.landing_page)}
+                    </a>
+                  )}
+                </div>
               </div>
               <div className="wl-row-right">
                 {(tab === "gains" || tab === "drops") &&
