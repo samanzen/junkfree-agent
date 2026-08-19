@@ -114,7 +114,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
         <KpiCard label="Striking distance" value={c.striking_distance} d={delta("striking_distance")}
           color="#E84393" hint="Keywords in pos 5–20" />
         <KpiCard label="AI visibility" value={c.ai_visibility} suffix="%"
-          color="#A29BFE" hint="Cited in ChatGPT / Gemini" />
+          color="#A29BFE" hint="Questions where assistants name you" />
         <KpiCard label="Site health" value={c.site_health} suffix="%"
           color="#FDCB6E" hint="Technical SEO score" />
       </div>

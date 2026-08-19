@@ -86,8 +86,19 @@ test("inspectPage returns the text it already computed", () => {
 });
 
 // ── AI visibility → metric snapshots ────────────────────────────────────────
-test("checkAiVisibility has a caller", () => {
-  expect(callersOf("checkAiVisibility", "lib/geo-agent.ts").length).toBeGreaterThan(0);
+// The single-question checkAiVisibility() this section originally guarded was
+// replaced by lib/ai-visibility (many questions, many assistants, many places).
+// These tests still guard the same two properties — the column is populated, and
+// a failure degrades to null instead of breaking the snapshot — against the new
+// mechanism.
+test("latestMentionRate has a caller", () => {
+  expect(callersOf("latestMentionRate", "lib/ai-visibility/run.ts").length).toBeGreaterThan(0);
+});
+
+test("the superseded single-question check is gone, not orphaned", () => {
+  // Leaving it would mean two competing AI-visibility implementations, which is
+  // exactly the dead-agent problem this file exists to catch.
+  expect(read("lib/geo-agent.ts")).not.toMatch(/^export async function checkAiVisibility/m);
 });
 
 test("ai_visibility is no longer hardcoded null", () => {
@@ -96,12 +107,11 @@ test("ai_visibility is no longer hardcoded null", () => {
   expect(src).toMatch(/ai_visibility:\s*aiVisibility/);
 });
 
-test("a failed visibility check leaves the column null rather than failing the snapshot", () => {
-  expect(read("lib/metrics.ts")).toMatch(/checkAiVisibility\(brand\)[\s\S]{0,120}\.catch\(\(\) => null\)/);
+test("a failed visibility read leaves the column null rather than failing the snapshot", () => {
+  expect(read("lib/metrics.ts")).toMatch(/latestMentionRate\(brand\.id\)[\s\S]{0,80}\.catch\(\(\) => null\)/);
 });
 
 test("the AI visibility card explains what its number means", () => {
-  // 100/0 is a yes/no. Displayed without wording it reads as a percentage.
   const src = read("app/portal/page.tsx");
   expect(src).not.toMatch(/label="AI Visibility"[\s\S]{0,80}hint="Coming soon"/);
   expect(src).toMatch(/AI assistants recommend you/);

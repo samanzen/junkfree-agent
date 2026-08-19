@@ -2,7 +2,7 @@ import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance } from "./gsc";
 import { domainOverview, backlinksSummary, rankedKeywords, isConfigured, geoOf } from "./dataforseo";
-import { checkAiVisibility } from "./geo-agent";
+import { latestMentionRate } from "./ai-visibility/run";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -43,21 +43,20 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     site_health = typeof parsed?.score === "number" ? parsed.score : null;
   } catch { /* leave null */ }
 
-  // checkAiVisibility (lib/geo-agent.ts) has existed since Sprint 5 with zero
-  // callers, which is why ai_visibility has been null in every snapshot ever
-  // taken and why the portal's AI Visibility card reads "Coming soon".
+  // AI visibility is now the mention rate from the most recent completed
+  // AI-visibility sweep (lib/ai-visibility): the share of measured questions —
+  // across assistants, places and languages — in which this brand was named.
   //
-  // It asks a model, with web search, the discovery question a customer would
-  // ask ("best <service> in <city>") and reports whether this brand appears in
-  // the answer. That is a genuine yes/no, so it is stored as 100 or 0 rather
-  // than dressed up as a percentage — the card's wording says exactly what the
-  // number means.
+  // It previously came from a single call to checkAiVisibility(): ONE question,
+  // asked of ONE model, stored as 100 or 0. That made a percentage-suffixed KPI
+  // card out of a coin flip, and it spent a web-search-grounded model call on
+  // every snapshot to do it. Reading the sweep's rate instead is both honest and
+  // free — the number already exists, computed from many questions.
   //
-  // Best-effort: a failure leaves the column null, which is what every previous
-  // snapshot already contained, so nothing downstream changes.
-  const aiVisibility = await checkAiVisibility(brand)
-    .then((r) => (r.mentioned ? 100 : 0))
-    .catch(() => null);
+  // Null when the sweep has never run or supabase/018_ai_visibility.sql has not
+  // been applied, which is exactly what this column contained before, so nothing
+  // downstream has to change.
+  const aiVisibility = await latestMentionRate(brand.id).catch(() => null);
 
   let strikingCount = striking.length;
   let avgPos = striking.length

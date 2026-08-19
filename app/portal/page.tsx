@@ -152,17 +152,20 @@ export default function PortalDashboard() {
           <ScoreCard label="SEO Score" value={seoScore} hint="Needs ranking data" />
           <ScoreCard label="Local SEO" value={localScore} hint="Needs citation data" />
           <ScoreCard label="Website Health" value={websiteHealth} hint="Runs with your next audit" />
-          {/* 100 or 0 is a yes/no, not a percentage — the hint says which, so
-              the number is never read as a score it isn't. */}
+          {/* Now a genuine percentage: the share of measured questions, across
+              assistants and locations, in which AI assistants named this
+              business (lib/ai-visibility). It replaced a single yes/no stored as
+              100 or 0, so the hint states what the number counts rather than
+              warning that it isn't a percentage. */}
           <ScoreCard
             label="AI Visibility"
             value={aiVisibility}
             hint={
               aiVisibility == null
-                ? "Checked on your next agent run"
-                : aiVisibility >= 100
-                ? "AI assistants recommend you for your main service search"
-                : "Not yet named when AI assistants are asked for your service"
+                ? "Measured on your next weekly AI check"
+                : aiVisibility === 0
+                ? "AI assistants recommend you for none of the questions we checked"
+                : `AI assistants recommend you in ${aiVisibility}% of the questions we checked`
             }
           />
           <ScoreCard label="Google Business Profile" value={gbpScore} hint="Connect your profile" />
