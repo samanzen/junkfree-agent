@@ -42,34 +42,63 @@ const accessErr = requireBrandAccess(auth, brandId);
     .eq("brand_id", brandId)
     .neq("status", "lost");
 
-  const brandKwMap = new Map((brandKws || []).map((k) => [k.keyword, k]));
+  const brandKwMap = new Map(
+    (brandKws || []).map((k) => [k.keyword.toLowerCase(), k])
+  );
 
   // Competitor's ranked keywords via DataForSEO (confirmed endpoint)
   const competitorKws = await rankedKeywords(competitor.domain, geoOf(competitorBrand)).catch(() => []);
 
+  function enrich(k: (typeof competitorKws)[number]) {
+    return {
+      keyword: k.keyword,
+      url: k.url,
+      volume: k.volume,
+      position: k.position,
+      etv: k.etv,
+      cpc: k.cpc,
+      competition: k.competition,
+      difficulty: k.difficulty,
+      brand_position: brandKwMap.get(k.keyword.toLowerCase())?.best_position ?? null,
+    };
+  }
+
   // Gap keywords: competitor ranks for these, brand does not
   const gaps = competitorKws
-    .filter((k) => k.keyword && !brandKwMap.has(k.keyword) && k.position <= 20)
+    .filter((k) => k.keyword && !brandKwMap.has(k.keyword.toLowerCase()) && k.position <= 20)
     .sort((a, b) => (b.volume || 0) - (a.volume || 0))
-    .slice(0, 30);
+    .slice(0, 50)
+    .map(enrich);
 
   // Overlap keywords: both rank for these
   const overlap = competitorKws
-    .filter((k) => k.keyword && brandKwMap.has(k.keyword))
+    .filter((k) => k.keyword && brandKwMap.has(k.keyword.toLowerCase()))
+    .sort((a, b) => {
+      const brandA = brandKwMap.get(a.keyword.toLowerCase())?.best_position ?? 999;
+      const brandB = brandKwMap.get(b.keyword.toLowerCase())?.best_position ?? 999;
+      return brandA - brandB;
+    })
+    .slice(0, 50)
     .map((k) => ({
-      keyword: k.keyword,
+      ...enrich(k),
       competitor_position: k.position,
-      brand_position: brandKwMap.get(k.keyword)?.best_position ?? null,
-      volume: k.volume,
-    }))
-    .sort((a, b) => (a.brand_position || 999) - (b.brand_position || 999))
-    .slice(0, 20);
+    }));
 
-  // Update last_keyword_count
-  await db.from("competitors").update({
+  // Update last_keyword_count (+ gap/common caches when columns exist)
+  const { error: updateErr } = await db.from("competitors").update({
     last_keyword_count: competitorKws.length,
+    last_common_keywords: overlap.length,
+    last_keyword_gap: gaps.length,
     last_checked_at: new Date().toISOString(),
   }).eq("id", id);
+
+  // If migration 018 is missing, still persist the older columns.
+  if (updateErr) {
+    await db.from("competitors").update({
+      last_keyword_count: competitorKws.length,
+      last_checked_at: new Date().toISOString(),
+    }).eq("id", id);
+  }
 
   return NextResponse.json({
     competitor: { domain: competitor.domain, name: competitor.name },
@@ -77,6 +106,7 @@ const accessErr = requireBrandAccess(auth, brandId);
     gaps,
     overlap,
     gap_count: gaps.length,
+    common_count: overlap.length,
   });
 }
 

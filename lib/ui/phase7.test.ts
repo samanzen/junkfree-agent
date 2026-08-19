@@ -29,6 +29,7 @@ const LAZY_CHART_MODULES = [
   // Reached only through the dynamically imported Intelligence tab.
   "app/dashboard/intelligence/PositionDistribution.tsx",
   "app/dashboard/intelligence/KeywordTable.tsx",
+  "app/dashboard/intelligence/CompetitorPanel.tsx",
 ];
 
 test("Recharts is imported only by modules behind a lazy boundary", () => {
