@@ -1,6 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
-import Field from "@/app/_components/Field";
+import { useEffect, useMemo, useState } from "react";
+import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
+import { displayWorkTitle, queueHintFor } from "@/lib/recommendations/preview";
 import {
   RECOMMENDATION_SECTIONS,
   isSectionAutopilot,
@@ -33,6 +34,8 @@ type Cite = {
 };
 type BrandLike = {
   id: string;
+  name?: string;
+  site_url?: string;
   auto_publish_meta?: boolean;
   recommendation_autopilot?: RecommendationAutopilot | null;
   business_model?: string;
@@ -54,7 +57,6 @@ type Props = {
   citations: Cite[];
   running: boolean;
   busy: string;
-  feedbackFor: string;
   feedbackText: string;
   onFeedbackFor: (id: string) => void;
   onFeedbackText: (v: string) => void;
@@ -63,7 +65,6 @@ type Props = {
   onRowAct: (table: string, id: string, status: string) => void;
   onToggleSectionAutopilot: (section: RecommendationSection, enabled: boolean) => void;
   onRunAgents: () => void;
-  DraftBody: React.ComponentType<{ body: string }>;
   Empty: React.ComponentType<{
     icon: string;
     title: string;
@@ -80,7 +81,6 @@ export default function RecommendationsPanel({
   citations,
   running,
   busy,
-  feedbackFor,
   feedbackText,
   onFeedbackFor,
   onFeedbackText,
@@ -89,13 +89,27 @@ export default function RecommendationsPanel({
   onRowAct,
   onToggleSectionAutopilot,
   onRunAgents,
-  DraftBody,
   Empty,
 }: Props) {
   const sections = RECOMMENDATION_SECTIONS.filter((s) => !s.localOnly || isLocal);
   const [section, setSection] = useState<RecommendationSection>(sections[0]?.key || "pages");
+  const [preview, setPreview] = useState<WorkPreviewModel | null>(null);
+  const [previewId, setPreviewId] = useState<string>("");
+  const [previewKind, setPreviewKind] = useState<"draft" | "gbp" | null>(null);
   const autopilot = readAutopilotMap(brand);
   const sectionAuto = isSectionAutopilot(brand, section);
+
+  useEffect(() => {
+    if (previewKind !== "draft" || !previewId) return;
+    const d = drafts.find((x) => x.id === previewId);
+    if (!d) {
+      setPreview(null);
+      setPreviewId("");
+      setPreviewKind(null);
+      return;
+    }
+    setPreview({ title: d.title, body: d.body, taskType: d.task_type, targetUrl: d.target_url });
+  }, [drafts, previewId, previewKind]);
 
   const pageDrafts = useMemo(
     () => drafts.filter((d) => sectionForTaskType(d.task_type) === "pages"),
@@ -187,57 +201,22 @@ export default function RecommendationsPanel({
                 <span className="kind">{LABEL[d.task_type] || d.task_type}</span>
                 <span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span>
               </div>
-              <h3>{d.title}</h3>
-              <p className="why">{d.rationale}</p>
-              <DraftBody body={d.body} />
+              <h3>{displayWorkTitle(d.title)}</h3>
+              <p className="why">{queueHintFor(d.task_type, { body: d.body })}</p>
               <div className="acts">
-                {d.status === "pending_review" && (
-                  <button className="primary" onClick={() => onDraftAct(d.id, "approve")}>
-                    Approve &amp; publish
-                  </button>
-                )}
-                {d.status === "approved" && (
-                  <button className="primary" onClick={() => onDraftAct(d.id, "publish")}>
-                    Publish
-                  </button>
-                )}
-                <button className="ghost" onClick={() => onDraftAct(d.id, "approve?action=dismiss")}>
-                  Decline
-                </button>
                 <button
-                  className="ghost"
+                  className="primary"
                   onClick={() => {
-                    onFeedbackFor(feedbackFor === d.id ? "" : d.id);
+                    setPreviewKind("draft");
+                    setPreviewId(d.id);
+                    setPreview({ title: d.title, body: d.body, taskType: d.task_type, targetUrl: d.target_url });
+                    onFeedbackFor(d.id);
                     onFeedbackText("");
                   }}
                 >
-                  Give feedback
+                  Preview
                 </button>
               </div>
-              {feedbackFor === d.id && (
-                <div className="fb">
-                  <Field
-                    hideLabel
-                    label="Feedback for the agent"
-                    className="fb-input-wrap"
-                    autoFocus
-                    value={feedbackText}
-                    disabled={busy === d.id}
-                    onChange={(e) => onFeedbackText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") onSendFeedback(d.id);
-                    }}
-                    placeholder="Tell the agent what to change — shorter, different tone, add local detail…"
-                  />
-                  <button
-                    className="primary"
-                    onClick={() => onSendFeedback(d.id)}
-                    disabled={busy === d.id}
-                  >
-                    {busy === d.id ? "Revising…" : "Send"}
-                  </button>
-                </div>
-              )}
             </article>
           ))}
           {sectionDrafts.length === 0 && (
@@ -259,14 +238,17 @@ export default function RecommendationsPanel({
                 <span className="kind">google business post</span>
               </div>
               <h3>{g.title}</h3>
-              <DraftBody body={g.body} />
-              <p className="why">Call to action: {g.cta}</p>
+              <p className="why">{queueHintFor("google_post", { brandName: brand.name })}</p>
               <div className="acts">
-                <button className="primary" onClick={() => onRowAct("gbp_posts", g.id, "approved")}>
-                  Approve
-                </button>
-                <button className="ghost" onClick={() => onRowAct("gbp_posts", g.id, "dismissed")}>
-                  Decline
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setPreviewKind("gbp");
+                    setPreviewId(g.id);
+                    setPreview({ title: g.title, body: g.body, taskType: "google_post", cta: g.cta });
+                  }}
+                >
+                  Preview
                 </button>
               </div>
             </article>
@@ -319,6 +301,40 @@ export default function RecommendationsPanel({
           )}
         </>
       )}
+
+      <WorkPreview
+        open={!!preview}
+        onClose={() => { setPreview(null); setPreviewId(""); setPreviewKind(null); }}
+        brandName={brand.name || "Your business"}
+        siteUrl={brand.site_url}
+        work={preview}
+        approveLabel={previewKind === "gbp" ? "Approve" : preview?.taskType && ["new_page", "new_blog", "geo_answers"].includes(preview.taskType) ? "Approve & publish" : "Approve"}
+        busy={busy === previewId}
+        onApprove={
+          previewKind === "gbp"
+            ? () => { onRowAct("gbp_posts", previewId, "approved"); setPreview(null); }
+            : preview
+              ? () => {
+                  const d = drafts.find((x) => x.id === previewId);
+                  onDraftAct(previewId, d?.status === "approved" ? "publish" : "approve");
+                  setPreview(null);
+                }
+              : undefined
+        }
+        onDecline={
+          previewKind === "gbp"
+            ? () => { onRowAct("gbp_posts", previewId, "dismissed"); setPreview(null); }
+            : previewKind === "draft"
+              ? () => { onDraftAct(previewId, "approve?action=dismiss"); setPreview(null); }
+              : undefined
+        }
+        feedback={previewKind === "draft" ? {
+          value: feedbackText,
+          onChange: onFeedbackText,
+          onSend: () => onSendFeedback(previewId),
+          sending: busy === previewId,
+        } : undefined}
+      />
 
       <style>{REC_CSS}</style>
     </div>

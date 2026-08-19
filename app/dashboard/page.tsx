@@ -393,7 +393,6 @@ export default function Dashboard() {
             citations={bCites}
             running={running}
             busy={busy}
-            feedbackFor={feedbackFor}
             feedbackText={feedbackText}
             onFeedbackFor={setFeedbackFor}
             onFeedbackText={setFeedbackText}
@@ -402,7 +401,6 @@ export default function Dashboard() {
             onRowAct={rowAct}
             onToggleSectionAutopilot={setSectionAutopilot}
             onRunAgents={runNow}
-            DraftBody={DraftBody}
             Empty={Empty}
           />
         )}
@@ -563,28 +561,6 @@ function BrandLinkForm({ brandId, onLink }: { brandId: string; onLink: (brandId:
   );
 }
 
-function DraftBody({ body }: { body: string }) {
-  let parsed: Record<string, unknown> | null = null;
-  try { const t = body.replace(/```json/gi, "").replace(/```/g, "").trim(); if (t.startsWith("{")) parsed = JSON.parse(t); } catch {}
-  if (parsed) {
-    const titles = (parsed.titles as string[]) || (parsed.title ? [parsed.title as string] : []);
-    const metas = (parsed.metas as string[]) || (parsed.meta ? [parsed.meta as string] : []);
-    const opening = parsed.opening as string | undefined;
-    if (titles.length || metas.length || opening) {
-      const copy = (t: string) => navigator.clipboard?.writeText(t);
-      return (
-        <div className="body">
-          {titles.length > 0 && <><div className="fieldlabel">title tag</div>{titles.map((t, i) => <button key={i} type="button" className="opt" onClick={() => copy(t)} aria-label={`Copy title tag: ${t}`}>{t}</button>)}</>}
-          {metas.length > 0 && <><div className="fieldlabel">meta description</div>{metas.map((m, i) => <button key={i} type="button" className="opt" onClick={() => copy(m)} aria-label={`Copy meta description: ${m}`}>{m}</button>)}</>}
-          {opening && <><div className="fieldlabel">new opening</div><button type="button" className="opt" onClick={() => copy(opening)} aria-label="Copy new opening paragraph">{opening}</button></>}
-          <div className="hint">click any option to copy</div>
-        </div>
-      );
-    }
-  }
-  return <pre className="body prose">{body}</pre>;
-}
-
 const CSS = `
 .sr { --bg:#F6F8FB; --surface:#FFFFFF; --surface2:#F2F5F9; --line:#E7EAF0; --text:#1A2030; --muted:#6B768D;
   --accent:#6C5CE7; --accent-dim:rgba(108,92,231,.1); --amber:#9A6E00; --coral:#DD3535; --violet:#8655F6; --green:#00856B;
@@ -629,22 +605,12 @@ const CSS = `
 .sr .prio { font-family:var(--font-mono); font-size:11px; color:var(--amber); }
 .sr h3 { font-size:17px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em; color:#12172A; }
 .sr .why { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 14px; }
-.sr .body { background:var(--surface2); border:1px solid var(--line); border-radius:var(--radius-sm); padding:14px; max-height:440px; overflow:auto; }
-.sr .prose { white-space:pre-wrap; font-family:var(--font-mono); font-size:12px; line-height:1.65; color:#3A4256; margin:0; }
-.sr .fieldlabel { font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:12px 0 6px; }
-.sr .fieldlabel:first-child { margin-top:0; }
-.sr .opt { display:block; width:100%; text-align:left; font-family:inherit; font-size:13px; color:var(--text); background:var(--surface); border:1px solid var(--line); padding:8px 12px; border-radius:var(--radius-sm); margin-bottom:6px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
-.sr .opt:hover { border-color:var(--accent); background:var(--accent-dim); }
-.sr .hint { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:8px; }
 .sr .acts { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
 .sr .primary { background:var(--accent); color:#fff; border:0; padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
 .sr .primary:hover { background:#5b4bd6; }
 .sr .primary:disabled { opacity:.6; cursor:default; }
 .sr .ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; }
 .sr .ghost:hover { color:var(--text); border-color:var(--muted); }
-.sr .fb { display:flex; gap:8px; margin-top:12px; }
-.sr .fb input { flex:1; background:var(--surface); border:1px solid var(--line); color:var(--text); padding:10px 12px; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; }
-.sr .fb input:focus { outline:none; border-color:var(--accent); }
 /* Labelled fields need vertical room, so the old single flex row becomes a
    responsive grid. Field styling comes from the shared fieldCSS. */
 .sr .brandform { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-top:12px; align-items:start; }
@@ -721,7 +687,6 @@ ${down.sm} { .sr .ov-kpis{grid-template-columns:1fr} .sr .ov-chart-tabs{flex-wra
 /* ══ Phase 1 foundation ═══════════════════════════════════════════════════ */
 ${touchTargetCSS(".sr")}
 
-.sr .fb-input-wrap { flex:1; min-width:0; }
 .sr .acts-email { min-width:180px; }
 
 /* ══ Phase 4: shared form fields + loading ════════════════════════════════ */
@@ -765,11 +730,8 @@ ${down.sm} {
   .sr .brandrow .mode:first-of-type { margin-left:0; }
   .sr .seg { width:100%; }
   .sr .seg button { flex:1; justify-content:center; }
-  /* Feedback and brand forms stack rather than fighting for one row. */
-  .sr .fb { flex-direction:column; }
   .sr .brandform input, .sr .brandform select { flex:1 1 100%; }
   .sr .card { padding:18px; border-radius:var(--radius-md); }
-  .sr .body { max-height:min(52vh,340px); }
   .sr .empty, .sr .lempty { padding:32px 20px; }
 }
 `;

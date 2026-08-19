@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { usePortalAuth } from "@/lib/portalAuth";
 import {
   usePlatformData, approveDraft, dismissDraft, setRowStatus,
@@ -9,12 +9,15 @@ import PageHeader from "../_components/PageHeader";
 import SubNav from "../_components/SubNav";
 import EmptyState from "../_components/EmptyState";
 import ConnectCard from "../_components/ConnectCard";
-import ApprovalCard from "../_components/ApprovalCard";
 import StatTile from "../_components/StatTile";
 import { Panel, PanelHead } from "../_components/Panel";
-import { Stagger } from "../_components/motion";
-import { IconContent, IconSparkle } from "../icons";
+import { Stagger, fadeUp, EASE } from "../_components/motion";
+import { IconContent, IconSparkle, IconCheck } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
+import { displayWorkTitle, queueHintFor } from "@/lib/recommendations/preview";
+import { useToast } from "@/app/_components/Notify";
+import { m } from "framer-motion";
 
 type Tab = "review" | "published" | "google" | "scheduled" | "writer";
 
@@ -75,7 +78,7 @@ export default function ContentPage() {
           <EmptyState icon="✓" title="Nothing waiting on you" sub="When your agents draft new content, it lands here for your approval before going live." />
         ) : (
           <Stagger className="p-cardlist">
-            {pending.map((d) => <DraftCard key={d.id} draft={d} />)}
+            {pending.map((d) => <DraftCard key={d.id} draft={d} brandName={brand.name} siteUrl={brand.site_url} />)}
           </Stagger>
         )
       ) : tab === "published" ? (
@@ -90,7 +93,7 @@ export default function ContentPage() {
                 <tbody>
                   {published.map((d) => (
                     <tr key={d.id}>
-                      <td><div className="p-kwcell" title={d.title}>{cleanTitle(d.title)}</div></td>
+                      <td><div className="p-kwcell" title={d.title}>{displayWorkTitle(d.title)}</div></td>
                       <td><span className="p-chip">{TYPE_LABEL[d.task_type] || d.task_type}</span></td>
                       <td>{d.target_keyword || <span className="p-na">—</span>}</td>
                       <td style={{ color: "var(--muted)", fontSize: 12.5 }}>
@@ -108,7 +111,7 @@ export default function ContentPage() {
           <EmptyState icon="📍" title="No Google posts waiting" sub="Google Business Profile posts drafted for you will appear here, ready to approve." />
         ) : (
           <Stagger className="p-cardlist">
-            {pendingGbp.map((g) => <GbpCard key={g.id} post={g} />)}
+            {pendingGbp.map((g) => <GbpCard key={g.id} post={g} brandName={brand.name} siteUrl={brand.site_url} />)}
           </Stagger>
         )
       ) : tab === "scheduled" ? (
@@ -165,41 +168,124 @@ export default function ContentPage() {
   );
 }
 
-function DraftCard({ draft }: { draft: Draft }) {
+function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: string; siteUrl: string }) {
   return (
-    <ApprovalCard
+    <PreviewPlanCard
       kind={TYPE_LABEL[draft.task_type] || draft.task_type}
-      title={cleanTitle(draft.title)}
+      title={displayWorkTitle(draft.title)}
+      hint={queueHintFor(draft.task_type, { body: draft.body })}
       meta={
         <>
           {draft.target_keyword && <span>🎯 {draft.target_keyword}</span>}
           <span>{new Date(draft.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
         </>
       }
-      body={draft.body}
-      footer={draft.rationale ? <span style={{ fontSize: 12, color: "var(--muted)", maxWidth: 420 }}>{draft.rationale}</span> : null}
+      work={{ title: draft.title, body: draft.body, taskType: draft.task_type, targetUrl: draft.target_url }}
+      brandName={brandName}
+      siteUrl={siteUrl}
+      approveLabel="Approve & publish"
       onApprove={() => approveDraft(draft.id)}
       onDismiss={() => dismissDraft(draft.id)}
-      approveLabel="Approve & publish"
     />
   );
 }
 
-function GbpCard({ post }: { post: GbpPost }) {
+function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: string; siteUrl: string }) {
   return (
-    <ApprovalCard
+    <PreviewPlanCard
       kind="Google post"
       title={post.title || "Google Business Profile post"}
+      hint={queueHintFor("google_post", { brandName })}
       meta={<span>{new Date(post.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
-      body={post.body}
-      footer={post.cta ? <span className="p-badge accent">{post.cta}</span> : null}
+      work={{ title: post.title || "Google post", body: post.body, taskType: "google_post", cta: post.cta || "" }}
+      brandName={brandName}
+      siteUrl={siteUrl}
+      approveLabel="Approve"
       onApprove={() => setRowStatus("gbp_posts", post.id, "approved")}
       onDismiss={() => setRowStatus("gbp_posts", post.id, "dismissed")}
-      approveLabel="Approve"
     />
   );
 }
 
-function cleanTitle(t: string) {
-  return t.replace(/^(Blog|Page|New blog|New page|Audit \+ rewrite|Meta rewrite|Intent fix):\s*/i, "");
+function PreviewPlanCard({
+  kind, title, hint, meta, work, brandName, siteUrl, approveLabel, onApprove, onDismiss,
+}: {
+  kind: string;
+  title: string;
+  hint: string;
+  meta?: ReactNode;
+  work: WorkPreviewModel;
+  brandName: string;
+  siteUrl: string;
+  approveLabel: string;
+  onApprove: () => Promise<boolean>;
+  onDismiss: () => Promise<boolean>;
+}) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<"" | "approved" | "dismissed">("");
+
+  async function run(which: "approve" | "dismiss") {
+    setBusy(true);
+    const ok = await (which === "approve" ? onApprove : onDismiss)();
+    setBusy(false);
+    if (ok) {
+      setDone(which === "approve" ? "approved" : "dismissed");
+      setOpen(false);
+    } else {
+      toast.error("That didn't go through", "Please try again in a moment.");
+    }
+  }
+
+  if (done) {
+    return (
+      <m.div
+        className="p-approve p-approve-done"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.28, ease: EASE }}
+      >
+        <span className={`p-badge ${done === "approved" ? "green" : ""}`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {done === "approved" && <IconCheck size={12} />}
+          {done === "approved" ? "Approved" : "Dismissed"}
+        </span>
+        <span className="p-approve-donetitle">{title}</span>
+      </m.div>
+    );
+  }
+
+  return (
+    <>
+      <m.article className="p-approve" variants={fadeUp}>
+        <div className="p-approve-head">
+          <div style={{ minWidth: 0 }}>
+            <span className="p-chip">{kind}</span>
+            <h3 className="p-approve-title">{title}</h3>
+            {meta && <div className="p-approve-meta">{meta}</div>}
+          </div>
+        </div>
+        <p style={{ margin: "0 0 4px", fontSize: 13.5, lineHeight: 1.6, color: "var(--text2)" }}>{hint}</p>
+        <div className="p-approve-foot">
+          <div className="p-approve-actions">
+            <m.button type="button" className="p-btn primary" onClick={() => setOpen(true)} whileTap={{ scale: 0.97 }}>
+              Preview
+            </m.button>
+          </div>
+        </div>
+      </m.article>
+      <WorkPreview
+        open={open}
+        onClose={() => setOpen(false)}
+        brandName={brandName}
+        siteUrl={siteUrl}
+        work={work}
+        approveLabel={approveLabel}
+        busy={busy}
+        onApprove={() => { void run("approve"); }}
+        onDecline={() => { void run("dismiss"); }}
+      />
+    </>
+  );
 }
