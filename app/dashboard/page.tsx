@@ -12,12 +12,12 @@ import Overview from "./Overview";
 import RecommendationsPanel from "./RecommendationsPanel";
 import type { RecommendationAutopilot, RecommendationSection } from "@/lib/recommendations/sections";
 
-// MEASURED: the Intelligence tab pulls seven components plus Recharts — the
+// MEASURED: the Reports tab pulls seven components plus Recharts — the
 // 353 kB chunk that dominated this route's bundle. It is not the default tab,
 // so none of that is needed until the user clicks it. Statically imported, it
 // was in the initial bundle for every admin regardless.
 //
-// SAFE BECAUSE: it is already conditionally rendered (`tab === "intelligence"`),
+// SAFE BECAUSE: it is already conditionally rendered (`tab === "reports"`),
 // so deferring the code changes nothing about when it mounts. The fallback
 // matches the section's existing min-height, so switching tabs does not reflow.
 const IntelligencePage = dynamic(() => import("./intelligence/IntelligencePage"), {
@@ -49,7 +49,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"overview" | "recommendations" | "intelligence" | "brands">("overview");
+  const [tab, setTab] = useState<"overview" | "recommendations" | "reports" | "brands">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -367,14 +367,13 @@ export default function Dashboard() {
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 
-        {/* One AI Recommendations queue (typed tabs + per-tab autopilot) +
-            Intelligence analytics. No second suggestion surface. */}
+        {/* AI Recommendations (work queue) + Reports (what the AI achieved). */}
         <nav className="tabs" role="tablist" aria-label="Dashboard sections">
           <button role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
           <button role="tab" aria-selected={tab === "recommendations"} className={tab === "recommendations" ? "on" : ""} onClick={() => setTab("recommendations")}>
             AI Recommendations<span aria-label={`${recommendationCount} waiting`}>{recommendationCount}</span>
           </button>
-          <button role="tab" aria-selected={tab === "intelligence"} className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>Intelligence</button>
+          <button role="tab" aria-selected={tab === "reports"} className={tab === "reports" ? "on" : ""} onClick={() => setTab("reports")}>Reports</button>
           {role === "admin" && <button role="tab" aria-selected={tab === "brands"} className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span aria-label={`${allBrands.length} total`}>{allBrands.length}</span></button>}
         </nav>
 
@@ -382,7 +381,7 @@ export default function Dashboard() {
         {loading && <p className="muted" role="status" aria-live="polite">Loading signal…</p>}
 
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
-        {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
+        {tab === "reports" && brandId && <IntelligencePage key={`reports-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
 
         {!loading && tab === "recommendations" && brand && (
           <RecommendationsPanel

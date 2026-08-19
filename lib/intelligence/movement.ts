@@ -55,7 +55,35 @@ export function buildMovementMaps(rows: NamedPosRow[]): {
   const dates = [...new Set(rows.map((r) => r.captured_date))].sort().reverse();
   const currentDate = dates[0] || null;
   const previousDate = dates.find((d) => d !== currentDate) || null;
+  return mapsForDates(rows, currentDate, previousDate);
+}
 
+/**
+ * Period report: compare the oldest sync day in the window to the newest.
+ * Used when the user picks Last 7 / 30 / 90 days — “where we were → where we are.”
+ */
+export function buildPeriodMovementMaps(rows: NamedPosRow[]): {
+  currentDate: string | null;
+  previousDate: string | null;
+  curMap: Map<string, NamedPosRow>;
+  prevMap: Map<string, number>;
+} {
+  const dates = [...new Set(rows.map((r) => r.captured_date))].sort();
+  if (dates.length === 0) return mapsForDates(rows, null, null);
+  if (dates.length === 1) return mapsForDates(rows, dates[0], null);
+  return mapsForDates(rows, dates[dates.length - 1], dates[0]);
+}
+
+function mapsForDates(
+  rows: NamedPosRow[],
+  currentDate: string | null,
+  previousDate: string | null
+): {
+  currentDate: string | null;
+  previousDate: string | null;
+  curMap: Map<string, NamedPosRow>;
+  prevMap: Map<string, number>;
+} {
   const curMap = new Map<string, NamedPosRow>();
   const prevMap = new Map<string, number>();
   for (const r of rows) {
