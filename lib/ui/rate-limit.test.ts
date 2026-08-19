@@ -148,9 +148,15 @@ const WIRED: Record<string, string> = {
   "app/api/intelligence/competitors/[id]/route.ts": "external",
   "app/api/intelligence/competitors/discover/route.ts": "external",
   "app/api/intelligence/competitors/route.ts": "external",
+  "app/api/analytics/route.ts": "external",
+  "app/api/portal/summary/route.ts": "external",
+  "app/api/intelligence/keyword-history/route.ts": "external",
   "app/api/execution/route.ts": "dispatch",
   "app/api/intelligence/action/route.ts": "dispatch",
   "app/api/images/process/route.ts": "dispatch",
+  "app/api/step/route.ts": "dispatch",
+  "app/api/run/route.ts": "dispatch",
+  "app/api/portal/connections/route.ts": "dispatch",
 };
 
 test("every expensive route is limited, with the right bucket", () => {

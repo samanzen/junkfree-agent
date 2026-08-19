@@ -3,6 +3,7 @@ import { getActiveBrands } from "@/lib/brands";
 import { clearStale } from "@/lib/queue";
 import { triggerBrandRun, drainBrand } from "@/lib/runner";
 import { requireAuth, isAuthError, requireAdmin } from "@/lib/auth";
+import { requireCronSecret } from "@/lib/cronAuth";
 import { orderByLastCompletedRun, PER_BRAND_BUDGET_MS, TICK_BUDGET_MS } from "@/lib/scheduling";
 
 export const maxDuration = 60;
@@ -11,7 +12,8 @@ export const maxDuration = 60;
 // active brand in one pass, so unlike /api/run (brand-scoped, used by the
 // dashboard) it is deliberately restricted to trusted callers only:
 //
-// GET  = Vercel Cron, authenticated via `Authorization: Bearer ${CRON_SECRET}`.
+// GET  = Vercel Cron, authenticated via requireCronSecret (fails closed when
+//        CRON_SECRET is unset — see lib/cronAuth.ts).
 // POST = admin-only manual trigger for the full multi-brand cycle (e.g. to
 //        run today's cron early) — requires a real admin session via
 //        requireAuth/requireAdmin. No customer session can ever reach this;
@@ -22,10 +24,8 @@ export const maxDuration = 60;
 // forever — previously nothing ever drained a cron-seeded queue unless a
 // human happened to open the dashboard afterward.
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const cronErr = requireCronSecret(req);
+  if (cronErr) return cronErr;
   return runQueue();
 }
 

@@ -357,7 +357,10 @@ async function keywordData(brand: Brand): Promise<ConnectionState> {
     lastSyncAt: lastSync,
     lastSyncLabel: lastSync ? `Last refreshed ${fmtDate(lastSync.slice(0, 10))}` : "Not refreshed yet",
     lastError: configured ? null : "Ranking data provider not configured.",
-    actions: configured ? ["sync_now"] : [],
+    // No sync_now: rank_enrich is deliberately admin/cron-only (weekly cadence
+    // exists specifically to control DataForSEO cost). Offering Sync here
+    // would put that job on a customer-reachable path.
+    actions: [],
     accounts: null,
     requirement: configured ? null : "Your ranking data is briefly unavailable. Our team has been notified and is restoring it — nothing is needed from you.",
   };
