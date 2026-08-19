@@ -2,6 +2,9 @@
 -- AI VISIBILITY (GEO / AEO) INTELLIGENCE
 --
 -- Apply in the Supabase SQL editor. Forward-only, additive, idempotent.
+-- Run the WHOLE file (Run, not a highlighted fragment). A previous partial
+-- run that created ai_visibility_prompts without `weight` used to fail here
+-- with 42703; the ADD COLUMN IF NOT EXISTS statements below heal that.
 --
 -- WHAT THIS REPLACES
 -- Until now "AI visibility" was a single integer on metric_snapshots, written
@@ -84,6 +87,19 @@ create table if not exists ai_visibility_locales (
   unique (brand_id, label, language)
 );
 
+alter table ai_visibility_locales
+  add column if not exists country text,
+  add column if not exists country_code text,
+  add column if not exists region text,
+  add column if not exists city text,
+  add column if not exists neighborhood text,
+  add column if not exists label text,
+  add column if not exists language text not null default 'en',
+  add column if not exists dataforseo_location_code int,
+  add column if not exists source text not null default 'parsed',
+  add column if not exists active boolean not null default true,
+  add column if not exists created_at timestamptz not null default now();
+
 create index if not exists ai_visibility_locales_brand_idx
   on ai_visibility_locales (brand_id, active);
 
@@ -121,6 +137,23 @@ create table if not exists ai_visibility_prompts (
   unique (brand_id, prompt_key)
 );
 
+-- CREATE TABLE IF NOT EXISTS does not add columns to a table that already
+-- exists. A half-applied run left this table standing without `weight`, and
+-- the index below then raised 42703. Adding the column is a no-op when the
+-- table was created from this file in full.
+alter table ai_visibility_prompts
+  add column if not exists prompt_key text,
+  add column if not exists intent text,
+  add column if not exists template_id text,
+  add column if not exists service text,
+  add column if not exists locale_id uuid references ai_visibility_locales(id) on delete set null,
+  add column if not exists language text not null default 'en',
+  add column if not exists text text,
+  add column if not exists weight int not null default 100,
+  add column if not exists active boolean not null default true,
+  add column if not exists created_at timestamptz not null default now();
+
+drop index if exists ai_visibility_prompts_brand_idx;
 create index if not exists ai_visibility_prompts_brand_idx
   on ai_visibility_prompts (brand_id, active, weight desc);
 
@@ -150,6 +183,17 @@ create table if not exists ai_visibility_runs (
   started_at timestamptz not null default now(),
   finished_at timestamptz
 );
+
+alter table ai_visibility_runs
+  add column if not exists status text not null default 'running',
+  add column if not exists assistants jsonb not null default '[]'::jsonb,
+  add column if not exists prompts_planned int not null default 0,
+  add column if not exists checks_completed int not null default 0,
+  add column if not exists checks_failed int not null default 0,
+  add column if not exists mention_rate numeric(5,2),
+  add column if not exists error text,
+  add column if not exists started_at timestamptz not null default now(),
+  add column if not exists finished_at timestamptz;
 
 create index if not exists ai_visibility_runs_brand_time_idx
   on ai_visibility_runs (brand_id, started_at desc);
@@ -202,6 +246,30 @@ create table if not exists ai_visibility_checks (
   checked_at timestamptz not null default now()
 );
 
+alter table ai_visibility_checks
+  add column if not exists run_id uuid references ai_visibility_runs(id) on delete cascade,
+  add column if not exists prompt_id uuid references ai_visibility_prompts(id) on delete set null,
+  add column if not exists prompt_key text,
+  add column if not exists prompt_text text,
+  add column if not exists intent text,
+  add column if not exists language text not null default 'en',
+  add column if not exists country text,
+  add column if not exists region text,
+  add column if not exists city text,
+  add column if not exists neighborhood text,
+  add column if not exists locale_label text,
+  add column if not exists assistant text,
+  add column if not exists model text,
+  add column if not exists mentioned boolean not null default false,
+  add column if not exists rank int,
+  add column if not exists brands_named jsonb not null default '[]'::jsonb,
+  add column if not exists sentiment text,
+  add column if not exists share_of_voice numeric(5,2),
+  add column if not exists answer_text text,
+  add column if not exists latency_ms int,
+  add column if not exists error text,
+  add column if not exists checked_at timestamptz not null default now();
+
 -- The report's hot path: newest first for a brand.
 create index if not exists ai_visibility_checks_brand_time_idx
   on ai_visibility_checks (brand_id, checked_at desc);
@@ -239,6 +307,14 @@ create table if not exists ai_visibility_citations (
 
   created_at timestamptz not null default now()
 );
+
+alter table ai_visibility_citations
+  add column if not exists url text,
+  add column if not exists domain text,
+  add column if not exists title text,
+  add column if not exists position int,
+  add column if not exists is_own boolean not null default false,
+  add column if not exists created_at timestamptz not null default now();
 
 -- "Which of our pages earn AI citations" -- the cited-pages leaderboard.
 create index if not exists ai_visibility_citations_own_idx

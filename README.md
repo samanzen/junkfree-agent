@@ -67,9 +67,13 @@ found on Tuesday becomes a draft, not just a red number.
 
 Setup:
 
-1. Run `supabase/018_ai_visibility.sql` in the SQL editor. Until you do,
-   everything degrades cleanly — the sweep skips with `not_migrated` and
-   `GET /api/intelligence/ai-visibility` reports `available: false`.
+1. Run `supabase/018_ai_visibility.sql` in the SQL editor. Run the **whole
+   file** (click Run with nothing highlighted). A previous partial apply that
+   created `ai_visibility_prompts` without `weight` used to fail with
+   `42703: column "weight" does not exist`; re-running the current file heals
+   that and creates the remaining tables. Until it succeeds, the sweep skips
+   with `not_migrated` and `GET /api/intelligence/ai-visibility` reports
+   `available: false`.
 2. Configure at least one assistant. `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` and
    the DataForSEO credentials are probably already set, which gets you three.
    `OPENAI_API_KEY` and `PERPLEXITY_API_KEY` add the other two.
