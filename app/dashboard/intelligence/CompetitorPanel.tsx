@@ -255,10 +255,15 @@ export default function CompetitorPanel({ brandId }: { brandId: string }) {
         setSuggestQuery("");
         setStatusMsg(
           d.resolved_domain && d.resolved_domain !== raw
-            ? `Added ${d.resolved_domain}.`
-            : "Competitor added."
+            ? `Added ${d.resolved_domain}. Pulling metrics…`
+            : "Competitor added. Pulling metrics…"
         );
+        autoRefreshTried.current = false;
         await load();
+        // Fetch live traffic/backlinks for the new rival (and refresh others).
+        setAdding(false);
+        await refreshReport();
+        return;
       }
     } finally {
       setAdding(false);
