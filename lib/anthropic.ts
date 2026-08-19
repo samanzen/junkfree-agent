@@ -40,7 +40,66 @@ type CallOpts = {
    * Must never carry customer content. It is written to logs verbatim.
    */
   label?: string;
+  /**
+   * Receives the sources a `search: true` call actually used.
+   *
+   * The response's text blocks are the only thing this function returns, so
+   * until now every citation the web-search tool produced was parsed out of the
+   * payload and thrown away. AI-visibility measurement needs them: "which URL
+   * did the assistant lean on" is the difference between knowing we were
+   * recommended and knowing WHY.
+   *
+   * Optional, so no existing caller changes. Never invoked when `search` is off,
+   * because there is nothing to report.
+   */
+  onCitations?: (citations: SearchCitation[]) => void;
 };
+
+/** A source an Anthropic web-search call reported using. */
+export type SearchCitation = { url: string; title: string | null };
+
+/**
+ * Pull the cited sources out of a Messages response.
+ *
+ * Two shapes carry them and they mean different things:
+ *  - `citations` on a text block are the sources the model attributed THIS
+ *    sentence to. Highest signal, so they come first and keep their order.
+ *  - a `web_search_tool_result` block lists everything the search returned,
+ *    whether or not the answer leaned on it. Appended after, so the ordering
+ *    still reflects "what the answer actually used" before "what it saw".
+ */
+function extractSearchCitations(content: unknown): SearchCitation[] {
+  const blocks = Array.isArray(content) ? content : [];
+  const out: SearchCitation[] = [];
+  const seen = new Set<string>();
+
+  const push = (url: unknown, title: unknown) => {
+    if (typeof url !== "string" || !url) return;
+    if (seen.has(url)) return;
+    seen.add(url);
+    out.push({ url, title: typeof title === "string" && title ? title : null });
+  };
+
+  for (const block of blocks) {
+    const b = block as { type?: string; citations?: unknown[] };
+    if (b.type !== "text" || !Array.isArray(b.citations)) continue;
+    for (const c of b.citations) {
+      const cite = c as { url?: unknown; title?: unknown };
+      push(cite.url, cite.title);
+    }
+  }
+
+  for (const block of blocks) {
+    const b = block as { type?: string; content?: unknown };
+    if (b.type !== "web_search_tool_result" || !Array.isArray(b.content)) continue;
+    for (const r of b.content) {
+      const result = r as { url?: unknown; title?: unknown };
+      push(result.url, result.title);
+    }
+  }
+
+  return out;
+}
 
 /**
  * Verbose prompt/response logging. OFF unless explicitly switched on.
@@ -56,7 +115,7 @@ type CallOpts = {
  */
 const DEBUG_AI_LOGGING = process.env.AI_DEBUG_LOGGING === "1";
 
-export async function callClaude({ user, system, search, maxTokens = 2000, thinking, onMeta, label }: CallOpts): Promise<string> {
+export async function callClaude({ user, system, search, maxTokens = 2000, thinking, onMeta, label, onCitations }: CallOpts): Promise<string> {
   const body: Record<string, unknown> = {
     model: MODEL,
     max_tokens: maxTokens,
@@ -127,6 +186,10 @@ export async function callClaude({ user, system, search, maxTokens = 2000, think
       output_tokens: data.usage?.output_tokens ?? 0,
       thinking_tokens: data.usage?.output_tokens_details?.thinking_tokens ?? 0,
     });
+
+    // Reported before the empty-text check below, so a search call whose text
+    // came back empty still hands its sources to the caller.
+    if (search && onCitations) onCitations(extractSearchCitations(data.content));
 
     const text = (data.content || [])
       .filter((b: { type: string }) => b.type === "text")

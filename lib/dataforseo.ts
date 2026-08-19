@@ -124,6 +124,83 @@ export function isConfigured() {
   return !!authHeader();
 }
 
+// GOOGLE AI OVERVIEW — the generated answer Google puts above the organic
+// results (lib/ai-visibility).
+//
+// This is the one "assistant" with no API of its own: you cannot ask Google's
+// AI Overview a question directly. It is read from a SERP instead, which is why
+// it lives here alongside the other SERP calls rather than in the provider
+// folder's own HTTP clients.
+//
+// `load_async_ai_overview` is required: without it the AI Overview element is
+// returned as a stub with no content, because Google itself loads it
+// asynchronously. Same graceful-degradation convention as every other call in
+// this file — returns null when unconfigured, on error, or when the SERP simply
+// had no AI Overview, and the three cases are distinguished by `reason` so a
+// missing block is never reported as an outage.
+//
+// NOTE: documented in DataForSEO's SERP API but not yet confirmed against a
+// live account, same status as keywordDifficulty/classifySearchIntent above.
+export type AiOverviewResult = {
+  text: string;
+  references: { url: string; title: string | null }[];
+};
+
+export async function aiOverview(
+  keyword: string,
+  geo: Geo = {}
+): Promise<{ result: AiOverviewResult | null; reason: "ok" | "unconfigured" | "request_failed" | "no_block" }> {
+  if (!isConfigured()) return { result: null, reason: "unconfigured" };
+
+  const data = await post<Task<unknown>>("/serp/google/organic/live/advanced", {
+    keyword,
+    location_code: geo.locationCode ?? LOCATION_CANADA,
+    language_code: geo.languageCode ?? LANG,
+    depth: 10,
+    load_async_ai_overview: true,
+  });
+  if (!data) return { result: null, reason: "request_failed" };
+
+  const items = (data.tasks?.[0]?.result?.[0] as { items?: { type?: string }[] } | undefined)?.items || [];
+  const block = items.find((i) => i.type === "ai_overview");
+  if (!block) return { result: null, reason: "no_block" };
+
+  // The block nests its prose under `items[].text` (and sometimes `markdown`),
+  // with sources either on the block or per nested item. Walk it rather than
+  // hardcoding one shape, the same approach renderedPageContent uses for
+  // content_parsing — the payload varies by query and by plan.
+  const texts: string[] = [];
+  const references: { url: string; title: string | null }[] = [];
+  const seenUrls = new Set<string>();
+
+  const collect = (node: unknown): void => {
+    if (!node) return;
+    if (Array.isArray(node)) return void node.forEach(collect);
+    if (typeof node !== "object") return;
+
+    const rec = node as Record<string, unknown>;
+    if (typeof rec.text === "string" && rec.text.trim()) texts.push(rec.text.trim());
+    else if (typeof rec.markdown === "string" && rec.markdown.trim()) texts.push(rec.markdown.trim());
+
+    if (typeof rec.url === "string" && rec.url.startsWith("http") && !seenUrls.has(rec.url)) {
+      seenUrls.add(rec.url);
+      references.push({ url: rec.url, title: typeof rec.title === "string" ? rec.title : null });
+    }
+
+    for (const [key, value] of Object.entries(rec)) {
+      // `text`/`markdown`/`url`/`title` are already consumed above; recursing
+      // into them would duplicate them.
+      if (key === "text" || key === "markdown" || key === "url" || key === "title") continue;
+      collect(value);
+    }
+  };
+  collect(block);
+
+  const text = [...new Set(texts)].join("\n\n").trim();
+  if (!text && !references.length) return { result: null, reason: "no_block" };
+  return { result: { text, references }, reason: "ok" };
+}
+
 // JS-RENDERED PAGE CONTENT (Phase 8B).
 //
 // The platform's own crawler (lib/auditor.ts) reads raw HTML, so a
