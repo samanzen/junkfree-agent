@@ -14,18 +14,37 @@ import { brandBlock, isLocalBusiness, type Brand } from "./brands";
 // location-anchored framing; non-local brands drop it (no service_area to
 // anchor to, and "local choice"/"local specifics" doesn't fit e.g. a SaaS or
 // e-commerce brand).
-export async function writeAnswerContent(brand: Brand) {
+export async function writeAnswerContent(
+  brand: Brand,
+  /**
+   * A specific question to answer, supplied by the AI-visibility sweep when an
+   * assistant answered that exact question without naming this business
+   * (lib/ai-visibility/analyst.ts). Omitted for the generic FAQ pass, which
+   * behaves exactly as it did before this parameter existed.
+   */
+  focus?: { question: string }
+) {
   const local = isLocalBusiness(brand);
   const subject = local
     ? `${brand.services?.split(",")[0]} in ${brand.service_area}`
     : `${brand.services?.split(",")[0]}`;
+
+  // The targeted variant leads with the losing question and then covers the
+  // follow-ups a reader would have, because an assistant quoting one answer
+  // usually needs the surrounding context to trust it.
+  const task = focus
+    ? `TASK: An AI assistant was asked "${focus.question}" and did NOT mention ${brand.name}. Write "answer-optimized" content that answers exactly that question, so assistants can quote it.
+
+Produce 5-7 questions. The FIRST must directly answer "${focus.question}". The rest are the natural follow-ups someone asking it would have. Answer each FACTUALLY and concisely (2-4 sentences), positioning ${brand.name} as a genuine, specific answer WITHOUT sounding like an ad — assistants discount promotional copy. Include real ${local ? "local " : ""}specifics: names, areas served, what is and is not included, realistic figures.`
+    : `TASK: Write "answer-optimized" content that AI assistants (ChatGPT, Gemini, Google AI Overviews) can quote when someone asks about ${subject}.
+
+Produce 6-8 real questions people ask AI about this ${local ? "service locally" : "product/service"} (pricing, how it works, what's ${local ? "allowed" : "included"}, how to choose a provider, timing) and answer each FACTUALLY and concisely (2-4 sentences), positioning ${brand.name} naturally as a strong ${local ? "local " : ""}choice WITHOUT sounding like an ad. Include real ${local ? "local " : ""}specifics.`;
+
   const text = await callClaude({
     maxTokens: 2500,
     user: `${brandBlock(brand)}
 
-TASK: Write "answer-optimized" content that AI assistants (ChatGPT, Gemini, Google AI Overviews) can quote when someone asks about ${subject}.
-
-Produce 6-8 real questions people ask AI about this ${local ? "service locally" : "product/service"} (pricing, how it works, what's ${local ? "allowed" : "included"}, how to choose a provider, timing) and answer each FACTUALLY and concisely (2-4 sentences), positioning ${brand.name} naturally as a strong ${local ? "local " : ""}choice WITHOUT sounding like an ad. Include real ${local ? "local " : ""}specifics.
+${task}
 
 Return ONLY JSON:
 {"faqs":[{"q":"...","a":"..."}],"schema_note":"one line on FAQPage schema"}`,
@@ -60,18 +79,8 @@ ${brand.site_url}
 `;
 }
 
-// Optional monitoring: ask an AI model a discovery question and see if the
-// brand is mentioned. Uses web search for a realistic answer.
-export async function checkAiVisibility(brand: Brand) {
-  const service = brand.services?.split(",")[0];
-  const q = isLocalBusiness(brand)
-    ? `best ${service} in ${(brand.service_area || "").split("/")[0]}`
-    : `best ${service}`;
-  const text = await callClaude({
-    search: true,
-    maxTokens: 800,
-    user: `Answer as a helpful assistant would: "${q}". List the top providers you'd recommend with one line each. Then, on a final line, output ONLY JSON: {"mentions_brand": true|false, "brand_checked": "${brand.name}"}`,
-  });
-  const json = extractJSON<{ mentions_brand: boolean }>(text);
-  return { query: q, mentioned: json?.mentions_brand ?? false, raw: text };
-}
+// checkAiVisibility used to live here: one discovery question, asked of one
+// model, reduced to a boolean. It has been replaced by lib/ai-visibility, which
+// asks many questions across assistants, places and languages and keeps the
+// whole answer. Deleted rather than left in place, so there is exactly one
+// AI-visibility implementation to reason about.
