@@ -3,28 +3,28 @@ import { db } from "@/lib/supabase";
 import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
 import { discoverCompetitors, geoOf } from "@/lib/dataforseo";
+import { normalizeCompetitorDomain } from "@/lib/competitors/filter";
+import { keepSameIndustryCompetitors } from "@/lib/competitors/relevance";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
-// On-demand competitor auto-discovery (not run automatically on every cron —
-// this hits an unverified DataForSEO Labs endpoint, so it's a deliberate
-// user action, same cost model as the manual "Add competitor" flow). Finds
-// organic competitors for the brand's own domain, skips anything already
-// tracked, and upserts the rest as normal (editable/removable) competitor
-// rows via the existing add/remove endpoints.
+// On-demand competitor auto-discovery.
+// Pipeline: DataForSEO Labs → drop social/directories → overlap floor →
+// same-industry gate (Claude, using brand.services). A moving company should
+// only keep other movers / closely related local services — never Facebook
+// or a car dealership that happens to share a few keywords.
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
   const { brand_id } = await req.json().catch(() => ({}));
   if (!brand_id) return NextResponse.json({ error: "brand_id required" }, { status: 400 });
-const accessErr = requireBrandAccess(auth, brand_id);
+  const accessErr = requireBrandAccess(auth, brand_id);
   if (accessErr) return accessErr;
 
-  // Rate limit AFTER authorisation, so an unauthorised caller can never
-  // consume a tenant's allowance.
   const limited = await enforceRate(brand_id!, "external");
   if (limited) return limited;
 
@@ -32,21 +32,35 @@ const accessErr = requireBrandAccess(auth, brand_id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
   const found = await discoverCompetitors(domainOf(brand), geoOf(brand)).catch(() => []);
-  if (!found.length) return NextResponse.json({ discovered: [] });
+  if (!found.length) return NextResponse.json({ discovered: [], rejected_noise: true });
+
+  const relevant = await keepSameIndustryCompetitors(brand, found);
+  if (!relevant.length) {
+    return NextResponse.json({
+      discovered: [],
+      message:
+        "No same-industry competitors found from keyword overlap. Add real rivals manually (other businesses in your line of work).",
+    });
+  }
 
   const { data: existing } = await db
     .from("competitors")
     .select("domain")
     .eq("brand_id", brand_id);
-  const known = new Set((existing || []).map((c) => c.domain));
+  const known = new Set((existing || []).map((c) => normalizeCompetitorDomain(c.domain)));
 
-  const rows = found
-    .map((f) => ({
-      brand_id,
-      domain: f.domain.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, ""),
-      name: f.domain,
-      active: true,
-    }))
+  const rows = relevant
+    .map((f) => {
+      const domain = normalizeCompetitorDomain(f.domain);
+      return {
+        brand_id,
+        domain,
+        name: domain,
+        active: true,
+        last_keyword_count: f.keywordOverlap,
+        last_checked_at: new Date().toISOString(),
+      };
+    })
     .filter((r) => r.domain && !known.has(r.domain));
 
   if (!rows.length) return NextResponse.json({ discovered: [] });

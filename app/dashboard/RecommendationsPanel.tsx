@@ -1,0 +1,341 @@
+"use client";
+import { useMemo, useState } from "react";
+import Field from "@/app/_components/Field";
+import {
+  RECOMMENDATION_SECTIONS,
+  isSectionAutopilot,
+  readAutopilotMap,
+  sectionForTaskType,
+  type RecommendationAutopilot,
+  type RecommendationSection,
+} from "@/lib/recommendations/sections";
+
+type Draft = {
+  id: string;
+  brand_id: string;
+  task_type: string;
+  target_url: string | null;
+  title: string;
+  body: string;
+  rationale: string;
+  status: string;
+};
+type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
+type Cite = {
+  id: string;
+  brand_id: string;
+  name: string;
+  url: string;
+  category: string;
+  priority: number;
+  rationale: string;
+  status: string;
+};
+type BrandLike = {
+  id: string;
+  auto_publish_meta?: boolean;
+  recommendation_autopilot?: RecommendationAutopilot | null;
+  business_model?: string;
+};
+
+const LABEL: Record<string, string> = {
+  fix_meta: "meta / intent",
+  improve_content: "content audit",
+  new_page: "new page",
+  new_blog: "new blog",
+  geo_answers: "AI-answer (GEO)",
+};
+
+type Props = {
+  brand: BrandLike;
+  isLocal: boolean;
+  drafts: Draft[];
+  gbp: Gbp[];
+  citations: Cite[];
+  running: boolean;
+  busy: string;
+  feedbackFor: string;
+  feedbackText: string;
+  onFeedbackFor: (id: string) => void;
+  onFeedbackText: (v: string) => void;
+  onDraftAct: (id: string, path: string) => void;
+  onSendFeedback: (id: string) => void;
+  onRowAct: (table: string, id: string, status: string) => void;
+  onToggleSectionAutopilot: (section: RecommendationSection, enabled: boolean) => void;
+  onRunAgents: () => void;
+  DraftBody: React.ComponentType<{ body: string }>;
+  Empty: React.ComponentType<{
+    icon: string;
+    title: string;
+    body: string;
+    action?: { label: string; onClick: () => void; disabled?: boolean };
+  }>;
+};
+
+export default function RecommendationsPanel({
+  brand,
+  isLocal,
+  drafts,
+  gbp,
+  citations,
+  running,
+  busy,
+  feedbackFor,
+  feedbackText,
+  onFeedbackFor,
+  onFeedbackText,
+  onDraftAct,
+  onSendFeedback,
+  onRowAct,
+  onToggleSectionAutopilot,
+  onRunAgents,
+  DraftBody,
+  Empty,
+}: Props) {
+  const sections = RECOMMENDATION_SECTIONS.filter((s) => !s.localOnly || isLocal);
+  const [section, setSection] = useState<RecommendationSection>(sections[0]?.key || "pages");
+  const autopilot = readAutopilotMap(brand);
+  const sectionAuto = isSectionAutopilot(brand, section);
+
+  const pageDrafts = useMemo(
+    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "pages"),
+    [drafts]
+  );
+  const contentDrafts = useMemo(
+    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "content"),
+    [drafts]
+  );
+  const metaDrafts = useMemo(
+    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "meta"),
+    [drafts]
+  );
+  const pendingGbp = useMemo(
+    () => gbp.filter((g) => g.status === "pending_review"),
+    [gbp]
+  );
+  const pendingCites = useMemo(
+    () => citations.filter((c) => c.status === "suggested" || c.status === "in_progress" || c.status === "pending_review"),
+    [citations]
+  );
+
+  const counts: Record<RecommendationSection, number> = {
+    pages: pageDrafts.length,
+    content: contentDrafts.length,
+    meta: metaDrafts.length,
+    google_posts: pendingGbp.length,
+    backlinks: pendingCites.length,
+  };
+
+  const activeBlurb = sections.find((s) => s.key === section)?.blurb || "";
+  const sectionDrafts =
+    section === "pages" ? pageDrafts : section === "content" ? contentDrafts : section === "meta" ? metaDrafts : [];
+
+  return (
+    <div className="rec">
+      <div className="rec-head">
+        <div>
+          <h2 className="rec-title">AI Recommendations</h2>
+          <p className="rec-sub">
+            Agents propose work here. Approve or decline — or turn Autopilot on for a tab so that type ships without waiting.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={`rec-auto ${sectionAuto ? "on" : ""}`}
+          onClick={() => onToggleSectionAutopilot(section, !sectionAuto)}
+          title={
+            sectionAuto
+              ? "Autopilot on for this tab — new items of this type skip the queue when safe."
+              : "Manual approval — you review each item in this tab."
+          }
+        >
+          {sectionAuto ? "◉ Autopilot" : "◎ Manual approval"}
+        </button>
+      </div>
+
+      <div className="rec-tabs" role="tablist" aria-label="Recommendation types">
+        {sections.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            role="tab"
+            aria-selected={section === s.key}
+            className={`rec-tab ${section === s.key ? "on" : ""}`}
+            onClick={() => setSection(s.key)}
+          >
+            {s.label}
+            <span className="rec-count" aria-label={`${counts[s.key]} waiting`}>
+              {counts[s.key]}
+            </span>
+            {autopilot[s.key] ? <span className="rec-pill">Auto</span> : null}
+          </button>
+        ))}
+      </div>
+
+      <p className="rec-blurb">
+        {activeBlurb}{" "}
+        {sectionAuto
+          ? "Autopilot is on for this tab."
+          : "Manual approval is on for this tab."}
+      </p>
+
+      {section !== "google_posts" && section !== "backlinks" && (
+        <>
+          {sectionDrafts.map((d) => (
+            <article className="card" key={d.id}>
+              <div className="meta">
+                <span className="kind">{LABEL[d.task_type] || d.task_type}</span>
+                <span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span>
+              </div>
+              <h3>{d.title}</h3>
+              <p className="why">{d.rationale}</p>
+              <DraftBody body={d.body} />
+              <div className="acts">
+                {d.status === "pending_review" && (
+                  <button className="primary" onClick={() => onDraftAct(d.id, "approve")}>
+                    Approve &amp; publish
+                  </button>
+                )}
+                {d.status === "approved" && (
+                  <button className="primary" onClick={() => onDraftAct(d.id, "publish")}>
+                    Publish
+                  </button>
+                )}
+                <button className="ghost" onClick={() => onDraftAct(d.id, "approve?action=dismiss")}>
+                  Decline
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => {
+                    onFeedbackFor(feedbackFor === d.id ? "" : d.id);
+                    onFeedbackText("");
+                  }}
+                >
+                  Give feedback
+                </button>
+              </div>
+              {feedbackFor === d.id && (
+                <div className="fb">
+                  <Field
+                    hideLabel
+                    label="Feedback for the agent"
+                    className="fb-input-wrap"
+                    autoFocus
+                    value={feedbackText}
+                    disabled={busy === d.id}
+                    onChange={(e) => onFeedbackText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") onSendFeedback(d.id);
+                    }}
+                    placeholder="Tell the agent what to change — shorter, different tone, add local detail…"
+                  />
+                  <button
+                    className="primary"
+                    onClick={() => onSendFeedback(d.id)}
+                    disabled={busy === d.id}
+                  >
+                    {busy === d.id ? "Revising…" : "Send"}
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+          {sectionDrafts.length === 0 && (
+            <Empty
+              icon="✦"
+              title={`No ${sections.find((s) => s.key === section)?.label.toLowerCase()} waiting`}
+              body="Run the agents to generate recommendations for this tab."
+              action={{ label: running ? "Running…" : "Run agents now", onClick: onRunAgents, disabled: running }}
+            />
+          )}
+        </>
+      )}
+
+      {section === "google_posts" && (
+        <>
+          {pendingGbp.map((g) => (
+            <article className="card" key={g.id}>
+              <div className="meta">
+                <span className="kind">google business post</span>
+              </div>
+              <h3>{g.title}</h3>
+              <DraftBody body={g.body} />
+              <p className="why">Call to action: {g.cta}</p>
+              <div className="acts">
+                <button className="primary" onClick={() => onRowAct("gbp_posts", g.id, "approved")}>
+                  Approve
+                </button>
+                <button className="ghost" onClick={() => onRowAct("gbp_posts", g.id, "dismissed")}>
+                  Decline
+                </button>
+              </div>
+            </article>
+          ))}
+          {pendingGbp.length === 0 && (
+            <Empty
+              icon="📍"
+              title="No Google posts waiting"
+              body="Local SEO agents draft GBP posts here for approval — or turn Autopilot on for this tab."
+              action={{ label: running ? "Running…" : "Run agents now", onClick: onRunAgents, disabled: running }}
+            />
+          )}
+        </>
+      )}
+
+      {section === "backlinks" && (
+        <>
+          {pendingCites.map((c) => (
+            <article className="card row" key={c.id}>
+              <div>
+                <div className="meta">
+                  <strong>{c.name}</strong>
+                  <span className="kind">{c.category}</span>
+                  <span className="prio">P{c.priority}</span>
+                </div>
+                <p className="why">{c.rationale}</p>
+                {c.url && (
+                  <a className="link" href={c.url} target="_blank" rel="noreferrer">
+                    {c.url}
+                  </a>
+                )}
+              </div>
+              <div className="acts">
+                <button className="primary" onClick={() => onRowAct("citations", c.id, "live")}>
+                  Approve
+                </button>
+                <button className="ghost" onClick={() => onRowAct("citations", c.id, "skipped")}>
+                  Decline
+                </button>
+              </div>
+            </article>
+          ))}
+          {pendingCites.length === 0 && (
+            <Empty
+              icon="🔗"
+              title="No backlink opportunities waiting"
+              body="Citation opportunities appear here ranked by value — or Autopilot can accept them automatically."
+              action={{ label: running ? "Running…" : "Run agents now", onClick: onRunAgents, disabled: running }}
+            />
+          )}
+        </>
+      )}
+
+      <style>{REC_CSS}</style>
+    </div>
+  );
+}
+
+const REC_CSS = `
+.rec-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; flex-wrap:wrap; }
+.rec-title { margin:0 0 4px; font-size:18px; letter-spacing:-.02em; }
+.rec-sub { margin:0; color:var(--muted); font-size:13px; max-width:52ch; line-height:1.45; }
+.rec-auto { border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:var(--radius-sm); padding:8px 14px; font-family:var(--font-mono); font-size:12px; cursor:pointer; }
+.rec-auto.on { background:rgba(139,92,246,.12); border-color:rgba(139,92,246,.35); color:var(--violet); }
+.rec-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
+.rec-tab { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:999px; padding:7px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.rec-tab.on { background:rgba(108,92,231,.1); border-color:rgba(108,92,231,.35); color:#6C5CE7; }
+.rec-count { font-family:var(--font-mono); font-size:11px; background:var(--surface2,#F3F5F8); color:var(--muted); padding:1px 7px; border-radius:999px; }
+.rec-tab.on .rec-count { background:rgba(108,92,231,.15); color:#6C5CE7; }
+.rec-pill { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#8B5CF6; }
+.rec-blurb { margin:0 0 14px; font-size:12.5px; color:var(--muted); }
+`;

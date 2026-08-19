@@ -3,38 +3,31 @@ import { useEffect, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import { Panel, PanelHead } from "../../_components/Panel";
 import EmptyState from "../../_components/EmptyState";
-import { Stagger, StaggerItem } from "../../_components/motion";
-import { IconSparkle, IconCheck } from "../../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import { useToast } from "@/app/_components/Notify";
 
-type Rec = {
-  priority?: number; category?: string; title?: string; explanation?: string;
-  estimated_impact?: string; action_type?: string; action_label?: string;
-  action_payload?: { target_keyword?: string; target_url?: string };
-};
 type AlmostRow = {
   keyword: string; position?: number; search_volume?: number | null;
   landing_page?: string | null; ai_opportunity_reason?: string | null;
 };
 
+/**
+ * Intelligence opportunities = ranking signals only.
+ * Work to approve lives in AI Recommendations — not a second parallel list.
+ */
 export default function OpportunitiesTab({ brandId }: { brandId: string }) {
   const toast = useToast();
-  const [recs, setRecs] = useState<Rec[]>([]);
   const [almost, setAlmost] = useState<AlmostRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [queued, setQueued] = useState<Record<number, "loading" | "done">>({});
+  const [queued, setQueued] = useState<Record<string, "loading" | "done">>({});
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      authedFetch(`/api/intelligence/recommendations?brand=${brandId}`).then((r) => r.json()).catch(() => ({})),
-      authedFetch(`/api/intelligence/winners-losers?brand=${brandId}`).then((r) => r.json()).catch(() => ({})),
-    ])
-      .then(([rec, wl]) => {
+    authedFetch(`/api/intelligence/winners-losers?brand=${brandId}`)
+      .then((r) => r.json())
+      .then((wl) => {
         if (cancelled) return;
-        setRecs(Array.isArray(rec?.recommendations) ? rec.recommendations : []);
         setAlmost(Array.isArray(wl?.almost_page_1) ? wl.almost_page_1 : []);
         setLoading(false);
       })
@@ -42,24 +35,34 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
     return () => { cancelled = true; };
   }, [brandId]);
 
-  async function runAction(i: number, rec: Rec) {
-    if (!rec.action_type) return;
-    setQueued((q) => ({ ...q, [i]: "loading" }));
+  async function queueBoost(row: AlmostRow) {
+    const key = row.keyword;
+    setQueued((q) => ({ ...q, [key]: "loading" }));
     try {
       const res = await authedFetch("/api/intelligence/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: rec.action_type, brand_id: brandId, payload: rec.action_payload || {} }),
+        body: JSON.stringify({
+          action: "boost_page1",
+          brand_id: brandId,
+          payload: {
+            target_keyword: row.keyword,
+            target_url: row.landing_page,
+            event_label: "Page 1 boost",
+          },
+        }),
       });
-      setQueued((q) => ({ ...q, [i]: res.ok ? "done" : "loading" }));
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error("Couldn't start that task", err.error || "Please try again in a moment.");
-        setQueued((q) => { const n = { ...q }; delete n[i]; return n; });
+        toast.error("Couldn't queue that", err.error || "Please try again.");
+        setQueued((q) => { const n = { ...q }; delete n[key]; return n; });
+        return;
       }
+      setQueued((q) => ({ ...q, [key]: "done" }));
+      toast.success("Queued for AI Recommendations", "The draft will show up in your recommendations inbox.");
     } catch {
-      toast.error("Couldn't start that task", "Check your connection and try again.");
-      setQueued((q) => { const n = { ...q }; delete n[i]; return n; });
+      toast.error("Couldn't queue that", "Check your connection and try again.");
+      setQueued((q) => { const n = { ...q }; delete n[key]; return n; });
     }
   }
 
@@ -75,55 +78,10 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
     <div className="p-stack">
       <Panel>
         <PanelHead
-          title="Recommended next steps"
-          badge={recs.length || undefined}
-          sub="Prioritised by your AI strategist from your live ranking data."
-        />
-        {recs.length === 0 ? (
-          <EmptyState icon="✦" title="No recommendations yet" sub="Recommendations are generated from your keyword data — they'll appear once enough ranking history exists." />
-        ) : (
-          <Stagger className="p-rec-list">
-            {recs.map((r, i) => (
-              <StaggerItem key={i} className="p-rec">
-                <div className="p-rec-top">
-                  <span className="p-rec-icon"><IconSparkle size={15} /></span>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="p-rec-title">{r.title || "Recommended action"}</div>
-                    {r.category && <span className="p-chip" style={{ marginTop: 4, display: "inline-block" }}>{r.category}</span>}
-                  </div>
-                </div>
-                {r.explanation && <p className="p-rec-text">{r.explanation}</p>}
-                <div className="p-rec-foot">
-                  {r.estimated_impact && <span className="p-rec-impact">📈 {r.estimated_impact}</span>}
-                  {r.action_type && (
-                    queued[i] === "done" ? (
-                      <span className="p-badge green" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        <IconCheck size={13} /> Added to your queue
-                      </span>
-                    ) : (
-                      <button
-                        className="p-btn primary"
-                        style={{ padding: "8px 14px", fontSize: 12.5 }}
-                        disabled={queued[i] === "loading"}
-                        onClick={() => runAction(i, r)}
-                      >
-                        {queued[i] === "loading" ? "Starting…" : (r.action_label || "Do this")}
-                      </button>
-                    )
-                  )}
-                </div>
-              </StaggerItem>
-            ))}
-          </Stagger>
-        )}
-      </Panel>
-
-      <Panel>
-        <PanelHead
           title="Almost on page 1"
           badge={almost.length || undefined}
           badgeTone="amber"
-          sub="Keywords sitting in positions 11–20. These are usually the fastest wins."
+          sub="Keywords in positions 11–20. Queue work from here — it lands in AI Recommendations to approve, decline, or autopilot per tab."
         />
         {almost.length === 0 ? (
           <EmptyState icon="⚡" title="Nothing in striking distance right now" sub="Keywords ranking between positions 11 and 20 will show up here." />
@@ -131,16 +89,30 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
           <ResponsiveTable>
             <table className="p-table">
               <thead>
-                <tr><th>Keyword</th><th>Position</th><th>Searches / mo</th><th>Page</th></tr>
+                <tr><th>Keyword</th><th>Position</th><th>Searches / mo</th><th>Page</th><th></th></tr>
               </thead>
               <tbody>
-                {almost.map((r, i) => (
-                  <tr key={i}>
+                {almost.map((r) => (
+                  <tr key={r.keyword}>
                     <td><div className="p-kwcell" title={r.keyword}>{r.keyword}</div></td>
                     <td><span className="p-pos top20">{r.position}</span></td>
                     <td>{r.search_volume != null ? r.search_volume.toLocaleString() : <span className="p-na">—</span>}</td>
                     <td style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--muted)", fontSize: 12 }}>
                       {r.landing_page ? r.landing_page.replace(/^https?:\/\/[^/]+/, "") || "/" : <span className="p-na">—</span>}
+                    </td>
+                    <td>
+                      {queued[r.keyword] === "done" ? (
+                        <span className="p-badge green">In Recommendations</span>
+                      ) : (
+                        <button
+                          className="p-btn primary"
+                          style={{ padding: "6px 12px", fontSize: 12 }}
+                          disabled={queued[r.keyword] === "loading"}
+                          onClick={() => queueBoost(r)}
+                        >
+                          {queued[r.keyword] === "loading" ? "…" : "Queue"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

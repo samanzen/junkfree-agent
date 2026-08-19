@@ -3,6 +3,7 @@
 // (Junk Free, POMO BUILD, or a Volo Locals customer) is one row.
 
 import { db } from "./supabase";
+import type { RecommendationAutopilot } from "./recommendations/sections";
 
 // Vertical classification (Sprint 6.2). Free text at the DB layer (see
 // supabase/007_business_model.sql), same convention as IntegrationProvider
@@ -29,6 +30,8 @@ export type Brand = {
   competitors: string | null;
   intent_notes: string | null;
   auto_publish_meta: boolean;
+  /** Per AI Recommendations tab autopilot. See lib/recommendations/sections.ts */
+  recommendation_autopilot?: RecommendationAutopilot | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;
@@ -73,5 +76,7 @@ export function brandBlock(b: Brand): string {
     b.competitors ? `\n- Competitors to beat: ${b.competitors}` : ""
   }${
     b.intent_notes ? `\n- SEARCH-INTENT NOTE: ${b.intent_notes}` : ""
-  }`;
+  }
+
+COMPETITOR RULE: A competitor is another business in the SAME industry competing for the same customers (e.g. other movers for a moving company). Social networks, directories, dealerships in unrelated verticals, and generic platforms are NOT competitors.`;
 }
