@@ -68,6 +68,8 @@ function posTone(p: number): { bg: string; color: string } {
   return { bg: "rgba(99,102,241,.1)", color: "#6366F1" };
 }
 
+type MovementFilter = "up" | "down" | "unchanged" | "almost";
+
 export default function KeywordTable({ brandId, days = 30 }: { brandId: string; days?: number }) {
   const [keywords, setKeywords] = useState<Kw[]>([]);
   const [total, setTotal] = useState(0);
@@ -76,6 +78,7 @@ export default function KeywordTable({ brandId, days = 30 }: { brandId: string; 
   const [order, setOrder] = useState<"desc" | "asc">("asc");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [movementFilters, setMovementFilters] = useState<MovementFilter[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Kw | null>(null);
   const [addKw, setAddKw] = useState("");
@@ -106,8 +109,10 @@ export default function KeywordTable({ brandId, days = 30 }: { brandId: string; 
       search,
       page: String(page),
       limit: String(limit),
+      days: String(days),
     });
     if (statusFilter) params.set("status", statusFilter);
+    if (movementFilters.length) params.set("movement", movementFilters.join(","));
     authedFetch(`/api/intelligence/keywords?${params}`)
       .then((r) => r.json())
       .then((d) => {
@@ -116,11 +121,16 @@ export default function KeywordTable({ brandId, days = 30 }: { brandId: string; 
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [brandId, sort, order, search, page, statusFilter]);
+  }, [brandId, sort, order, search, page, statusFilter, movementFilters, days]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  function toggleMovement(key: MovementFilter) {
+    setMovementFilters((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+    setPage(1);
+  }
 
   async function addKeyword() {
     if (!addKw.trim()) return;
@@ -207,31 +217,70 @@ export default function KeywordTable({ brandId, days = 30 }: { brandId: string; 
         <span className="kt-count-pill">{total.toLocaleString()} tracked</span>
       </div>
 
-      <div className="kt-cards">
-        <div className="kt-card up">
-          <div className="kt-card-label">Keywords moved up</div>
-          <div className="kt-card-n">
-            <span className="kt-card-arrow">▲</span>
-            {summary?.moved_up ?? "—"}
-          </div>
-        </div>
-        <div className="kt-card down">
-          <div className="kt-card-label">Keywords moved down</div>
-          <div className="kt-card-n">
-            <span className="kt-card-arrow">▼</span>
-            {summary?.moved_down ?? "—"}
-          </div>
-        </div>
-        <div className="kt-card flat">
-          <div className="kt-card-label">Keywords unchanged</div>
-          <div className="kt-card-n">{summary?.unchanged ?? "—"}</div>
-        </div>
-        <div className="kt-card almost">
-          <div className="kt-card-label">Almost page 1</div>
-          <div className="kt-card-n">{summary?.almost_page_1 ?? "—"}</div>
-          <div className="kt-card-hint">Positions 11–20 — unique to your reports</div>
-        </div>
+      <div className="kt-cards" role="group" aria-label="Filter keywords by movement">
+        {(
+          [
+            {
+              key: "up" as const,
+              label: "Keywords moved up",
+              value: summary?.moved_up,
+              className: "up",
+              arrow: "▲",
+            },
+            {
+              key: "down" as const,
+              label: "Keywords moved down",
+              value: summary?.moved_down,
+              className: "down",
+              arrow: "▼",
+            },
+            {
+              key: "unchanged" as const,
+              label: "Keywords unchanged",
+              value: summary?.unchanged,
+              className: "flat",
+            },
+            {
+              key: "almost" as const,
+              label: "Almost page 1",
+              value: summary?.almost_page_1,
+              className: "almost",
+              hint: "Positions 11–20 — unique to your reports",
+            },
+          ] as const
+        ).map((card) => {
+          const on = movementFilters.includes(card.key);
+          return (
+            <button
+              key={card.key}
+              type="button"
+              className={`kt-card ${card.className}${on ? " on" : ""}`}
+              aria-pressed={on}
+              onClick={() => toggleMovement(card.key)}
+            >
+              <div className="kt-card-top">
+                <div className="kt-card-label">{card.label}</div>
+                <span className={`kt-card-check${on ? " on" : ""}`} aria-hidden="true">
+                  {on ? "✓" : ""}
+                </span>
+              </div>
+              <div className="kt-card-n">
+                {"arrow" in card && card.arrow ? <span className="kt-card-arrow">{card.arrow}</span> : null}
+                {card.value ?? "—"}
+              </div>
+              {"hint" in card && card.hint ? <div className="kt-card-hint">{card.hint}</div> : null}
+            </button>
+          );
+        })}
       </div>
+      {movementFilters.length > 0 && (
+        <div className="kt-filter-note">
+          Showing {total.toLocaleString()} keyword{total === 1 ? "" : "s"} matching selected cards.{" "}
+          <button type="button" className="kt-clear-filters" onClick={() => { setMovementFilters([]); setPage(1); }}>
+            Clear filters
+          </button>
+        </div>
+      )}
 
       <div className="kt-buckets">
         <span className="kt-bucket">
