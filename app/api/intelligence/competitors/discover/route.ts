@@ -4,14 +4,17 @@ import { getBrandById } from "@/lib/brands";
 import { domainOf } from "@/lib/metrics";
 import { discoverCompetitors, geoOf } from "@/lib/dataforseo";
 import { normalizeCompetitorDomain } from "@/lib/competitors/filter";
+import { keepSameIndustryCompetitors } from "@/lib/competitors/relevance";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
 
 export const maxDuration = 60;
 
-// On-demand competitor auto-discovery (not run automatically on every cron —
-// this hits a DataForSEO Labs endpoint, so it's a deliberate user action).
-// Social networks and directories are stripped in discoverCompetitors().
+// On-demand competitor auto-discovery.
+// Pipeline: DataForSEO Labs → drop social/directories → overlap floor →
+// same-industry gate (Claude, using brand.services). A moving company should
+// only keep other movers / closely related local services — never Facebook
+// or a car dealership that happens to share a few keywords.
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -29,7 +32,16 @@ export async function POST(req: NextRequest) {
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
   const found = await discoverCompetitors(domainOf(brand), geoOf(brand)).catch(() => []);
-  if (!found.length) return NextResponse.json({ discovered: [] });
+  if (!found.length) return NextResponse.json({ discovered: [], rejected_noise: true });
+
+  const relevant = await keepSameIndustryCompetitors(brand, found);
+  if (!relevant.length) {
+    return NextResponse.json({
+      discovered: [],
+      message:
+        "No same-industry competitors found from keyword overlap. Add real rivals manually (other businesses in your line of work).",
+    });
+  }
 
   const { data: existing } = await db
     .from("competitors")
@@ -37,7 +49,7 @@ export async function POST(req: NextRequest) {
     .eq("brand_id", brand_id);
   const known = new Set((existing || []).map((c) => normalizeCompetitorDomain(c.domain)));
 
-  const rows = found
+  const rows = relevant
     .map((f) => {
       const domain = normalizeCompetitorDomain(f.domain);
       return {

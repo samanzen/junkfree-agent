@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "That looks like a social network or directory, not a competing business. Add a real competitor domain (e.g. a rival junk-removal company).",
+          "That is not a competitor. Add another business in your industry (e.g. another moving company) — not Facebook, Yelp, or an unrelated vertical.",
       },
       { status: 400 }
     );

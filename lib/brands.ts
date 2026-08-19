@@ -73,5 +73,7 @@ export function brandBlock(b: Brand): string {
     b.competitors ? `\n- Competitors to beat: ${b.competitors}` : ""
   }${
     b.intent_notes ? `\n- SEARCH-INTENT NOTE: ${b.intent_notes}` : ""
-  }`;
+  }
+
+COMPETITOR RULE: A competitor is another business in the SAME industry competing for the same customers (e.g. other movers for a moving company). Social networks, directories, dealerships in unrelated verticals, and generic platforms are NOT competitors.`;
 }
