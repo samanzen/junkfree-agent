@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
+import { getBrandById } from "@/lib/brands";
 import { isTrackableCompetitor, normalizeCompetitorDomain } from "@/lib/competitors/filter";
+import { resolveCompetitorInput } from "@/lib/competitors/resolve";
 
 export const maxDuration = 60;
 
 // GET: list competitors for a brand with keyword gap summary.
-// POST: add a new competitor.
+// POST: add a new competitor (accepts a domain OR a business name).
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -55,7 +57,14 @@ export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const { brand_id, domain, name } = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => ({}));
+  const { brand_id, domain, name, confirm } = body as {
+    brand_id?: string;
+    domain?: string;
+    name?: string;
+    /** When true, skip did-you-mean and add `domain` as typed (after user picked a suggestion). */
+    confirm?: boolean;
+  };
   if (!brand_id || !domain) {
     return NextResponse.json({ error: "brand_id and domain required" }, { status: 400 });
   }
@@ -67,24 +76,52 @@ export async function POST(req: NextRequest) {
   const limited = await enforceRate(brand_id!, "external");
   if (limited) return limited;
 
-  const cleanDomain = normalizeCompetitorDomain(domain);
-  if (!isTrackableCompetitor(cleanDomain)) {
-    return NextResponse.json(
-      {
-        error:
-          "That is not a competitor. Add another business in your industry (e.g. another moving company) — not Facebook, Yelp, or an unrelated vertical.",
-      },
-      { status: 400 }
-    );
+  const brand = await getBrandById(brand_id);
+  if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+
+  let cleanDomain: string;
+
+  if (confirm) {
+    cleanDomain = normalizeCompetitorDomain(domain);
+    if (!isTrackableCompetitor(cleanDomain, brand.site_url)) {
+      return NextResponse.json(
+        {
+          error:
+            "That isn’t a competitor site. Add another business in your industry — not Facebook, Yelp, or a directory.",
+        },
+        { status: 400 }
+      );
+    }
+  } else {
+    const resolved = await resolveCompetitorInput(domain, brand);
+    if (resolved.kind === "empty") {
+      return NextResponse.json({ error: resolved.message }, { status: 400 });
+    }
+    if (resolved.kind === "suggestions") {
+      return NextResponse.json({
+        needs_confirmation: true,
+        query: resolved.query,
+        suggestions: resolved.suggestions,
+        message: `Did you mean one of these sites for “${resolved.query}”?`,
+      });
+    }
+    cleanDomain = resolved.domain;
   }
 
-  const { data, error } = await db.from("competitors").upsert({
-    brand_id,
-    domain: cleanDomain,
-    name: name || cleanDomain,
-    active: true,
-  }, { onConflict: "brand_id,domain" }).select().single();
+  const { data, error } = await db
+    .from("competitors")
+    .upsert(
+      {
+        brand_id,
+        domain: cleanDomain,
+        name: name || cleanDomain,
+        active: true,
+      },
+      { onConflict: "brand_id,domain" }
+    )
+    .select()
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, competitor: data });
+  return NextResponse.json({ ok: true, competitor: data, resolved_domain: cleanDomain });
 }

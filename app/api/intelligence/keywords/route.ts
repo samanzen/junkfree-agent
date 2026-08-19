@@ -1,9 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
-import { pickLatestAndPrevious, type KeywordPosRow } from "@/lib/intelligence/movement";
+import {
+  buildPeriodMovementMaps,
+  pickLatestAndPrevious,
+  type KeywordPosRow,
+  type NamedPosRow,
+} from "@/lib/intelligence/movement";
+import { lookbackDateISO, parseReportDays } from "@/lib/intelligence/reportRange";
 
 export const maxDuration = 30;
+
+const MOVEMENT_KEYS = new Set(["up", "down", "unchanged", "almost"]);
+
+/** Resolve keyword strings matching Rank Tracking summary cards (period-based). */
+async function keywordsForMovements(
+  brandId: string,
+  days: number,
+  movements: Set<string>
+): Promise<string[] | null> {
+  if (movements.size === 0) return null;
+
+  const lookback = lookbackDateISO(days);
+  const { data: history } = await db
+    .from("keyword_positions")
+    .select("keyword, position, clicks, impressions, landing_page, captured_date")
+    .eq("brand_id", brandId)
+    .gte("captured_date", lookback)
+    .order("captured_date", { ascending: false });
+
+  const { curMap, prevMap } = buildPeriodMovementMaps((history || []) as NamedPosRow[]);
+  const matched = new Set<string>();
+
+  for (const [kw, row] of curMap) {
+    const prev = prevMap.get(kw);
+    if (movements.has("up") && prev != null && row.position < prev) matched.add(kw);
+    if (movements.has("down") && prev != null && row.position > prev) matched.add(kw);
+    if (movements.has("unchanged") && prev != null && row.position === prev) matched.add(kw);
+    if (movements.has("almost") && row.position >= 11 && row.position <= 20) matched.add(kw);
+  }
+
+  return [...matched];
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
@@ -22,15 +60,35 @@ export async function GET(req: NextRequest) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
   const limit = Math.min(100, parseInt(url.searchParams.get("limit") || "50"));
   const offset = (page - 1) * limit;
+  const days = parseReportDays(url.searchParams.get("days"), 30);
+  const movements = new Set(
+    (url.searchParams.get("movement") || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => MOVEMENT_KEYS.has(s))
+  );
 
-  const safeSort = ["ai_opportunity_score","search_volume","keyword_difficulty","keyword","status","best_position"].includes(sort)
-    ? sort : "ai_opportunity_score";
+  const safeSort = ["ai_opportunity_score", "search_volume", "keyword_difficulty", "keyword", "status", "best_position"].includes(
+    sort
+  )
+    ? sort
+    : "ai_opportunity_score";
 
-  let q = db.from("tracked_keywords")
-    .select("id,keyword,status,source,search_volume,keyword_difficulty,search_intent,cpc,ai_opportunity_score,ai_opportunity_reason,estimated_monthly_clicks,estimated_revenue_impact,best_position,best_position_date,worst_position,first_seen_date,last_seen_date,enriched_at", { count: "exact" })
+  const movementKeywords = await keywordsForMovements(brandId, days, movements);
+  if (movementKeywords && movementKeywords.length === 0) {
+    return NextResponse.json({ keywords: [], total: 0, page, limit });
+  }
+
+  let q = db
+    .from("tracked_keywords")
+    .select(
+      "id,keyword,status,source,search_volume,keyword_difficulty,search_intent,cpc,ai_opportunity_score,ai_opportunity_reason,estimated_monthly_clicks,estimated_revenue_impact,best_position,best_position_date,worst_position,first_seen_date,last_seen_date,enriched_at",
+      { count: "exact" }
+    )
     .eq("brand_id", brandId)
     .neq("status", "lost");
 
+  if (movementKeywords) q = q.in("keyword", movementKeywords);
   if (search) q = q.ilike("keyword", `%${search}%`);
   if (status) q = q.eq("status", status);
   q = q.order(safeSort, { ascending: order, nullsFirst: false });
@@ -43,7 +101,8 @@ export async function GET(req: NextRequest) {
   // Pull recent history (not just today) so a missed cron day still shows a position.
   const lookback = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
   const { data: positions } = kwIds.length
-    ? await db.from("keyword_positions")
+    ? await db
+        .from("keyword_positions")
         .select("keyword_id, position, clicks, impressions, ctr, landing_page, captured_date")
         .in("keyword_id", kwIds)
         .gte("captured_date", lookback)
@@ -90,13 +149,20 @@ export async function POST(req: NextRequest) {
   if (accessErr) return accessErr;
 
   const today = new Date().toISOString().slice(0, 10);
-  const { data, error } = await db.from("tracked_keywords").upsert({
-    brand_id,
-    keyword: keyword.trim().toLowerCase(),
-    source: "manual",
-    first_seen_date: today,
-    status: "new",
-  }, { onConflict: "brand_id,keyword" }).select().single();
+  const { data, error } = await db
+    .from("tracked_keywords")
+    .upsert(
+      {
+        brand_id,
+        keyword: keyword.trim().toLowerCase(),
+        source: "manual",
+        first_seen_date: today,
+        status: "new",
+      },
+      { onConflict: "brand_id,keyword" }
+    )
+    .select()
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, keyword: data });

@@ -94,17 +94,47 @@ export async function keywordIdeas(seed: string, geo: Geo = {}): Promise<Keyword
 }
 
 // Keywords a competitor domain ranks for that you may not — gap analysis.
-export async function rankedKeywords(domain: string, geo: Geo = {}): Promise<{ keyword: string; position: number; volume: number | null }[]> {
+export type RankedKeyword = {
+  keyword: string;
+  position: number;
+  volume: number | null;
+  url: string | null;
+  etv: number | null;
+  cpc: number | null;
+  competition: number | null;
+  difficulty: number | null;
+};
+
+export async function rankedKeywords(domain: string, geo: Geo = {}): Promise<RankedKeyword[]> {
   const data = await post<Task<unknown>>(
     "/dataforseo_labs/google/ranked_keywords/live",
     { target: domain, location_code: geo.locationCode ?? LOCATION_CANADA, language_code: geo.languageCode ?? LANG, limit: 100 }
   );
-  const items = (data?.tasks?.[0]?.result?.[0] as { items?: { keyword_data?: { keyword: string; keyword_info?: { search_volume: number } }; ranked_serp_element?: { serp_item?: { rank_absolute: number } } }[] })?.items || [];
-  return items.map((it) => ({
-    keyword: it.keyword_data?.keyword || "",
-    position: it.ranked_serp_element?.serp_item?.rank_absolute ?? 0,
-    volume: it.keyword_data?.keyword_info?.search_volume ?? null,
-  })).filter((x) => x.keyword);
+  type Item = {
+    keyword_data?: {
+      keyword?: string;
+      keyword_info?: { search_volume?: number; cpc?: number; competition?: number };
+      keyword_properties?: { keyword_difficulty?: number };
+    };
+    ranked_serp_element?: {
+      serp_item?: { rank_absolute?: number; url?: string; etv?: number };
+    };
+  };
+  const items = (data?.tasks?.[0]?.result?.[0] as { items?: Item[] })?.items || [];
+  return items
+    .map((it) => ({
+      keyword: it.keyword_data?.keyword || "",
+      position: it.ranked_serp_element?.serp_item?.rank_absolute ?? 0,
+      volume: it.keyword_data?.keyword_info?.search_volume ?? null,
+      url: it.ranked_serp_element?.serp_item?.url ?? null,
+      etv: it.ranked_serp_element?.serp_item?.etv != null
+        ? Math.round(it.ranked_serp_element.serp_item.etv)
+        : null,
+      cpc: it.keyword_data?.keyword_info?.cpc ?? null,
+      competition: it.keyword_data?.keyword_info?.competition ?? null,
+      difficulty: it.keyword_data?.keyword_properties?.keyword_difficulty ?? null,
+    }))
+    .filter((x) => x.keyword);
 }
 
 // The live top-10 organic results for a keyword — input to the SERP Analyst.
@@ -182,7 +212,12 @@ export async function domainOverview(domain: string, geo: Geo = {}): Promise<{ o
   const item = (data?.tasks?.[0]?.result?.[0] as { items?: { metrics?: { organic?: { etv?: number; count?: number } } }[] })?.items?.[0];
   const organic = item?.metrics?.organic;
   if (!organic) return null;
-  return { organic_traffic: Math.round(organic.etv || 0), organic_keywords: organic.count ?? null };
+  // Never coerce missing etv to 0 — that made Got Junk / rivals look like zero traffic.
+  const etv = organic.etv;
+  return {
+    organic_traffic: typeof etv === "number" ? Math.round(etv) : null,
+    organic_keywords: typeof organic.count === "number" ? organic.count : null,
+  };
 }
 
 // Backlinks summary: total backlinks + referring domains.

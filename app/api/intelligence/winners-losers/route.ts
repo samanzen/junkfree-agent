@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
-import { buildMovementMaps, type NamedPosRow } from "@/lib/intelligence/movement";
+import { buildPeriodMovementMaps, type NamedPosRow } from "@/lib/intelligence/movement";
+import { lookbackDateISO, parseReportDays } from "@/lib/intelligence/reportRange";
 
 export const maxDuration = 30;
 
-// Five intelligence categories derived from position history comparisons.
+/** Reports → What changed (ex Winners & Losers). Supports `days` period compare. */
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
 
-  const brandId = new URL(req.url).searchParams.get("brand");
+  const url = new URL(req.url);
+  const brandId = url.searchParams.get("brand");
   if (!brandId) return NextResponse.json({ error: "brand required" }, { status: 400 });
   const accessErr = requireBrandAccess(auth, brandId);
   if (accessErr) return accessErr;
 
-  const lookback = new Date(Date.now() - 21 * 864e5).toISOString().slice(0, 10);
+  const days = parseReportDays(url.searchParams.get("days"), 30);
+  const lookback = lookbackDateISO(days);
 
   const { data: history } = await db
     .from("keyword_positions")
@@ -24,7 +27,7 @@ export async function GET(req: NextRequest) {
     .gte("captured_date", lookback)
     .order("captured_date", { ascending: false });
 
-  const { currentDate, previousDate, curMap, prevMap } = buildMovementMaps(
+  const { currentDate, previousDate, curMap, prevMap } = buildPeriodMovementMaps(
     (history || []) as NamedPosRow[]
   );
 
@@ -36,46 +39,56 @@ export async function GET(req: NextRequest) {
   const metaMap = new Map((metadata || []).map((m) => [m.keyword, m]));
   const allCurrent = [...curMap.entries()];
 
-  const gains = allCurrent
-    .filter(([kw]) => prevMap.has(kw) && curMap.get(kw)!.position < prevMap.get(kw)!)
-    .map(([kw, r]) => ({
-      keyword: kw, current_position: r.position,
-      previous_position: prevMap.get(kw)!,
-      change: prevMap.get(kw)! - r.position,
-      ...metaMap.get(kw),
-    }))
-    .filter((r) => r.change >= 1)
-    .sort((a, b) => b.change - a.change)
-    .slice(0, 10);
+  const gainsAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position < prevMap.get(kw)!
+  );
+  const dropsAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position > prevMap.get(kw)!
+  );
+  const unchangedAll = allCurrent.filter(
+    ([kw]) => prevMap.has(kw) && curMap.get(kw)!.position === prevMap.get(kw)!
+  );
 
-  const drops = allCurrent
-    .filter(([kw]) => prevMap.has(kw) && curMap.get(kw)!.position > prevMap.get(kw)!)
+  const gains = gainsAll
     .map(([kw, r]) => ({
       keyword: kw, current_position: r.position,
       previous_position: prevMap.get(kw)!,
-      change: curMap.get(kw)!.position - prevMap.get(kw)!,
+      change: Math.round(prevMap.get(kw)! - r.position),
+      landing_page: r.landing_page,
       ...metaMap.get(kw),
     }))
     .filter((r) => r.change >= 1)
     .sort((a, b) => b.change - a.change)
-    .slice(0, 10);
+    .slice(0, 15);
+
+  const drops = dropsAll
+    .map(([kw, r]) => ({
+      keyword: kw, current_position: r.position,
+      previous_position: prevMap.get(kw)!,
+      change: Math.round(curMap.get(kw)!.position - prevMap.get(kw)!),
+      landing_page: r.landing_page,
+      ...metaMap.get(kw),
+    }))
+    .filter((r) => r.change >= 1)
+    .sort((a, b) => b.change - a.change)
+    .slice(0, 15);
 
   const newKeywords = allCurrent
     .filter(([kw]) => !prevMap.has(kw))
-    .map(([kw, r]) => ({ keyword: kw, position: r.position, ...metaMap.get(kw) }))
+    .map(([kw, r]) => ({ keyword: kw, position: r.position, landing_page: r.landing_page, ...metaMap.get(kw) }))
     .sort((a, b) => (a.position || 100) - (b.position || 100))
-    .slice(0, 10);
+    .slice(0, 15);
 
   const lostKeywords = [...prevMap.entries()]
     .filter(([kw]) => !curMap.has(kw))
     .map(([kw, pos]) => ({ keyword: kw, last_position: pos, ...metaMap.get(kw) }))
-    .slice(0, 10);
+    .slice(0, 15);
 
   const almostPage1 = allCurrent
     .filter(([, r]) => r.position >= 11 && r.position <= 20)
     .map(([kw, r]) => ({ keyword: kw, position: r.position, landing_page: r.landing_page, ...metaMap.get(kw) }))
     .sort((a, b) => (b.search_volume || 0) - (a.search_volume || 0))
-    .slice(0, 10);
+    .slice(0, 15);
 
   return NextResponse.json({
     gains,
@@ -83,6 +96,14 @@ export async function GET(req: NextRequest) {
     new_keywords: newKeywords,
     lost_keywords: lostKeywords,
     almost_page_1: almostPage1,
-    compared: { current_date: currentDate, previous_date: previousDate },
+    summary: {
+      moved_up: gainsAll.length,
+      moved_down: dropsAll.length,
+      unchanged: unchangedAll.length,
+      newly_ranking: allCurrent.filter(([kw]) => !prevMap.has(kw)).length,
+      almost_page_1: allCurrent.filter(([, r]) => r.position >= 11 && r.position <= 20).length,
+      tracked: allCurrent.length,
+    },
+    compared: { current_date: currentDate, previous_date: previousDate, days },
   });
 }
