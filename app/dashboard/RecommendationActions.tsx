@@ -1,9 +1,9 @@
 "use client";
 /**
- * Actionable ranking opportunities inside AI Recommendations.
- * Reports stay read-only — fix / push lives here.
+ * Issues / Almost page 1 — actionable ranking work inside AI Recommendations.
+ * Respects per-tab "I'll choose" vs "Do automatically".
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import ActionButton from "./intelligence/ActionButton";
 
@@ -23,12 +23,16 @@ type Mode = "issues" | "opportunities";
 export default function RecommendationActions({
   brandId,
   mode,
+  doAutomatically,
 }: {
   brandId: string;
   mode: Mode;
+  doAutomatically: boolean;
 }) {
   const [rows, setRows] = useState<Kw[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autoMsg, setAutoMsg] = useState("");
+  const queuedOnce = useRef<string>("");
 
   useEffect(() => {
     if (!brandId) return;
@@ -42,6 +46,50 @@ export default function RecommendationActions({
       .catch(() => setLoading(false));
   }, [brandId, mode]);
 
+  // When "Do automatically" is on, queue current items once per brand+mode load.
+  useEffect(() => {
+    if (!doAutomatically || loading || !rows.length) return;
+    const key = `${brandId}:${mode}:${rows.map((r) => r.keyword).join("|")}`;
+    if (queuedOnce.current === key) return;
+    queuedOnce.current = key;
+
+    let cancelled = false;
+    (async () => {
+      let n = 0;
+      for (const kw of rows) {
+        const action = mode === "issues" ? "improve_content" : "boost_page1";
+        const res = await authedFetch("/api/intelligence/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            brand_id: brandId,
+            payload: {
+              target_keyword: kw.keyword,
+              target_url: kw.landing_page,
+              event_label: mode === "issues" ? "Auto-fix slip" : "Auto page-1 push",
+              rationale:
+                mode === "issues"
+                  ? `Autopilot Issues: ranking slipped for "${kw.keyword}"`
+                  : `Autopilot Almost page 1: push "${kw.keyword}"`,
+            },
+          }),
+        }).catch(() => null);
+        if (res?.ok) n++;
+      }
+      if (!cancelled) {
+        setAutoMsg(
+          n
+            ? `Sent ${n} to the AI automatically. Drafts will show under Content / Meta.`
+            : "Tried to send these to the AI — check again shortly."
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [doAutomatically, loading, rows, brandId, mode]);
+
   if (loading) {
     return <p className="rec-action-loading">Scanning rankings…</p>;
   }
@@ -50,19 +98,25 @@ export default function RecommendationActions({
     return (
       <div className="rec-action-empty">
         {mode === "issues"
-          ? "No slipping keywords right now — nice. Check Reports → What changed anytime."
-          : "Nothing sitting just off page 1 right now. When there is, it’ll show up here to push."}
+          ? "No slipping keywords right now."
+          : "Nothing sitting just off page 1 right now."}
       </div>
     );
   }
 
   return (
     <div className="rec-actions">
-      <p className="rec-action-intro">
-        {mode === "issues"
-          ? "These searches slipped. Send them to the AI to rewrite / strengthen the page — results land back in Content for review (unless Autopilot is on)."
-          : "These searches are almost on Google’s first page. Ask the AI to push them — work appears in Content / Meta for approval."}
-      </p>
+      {doAutomatically ? (
+        <p className="rec-action-intro auto">
+          <strong>Do automatically</strong> is on for this tab.{" "}
+          {autoMsg || "Sending these to the AI…"}
+        </p>
+      ) : (
+        <p className="rec-action-intro">
+          <strong>I&apos;ll choose</strong> is on — click a button on any row to send it to the AI.
+          Results come back under Content / Meta for approval (unless those tabs are also automatic).
+        </p>
+      )}
       <div className="rec-action-list">
         {rows.map((kw, i) => (
           <article key={`${kw.keyword}-${i}`} className={`rec-action-card ${mode}`}>
@@ -87,7 +141,9 @@ export default function RecommendationActions({
               )}
             </div>
             <div className="rec-action-right">
-              {mode === "issues" ? (
+              {doAutomatically ? (
+                <span className="rec-action-auto-badge">Queued automatically</span>
+              ) : mode === "issues" ? (
                 <ActionButton
                   action="improve_content"
                   brandId={brandId}
@@ -97,7 +153,7 @@ export default function RecommendationActions({
                     event_label: "Fix slipping keyword",
                     rationale: `Ranking slipped for "${kw.keyword}"`,
                   }}
-                  label="Ask AI to fix"
+                  label="Send to AI"
                   variant="primary"
                 />
               ) : (
@@ -109,7 +165,7 @@ export default function RecommendationActions({
                     target_url: kw.landing_page,
                     event_label: "Page 1 push",
                   }}
-                  label="Ask AI to push"
+                  label="Send to AI"
                   variant="teal"
                 />
               )}

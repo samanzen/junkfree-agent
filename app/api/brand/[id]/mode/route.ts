@@ -11,6 +11,8 @@ import {
 export const maxDuration = 30;
 
 const SECTIONS = new Set<RecommendationSection>([
+  "issues",
+  "opportunities",
   "content",
   "pages",
   "meta",
@@ -19,10 +21,9 @@ const SECTIONS = new Set<RecommendationSection>([
 ]);
 
 /**
- * Set autopilot for one AI Recommendations tab.
- * Body: { section: "pages"|"content"|"meta"|"google_posts"|"backlinks", enabled: boolean }
- *
- * Legacy: { auto_publish_meta: boolean } still toggles the Meta tab.
+ * Set "Do automatically" for one AI Recommendations tab.
+ * Body: { section, enabled: boolean }
+ * Legacy: { auto_publish_meta: boolean } still toggles Meta.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(req);
@@ -36,7 +37,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const brand = await getBrandById(id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
-  // Legacy global meta toggle
   if (typeof body.auto_publish_meta === "boolean" && body.section == null) {
     const next = mergeAutopilotUpdate(readAutopilotMap(brand), "meta", body.auto_publish_meta);
     await db
@@ -49,7 +49,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const section = body.section as RecommendationSection;
   if (!SECTIONS.has(section)) {
     return NextResponse.json(
-      { error: "section must be one of: content, pages, meta, google_posts, backlinks" },
+      {
+        error:
+          "section must be one of: issues, opportunities, content, pages, meta, google_posts, backlinks",
+      },
       { status: 400 }
     );
   }
