@@ -30,7 +30,7 @@ export default function ActionButton({ action, brandId, payload = {}, label, var
       const d = await res.json();
       if (!res.ok || !d.ok) throw new Error(d.error || "Action failed");
       setState("done");
-      setMsg("Sent to Approvals ✓");
+      setMsg("Sent to AI Recommendations ✓");
       setTimeout(() => { setState("idle"); setMsg(""); onDone?.(); }, 3000);
     } catch (e) {
       setState("error");

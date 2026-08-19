@@ -26,7 +26,7 @@ export default function IntelligencePage({ brandId, brandName }: Props) {
     <div className="ip">
       <style>{CSS}</style>
 
-      {/* Section nav — analytics only. Work to approve lives in Approvals. */}
+      {/* Section nav — analytics only. Work to approve lives in AI Recommendations. */}
       <div className="ip-nav">
         {SECTIONS.map((s) => (
           <button key={s.key} className={`ip-nav-btn ${section === s.key ? "on" : ""}`}

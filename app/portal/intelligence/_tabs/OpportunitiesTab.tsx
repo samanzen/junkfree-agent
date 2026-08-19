@@ -13,8 +13,7 @@ type AlmostRow = {
 
 /**
  * Intelligence opportunities = ranking signals only.
- * Work to approve lives in the Content / Approvals queue — not a second
- * parallel "AI recommendations" list.
+ * Work to approve lives in AI Recommendations — not a second parallel list.
  */
 export default function OpportunitiesTab({ brandId }: { brandId: string }) {
   const toast = useToast();
@@ -60,7 +59,7 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
         return;
       }
       setQueued((q) => ({ ...q, [key]: "done" }));
-      toast.success("Queued for Approvals", "The draft will show up in your approval inbox.");
+      toast.success("Queued for AI Recommendations", "The draft will show up in your recommendations inbox.");
     } catch {
       toast.error("Couldn't queue that", "Check your connection and try again.");
       setQueued((q) => { const n = { ...q }; delete n[key]; return n; });
@@ -82,7 +81,7 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
           title="Almost on page 1"
           badge={almost.length || undefined}
           badgeTone="amber"
-          sub="Keywords in positions 11–20. Queue work from here — it lands in Approvals to approve, decline, or autopilot."
+          sub="Keywords in positions 11–20. Queue work from here — it lands in AI Recommendations to approve, decline, or autopilot per tab."
         />
         {almost.length === 0 ? (
           <EmptyState icon="⚡" title="Nothing in striking distance right now" sub="Keywords ranking between positions 11 and 20 will show up here." />
@@ -103,7 +102,7 @@ export default function OpportunitiesTab({ brandId }: { brandId: string }) {
                     </td>
                     <td>
                       {queued[r.keyword] === "done" ? (
-                        <span className="p-badge green">In Approvals</span>
+                        <span className="p-badge green">In Recommendations</span>
                       ) : (
                         <button
                           className="p-btn primary"

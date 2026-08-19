@@ -18,6 +18,7 @@ import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
 import { executeChange } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
+import { isDraftAutopilot, isSectionAutopilot } from "./recommendations/sections";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -250,20 +251,22 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   }
   if (!body) return;
 
-  // Auto mode: publish immediately. Review mode: wait for approval.
-  const autoMode = brand.auto_publish_meta;
+  // Per-section autopilot (Pages / Content / Meta tabs). Autopilot Meta still
+  // respects the legacy auto_publish_meta flag via readAutopilotMap.
+  const taskType = (p.intent ? "fix_meta" : type) as TaskType;
+  const autoMode = isDraftAutopilot(brand, taskType);
   const { data: inserted } = await db.from("drafts").insert({
-    brand_id: brand.id, run_id: runId, task_type: p.intent ? "fix_meta" : type,
+    brand_id: brand.id, run_id: runId, task_type: taskType,
     target_url: (p.target_url as string) || null, target_keyword: kw || null,
     title, body, rationale: (p.rationale as string) || "Search-intent qualification.",
     status: autoMode ? "approved" : "pending_review",
   }).select().single();
 
-  // In auto mode, immediately publish blog/page content live.
-  if (autoMode && inserted && (type === "new_blog" || type === "new_page")) {
+  // Autopilot Pages/Content: publish new pages/blogs immediately.
+  if (autoMode && inserted && (taskType === "new_blog" || taskType === "new_page")) {
     const raw = kw || title.replace(/^(Blog|Page):\s*/i, "");
     const base = slugify(raw);
-    const slug = type === "new_page" ? base : `blog/${base}`;
+    const slug = taskType === "new_page" ? base : `blog/${base}`;
     const { title: cleanTitle, body: cleanBody } = splitFrontMatter(body, title);
     await db.from("content").upsert(
       { slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() },
@@ -279,25 +282,45 @@ export async function stepGeo(brand: Brand) {
   if (count) return;
   const a = await writeAnswerContent(brand);
   if (a?.faqs?.length) {
+    const auto = isSectionAutopilot(brand, "content");
     await db.from("drafts").insert({
       brand_id: brand.id, task_type: "geo_answers", title: "AI-answer FAQ content (GEO/AEO)",
       body: a.faqs.map((f) => `**${f.q}**\n\n${f.a}`).join("\n\n"),
-      rationale: "Answer-optimized so ChatGPT/Gemini recommend the business.", status: "pending_review",
+      rationale: "Answer-optimized so ChatGPT/Gemini recommend the business.",
+      status: auto ? "approved" : "pending_review",
     });
   }
 }
 
 export async function stepGbp(brand: Brand) {
   const post = await draftGbpPost(brand);
-  if (post) await db.from("gbp_posts").insert({ brand_id: brand.id, title: post.title, body: post.body, cta: post.cta, status: "pending_review" });
+  if (!post) return;
+  const auto = isSectionAutopilot(brand, "google_posts");
+  await db.from("gbp_posts").insert({
+    brand_id: brand.id,
+    title: post.title,
+    body: post.body,
+    cta: post.cta,
+    // Autopilot: accepted without sitting in the review queue.
+    status: auto ? "approved" : "pending_review",
+  });
 }
 
 export async function stepCitations(brand: Brand) {
   const { count } = await db.from("citations").select("id", { count: "exact", head: true }).eq("brand_id", brand.id);
   if (count) return;
   const cites = await findCitations(brand);
-  if (cites?.length) await db.from("citations").insert(cites.map((c) => ({
-    brand_id: brand.id, name: c.name, url: c.url, category: c.category, priority: c.priority, rationale: c.rationale,
+  if (!cites?.length) return;
+  const auto = isSectionAutopilot(brand, "backlinks");
+  await db.from("citations").insert(cites.map((c) => ({
+    brand_id: brand.id,
+    name: c.name,
+    url: c.url,
+    category: c.category,
+    priority: c.priority,
+    rationale: c.rationale,
+    // Autopilot accepts the opportunity list; still tracked as live outreach items.
+    status: auto ? "live" : "suggested",
   })));
 }
 

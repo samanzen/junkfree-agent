@@ -3,6 +3,7 @@
 // (Junk Free, POMO BUILD, or a Volo Locals customer) is one row.
 
 import { db } from "./supabase";
+import type { RecommendationAutopilot } from "./recommendations/sections";
 
 // Vertical classification (Sprint 6.2). Free text at the DB layer (see
 // supabase/007_business_model.sql), same convention as IntegrationProvider
@@ -29,6 +30,8 @@ export type Brand = {
   competitors: string | null;
   intent_notes: string | null;
   auto_publish_meta: boolean;
+  /** Per AI Recommendations tab autopilot. See lib/recommendations/sections.ts */
+  recommendation_autopilot?: RecommendationAutopilot | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;

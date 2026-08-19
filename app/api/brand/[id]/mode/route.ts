@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
+import { getBrandById } from "@/lib/brands";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import {
+  mergeAutopilotUpdate,
+  readAutopilotMap,
+  type RecommendationSection,
+} from "@/lib/recommendations/sections";
 
 export const maxDuration = 30;
 
-// Toggle a brand's publishing mode. auto_publish_meta=true => Auto mode:
-// content publishes without review. false => Review mode (drafts wait).
+const SECTIONS = new Set<RecommendationSection>([
+  "content",
+  "pages",
+  "meta",
+  "google_posts",
+  "backlinks",
+]);
+
+/**
+ * Set autopilot for one AI Recommendations tab.
+ * Body: { section: "pages"|"content"|"meta"|"google_posts"|"backlinks", enabled: boolean }
+ *
+ * Legacy: { auto_publish_meta: boolean } still toggles the Meta tab.
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -14,7 +32,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const accessErr = requireBrandAccess(auth, id);
   if (accessErr) return accessErr;
 
-  const { auto_publish_meta } = await req.json().catch(() => ({}));
-  await db.from("brands").update({ auto_publish_meta: !!auto_publish_meta }).eq("id", id);
-  return NextResponse.json({ ok: true });
+  const body = await req.json().catch(() => ({}));
+  const brand = await getBrandById(id);
+  if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+
+  // Legacy global meta toggle
+  if (typeof body.auto_publish_meta === "boolean" && body.section == null) {
+    const next = mergeAutopilotUpdate(readAutopilotMap(brand), "meta", body.auto_publish_meta);
+    await db
+      .from("brands")
+      .update({ auto_publish_meta: body.auto_publish_meta, recommendation_autopilot: next })
+      .eq("id", id);
+    return NextResponse.json({ ok: true, recommendation_autopilot: next });
+  }
+
+  const section = body.section as RecommendationSection;
+  if (!SECTIONS.has(section)) {
+    return NextResponse.json(
+      { error: "section must be one of: content, pages, meta, google_posts, backlinks" },
+      { status: 400 }
+    );
+  }
+  const enabled = !!body.enabled;
+  const next = mergeAutopilotUpdate(readAutopilotMap(brand), section, enabled);
+  const patch: Record<string, unknown> = { recommendation_autopilot: next };
+  if (section === "meta") patch.auto_publish_meta = enabled;
+
+  await db.from("brands").update(patch).eq("id", id);
+  return NextResponse.json({ ok: true, recommendation_autopilot: next });
 }

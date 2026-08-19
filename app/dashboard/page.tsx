@@ -9,6 +9,8 @@ import { useToast, useConfirm } from "@/app/_components/Notify";
 import Field, { focusFirstError } from "@/app/_components/Field";
 import dynamic from "next/dynamic";
 import Overview from "./Overview";
+import RecommendationsPanel from "./RecommendationsPanel";
+import type { RecommendationAutopilot, RecommendationSection } from "@/lib/recommendations/sections";
 
 // MEASURED: the Intelligence tab pulls seven components plus Recharts — the
 // 353 kB chunk that dominated this route's bundle. It is not the default tab,
@@ -23,16 +25,23 @@ const IntelligencePage = dynamic(() => import("./intelligence/IntelligencePage")
 });
 
 type JobFailure = { kind: string; error: string; finished_at: string };
-type Brand = { id: string; slug: string; name: string; auto_publish_meta?: boolean; business_model?: string; site_url?: string; gsc_property?: string | null; last_run_at?: string | null; recent_failures?: JobFailure[]; active?: boolean };
+type Brand = {
+  id: string;
+  slug: string;
+  name: string;
+  auto_publish_meta?: boolean;
+  recommendation_autopilot?: RecommendationAutopilot | null;
+  business_model?: string;
+  site_url?: string;
+  gsc_property?: string | null;
+  last_run_at?: string | null;
+  recent_failures?: JobFailure[];
+  active?: boolean;
+};
 const BUSINESS_MODELS = ["local_service", "ecommerce", "saas", "national_brand", "content_publisher"] as const;
 type Draft = { id: string; brand_id: string; task_type: string; target_url: string | null; title: string; body: string; rationale: string; status: string };
 type Gbp = { id: string; brand_id: string; title: string; body: string; cta: string; status: string };
 type Cite = { id: string; brand_id: string; name: string; url: string; category: string; priority: number; rationale: string; status: string };
-
-const LABEL: Record<string, string> = {
-  fix_meta: "meta / intent", improve_content: "content audit", new_page: "new page",
-  new_blog: "new blog", geo_answers: "AI-answer (GEO)",
-};
 
 export default function Dashboard() {
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -40,7 +49,7 @@ export default function Dashboard() {
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
   const [brandId, setBrandId] = useState("");
-  const [tab, setTab] = useState<"overview" | "approvals" | "intelligence" | "brands">("overview");
+  const [tab, setTab] = useState<"overview" | "recommendations" | "intelligence" | "brands">("overview");
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
@@ -223,8 +232,13 @@ export default function Dashboard() {
     } catch { toast.error("Revision failed", "Check your connection and try again."); }
     setBusy(""); setFeedbackFor(""); setFeedbackText(""); load();
   }
-  async function toggleAuto(id: string, current: boolean) {
-    await authedFetch(`/api/brand/${id}/mode`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auto_publish_meta: !current }) });
+  async function setSectionAutopilot(section: RecommendationSection, enabled: boolean) {
+    if (!brandId) return;
+    await authedFetch(`/api/brand/${brandId}/mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ section, enabled }),
+    });
     load();
   }
   async function rowAct(table: string, id: string, status: string) {
@@ -302,10 +316,11 @@ export default function Dashboard() {
 
   const brand = brands.find((b) => b.id === brandId);
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
-  const bGbp = gbp.filter((g) => g.brand_id === brandId && g.status === "pending_review");
+  const bGbp = gbp.filter((g) => g.brand_id === brandId && (g.status === "pending_review" || g.status === "approved"));
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
-  const approvalCount = bDrafts.length + (activeBrandIsLocal ? bGbp.length + bCites.length : 0);
-  const auto = !!brand?.auto_publish_meta;
+  const recommendationCount = bDrafts.length
+    + (activeBrandIsLocal ? bGbp.filter((g) => g.status === "pending_review").length : 0)
+    + (activeBrandIsLocal ? bCites.filter((c) => c.status === "suggested" || c.status === "in_progress" || c.status === "pending_review").length : 0);
 
   // The <style> has to be inside this early return too. Without it the
   // authenticating state rendered .sr markup with no stylesheet attached at
@@ -348,23 +363,16 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-          {brand && (
-            <button className={`mode ${auto ? "auto" : ""}`} onClick={() => toggleAuto(brand.id, auto)}
-              title="Approval: you approve each item in Approvals. Autopilot: safe items publish without waiting on you.">
-              {auto ? "◉ Autopilot" : "◎ Approval mode"}
-            </button>
-          )}
-          <a href={`/portal?brand=${brandId}`} className="mode" style={{ textDecoration:"none", textAlign:"center" }} title="Preview customer view">👁 Customer view</a>
+          <a href={`/portal?brand=${brandId}`} className="mode" style={{ textDecoration:"none", textAlign:"center", marginLeft: "auto" }} title="Preview customer view">👁 Customer view</a>
           <button className="mode" onClick={signOut} title="Sign out">⏻ Sign out</button>
         </div>
 
-        {/* One work queue (Approvals) + Intelligence analytics. No second
-            "suggestions" surface — agents write drafts here; you approve,
-            dismiss, or turn Autopilot on. */}
+        {/* One AI Recommendations queue (typed tabs + per-tab autopilot) +
+            Intelligence analytics. No second suggestion surface. */}
         <nav className="tabs" role="tablist" aria-label="Dashboard sections">
           <button role="tab" aria-selected={tab === "overview"} className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
-          <button role="tab" aria-selected={tab === "approvals"} className={tab === "approvals" ? "on" : ""} onClick={() => setTab("approvals")}>
-            Approvals<span aria-label={`${approvalCount} waiting`}>{approvalCount}</span>
+          <button role="tab" aria-selected={tab === "recommendations"} className={tab === "recommendations" ? "on" : ""} onClick={() => setTab("recommendations")}>
+            AI Recommendations<span aria-label={`${recommendationCount} waiting`}>{recommendationCount}</span>
           </button>
           <button role="tab" aria-selected={tab === "intelligence"} className={tab === "intelligence" ? "on" : ""} onClick={() => setTab("intelligence")}>Intelligence</button>
           {role === "admin" && <button role="tab" aria-selected={tab === "brands"} className={tab === "brands" ? "on" : ""} onClick={() => setTab("brands")}>Brands<span aria-label={`${allBrands.length} total`}>{allBrands.length}</span></button>}
@@ -376,81 +384,27 @@ export default function Dashboard() {
         {tab === "overview" && brandId && !loading && <Overview key={brandId} brandId={brandId} token={token} />}
         {tab === "intelligence" && brandId && <IntelligencePage key={`intel-${brandId}`} brandId={brandId} brandName={brands.find(b => b.id === brandId)?.name} />}
 
-        {!loading && tab === "approvals" && (
-          <>
-            {auto && (
-              <p className="muted" style={{ marginBottom: 12 }}>
-                Autopilot is on — safe items can publish without waiting in this queue. Turn on Approval mode if you want to review everything first.
-              </p>
-            )}
-            {!auto && approvalCount > 0 && (
-              <p className="muted" style={{ marginBottom: 12 }}>
-                One inbox: approve to publish, dismiss to decline. Intelligence is for data only — it no longer has a second suggestion list.
-              </p>
-            )}
-
-            {bDrafts.map((d) => (
-              <article className="card" key={d.id}>
-                <div className="meta"><span className="kind">{LABEL[d.task_type] || d.task_type}</span><span className={`stat ${d.status}`}>{d.status.replace("_", " ")}</span></div>
-                <h3>{d.title}</h3>
-                <p className="why">{d.rationale}</p>
-                <DraftBody body={d.body} />
-                <div className="acts">
-                  {d.status === "pending_review" && <button className="primary" onClick={() => draftAct(d.id, "approve")}>Approve &amp; publish</button>}
-                  {d.status === "approved" && <button className="primary" onClick={() => draftAct(d.id, "publish")}>Publish</button>}
-                  <button className="ghost" onClick={() => draftAct(d.id, "approve?action=dismiss")}>Decline</button>
-                  <button className="ghost" onClick={() => { setFeedbackFor(feedbackFor === d.id ? "" : d.id); setFeedbackText(""); }}>Give feedback</button>
-                </div>
-                {feedbackFor === d.id && (
-                  <div className="fb">
-                    <Field
-                      hideLabel label="Feedback for the agent" className="fb-input-wrap"
-                      autoFocus value={feedbackText} disabled={busy === d.id}
-                      onChange={(e) => setFeedbackText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") sendFeedback(d.id); }}
-                      placeholder="Tell the agent what to change — shorter, different tone, add local detail…" />
-                    <button className="primary" onClick={() => sendFeedback(d.id)} disabled={busy === d.id}>{busy === d.id ? "Revising…" : "Send"}</button>
-                  </div>
-                )}
-              </article>
-            ))}
-
-            {activeBrandIsLocal && bGbp.map((g) => (
-              <article className="card" key={g.id}>
-                <div className="meta"><span className="kind">google business post</span></div>
-                <h3>{g.title}</h3>
-                <DraftBody body={g.body} />
-                <p className="why">Call to action: {g.cta}</p>
-                <div className="acts">
-                  <button className="primary" onClick={() => rowAct("gbp_posts", g.id, "approved")}>Approve</button>
-                  <button className="ghost" onClick={() => rowAct("gbp_posts", g.id, "dismissed")}>Decline</button>
-                </div>
-              </article>
-            ))}
-
-            {activeBrandIsLocal && bCites.map((c) => (
-              <article className="card row" key={c.id}>
-                <div>
-                  <div className="meta"><strong>{c.name}</strong><span className="kind">{c.category}</span><span className="prio">P{c.priority}</span></div>
-                  <p className="why">{c.rationale}</p>
-                  {c.url && <a className="link" href={c.url} target="_blank" rel="noreferrer">{c.url}</a>}
-                </div>
-                <div className="acts">
-                  <button className="primary" onClick={() => rowAct("citations", c.id, "live")}>Approve</button>
-                  <button className="ghost" onClick={() => rowAct("citations", c.id, "skipped")}>Decline</button>
-                </div>
-              </article>
-            ))}
-
-            {approvalCount === 0 && (
-              <Empty
-                icon="✓"
-                title="Nothing waiting for approval"
-                body="When agents finish work, it lands here. Approve to publish, Decline to skip, or switch to Autopilot so safe items ship on their own."
-                action={{ label: running ? "Running…" : "Run agents now", onClick: runNow, disabled: running }}
-              />
-            )}
-          </>
+        {!loading && tab === "recommendations" && brand && (
+          <RecommendationsPanel
+            brand={brand}
+            isLocal={activeBrandIsLocal}
+            drafts={bDrafts}
+            gbp={bGbp}
+            citations={bCites}
+            running={running}
+            busy={busy}
+            feedbackFor={feedbackFor}
+            feedbackText={feedbackText}
+            onFeedbackFor={setFeedbackFor}
+            onFeedbackText={setFeedbackText}
+            onDraftAct={draftAct}
+            onSendFeedback={sendFeedback}
+            onRowAct={rowAct}
+            onToggleSectionAutopilot={setSectionAutopilot}
+            onRunAgents={runNow}
+            DraftBody={DraftBody}
+            Empty={Empty}
+          />
         )}
 
         {tab === "brands" && role === "admin" && (
