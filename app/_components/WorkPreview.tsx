@@ -5,6 +5,7 @@ import { useDialog } from "@/lib/ui/useDialog";
 import Field from "@/app/_components/Field";
 import {
   absolutizeMarkdownImages,
+  decisionWhy,
   displayWorkTitle,
   firstMarkdownImage,
   metaFromBody,
@@ -38,7 +39,6 @@ type Props = {
   onDecline?: () => void;
   approveLabel?: string;
   busy?: boolean;
-  why?: string | null;
   feedback?: {
     value: string;
     onChange: (v: string) => void;
@@ -49,12 +49,11 @@ type Props = {
 
 export default function WorkPreview({
   open, onClose, brandName, siteUrl, work, onApprove, onDecline,
-  approveLabel = "Approve & publish", busy, why, feedback,
+  approveLabel = "Approve & publish", busy, feedback,
 }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useDialog<HTMLDivElement>({ open, onClose, modal: true });
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [whyOpen, setWhyOpen] = useState(false);
 
   if (!open || !work) return null;
 
@@ -68,6 +67,15 @@ export default function WorkPreview({
     targetUrl: work.targetUrl,
     targetKeyword: work.targetKeyword,
     siteUrl,
+  });
+  const whyText = decisionWhy({
+    kind: work.taskType === "google_post" ? "google_post" : "draft",
+    taskType: work.taskType,
+    title: work.title,
+    keyword: work.targetKeyword,
+    url: work.targetUrl || href,
+    rationale: work.rationale,
+    body: work.body,
   });
 
   return (
@@ -93,6 +101,13 @@ export default function WorkPreview({
           <button ref={closeRef} type="button" className="wp-x" onClick={onClose} aria-label="Close preview">✕</button>
         </header>
 
+        {whyText && (
+          <div className="wp-why-block">
+            <div className="wp-kicker">Why I queued this</div>
+            <p className="wp-why">{whyText}</p>
+          </div>
+        )}
+
         <div className="wp-stage">
           {kind === "page" && <PageLook brandName={brandName} siteUrl={siteUrl} title={work.title} body={work.body} targetUrl={work.targetUrl || href} />}
           {kind === "meta" && <SerpLook brandName={brandName} siteUrl={siteUrl} title={work.title} body={work.body} targetUrl={work.targetUrl || href} />}
@@ -112,11 +127,6 @@ export default function WorkPreview({
           {onDecline && (
             <button type="button" className="wp-ghost" onClick={onDecline} disabled={busy}>Decline</button>
           )}
-          {why && (
-            <button type="button" className="wp-ghost" onClick={() => setWhyOpen((v) => !v)}>
-              Why
-            </button>
-          )}
           {feedback && (
             <button type="button" className="wp-ghost" onClick={() => setFeedbackOpen((v) => !v)}>
               Give feedback
@@ -129,7 +139,6 @@ export default function WorkPreview({
             </button>
           )}
         </footer>
-        {why && whyOpen && <p className="wp-why">{why}</p>}
         {feedback && feedbackOpen && (
           <div className="wp-fb">
             <Field
@@ -330,7 +339,8 @@ const WP_CSS = `
 .wp-step-n { width:28px; height:28px; border-radius:50%; background:#6C5CE7; color:#fff; display:grid; place-items:center; font-weight:700; font-size:13px; flex-shrink:0; }
 .wp-step-title { font-weight:700; margin:0 0 4px; }
 .wp-step-detail { margin:0; color:#6B768D; font-size:14px; line-height:1.55; }
-.wp-why { margin:0; padding:0 18px 14px; background:#fff; font-size:13.5px; line-height:1.6; color:#3A4256; }
+.wp-why-block { padding:14px 18px 12px; background:#F7F6FF; border-bottom:1px solid #EDEAF8; }
+.wp-why { margin:6px 0 0; font-size:13.5px; line-height:1.65; color:#3A4256; white-space:pre-wrap; max-width:68ch; }
 @media (max-width:640px) {
   .wp-layer { padding:0; }
   .wp-sheet { border-radius:0; }

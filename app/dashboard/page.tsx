@@ -604,7 +604,7 @@ const CSS = `
 .sr .stat.approved { color:var(--green); }
 .sr .prio { font-family:var(--font-mono); font-size:11px; color:var(--amber); }
 .sr h3 { font-size:17px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em; color:#12172A; }
-.sr .why { color:var(--muted); font-size:13px; line-height:1.55; margin:0 0 14px; }
+.sr .why { color:var(--text); font-size:13.5px; line-height:1.65; margin:0 0 14px; white-space:pre-wrap; max-width:68ch; }
 .sr .acts { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
 .sr .primary { background:var(--accent); color:#fff; border:0; padding:8px 16px; border-radius:var(--radius-sm); font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; transition:all var(--dur-2) var(--ease-out); }
 .sr .primary:hover { background:#5b4bd6; }

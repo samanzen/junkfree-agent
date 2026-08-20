@@ -183,7 +183,15 @@ function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: str
       kind={TYPE_LABEL[draft.task_type] || draft.task_type}
       title={displayWorkTitle(draft.title)}
       href={href}
-      why={decisionWhy("draft", draft.rationale)}
+      why={decisionWhy({
+        kind: "draft",
+        taskType: draft.task_type,
+        title: draft.title,
+        keyword: draft.target_keyword,
+        url: draft.target_url || href,
+        rationale: draft.rationale,
+        body: draft.body,
+      })}
       meta={
         <>
           {draft.target_keyword && <span>🎯 {draft.target_keyword}</span>}
@@ -221,7 +229,7 @@ function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: strin
     <PreviewPlanCard
       kind="Google post"
       title={post.title || "Google Business Profile post"}
-      why={decisionWhy("google_post", null)}
+      why={decisionWhy({ kind: "google_post", title: post.title, body: post.body })}
       meta={<span>{new Date(post.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
       work={{ title: post.title || "Google post", body: post.body, taskType: "google_post", cta: post.cta || "" }}
       brandName={brandName}
@@ -360,7 +368,6 @@ function PreviewPlanCard({
         work={work}
         approveLabel={approveLabel}
         busy={busy}
-        why={why}
         onApprove={() => { void run("approve"); }}
         onDecline={() => { void run("dismiss"); }}
         feedback={onFeedback ? {

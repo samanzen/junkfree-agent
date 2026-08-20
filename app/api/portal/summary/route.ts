@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { latestWithDelta, series } from "@/lib/metrics";
+import { kpiDelta } from "@/lib/metrics/kpis";
 import { strikingDistance } from "@/lib/gsc";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   const { data: brand } = await db.from("brands").select("*").eq("id", brandId).single();
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
-  const [{ current, previous }, ts, drafts, gbpPosts, citations, lessons] = await Promise.all([
+  const [{ current, previous, history }, ts, drafts, gbpPosts, citations, lessons] = await Promise.all([
     latestWithDelta(brandId),
     series(brandId, 12),
     db.from("drafts").select("title,task_type,status,created_at,target_keyword")
@@ -63,10 +64,10 @@ export async function GET(req: NextRequest) {
       avg_position: current?.avg_position ?? null,
       ai_visibility: current?.ai_visibility ?? null,
       site_health: current?.site_health ?? null,
-      traffic_delta: delta("organic_traffic"),
-      keywords_delta: delta("organic_keywords"),
-      backlinks_delta: delta("backlinks"),
-      position_delta: delta("avg_position"),
+      traffic_delta: kpiDelta(history, "organic_traffic") ?? delta("organic_traffic"),
+      keywords_delta: kpiDelta(history, "organic_keywords") ?? delta("organic_keywords"),
+      backlinks_delta: kpiDelta(history, "backlinks") ?? delta("backlinks"),
+      position_delta: kpiDelta(history, "avg_position") ?? delta("avg_position"),
     },
     chart: ts.map((s) => ({
       date: new Date(s.captured_at).toLocaleDateString("en-CA", { month: "short", day: "numeric" }),

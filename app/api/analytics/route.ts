@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { strikingDistance, lowCtrPages } from "@/lib/gsc";
+import { fillSnapshotGaps } from "@/lib/metrics/kpis";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 
 export const maxDuration = 60;
@@ -23,9 +24,10 @@ export async function GET(req: NextRequest) {
     .order("captured_at", { ascending: false })
     .limit(32);
 
-  const current = snapshots?.[0] || null;
-  const previous = snapshots?.[1] || null;
-  const series = [...(snapshots || [])].reverse();
+  const rows = snapshots || [];
+  const current = rows[0] ? fillSnapshotGaps(rows[0], rows) : null;
+  const previous = rows[1] || null;
+  const series = [...rows].reverse();
 
   const [drafts, runs] = await Promise.all([
     db.from("drafts").select("task_type,status,created_at")

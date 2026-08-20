@@ -95,14 +95,97 @@ test("a rewrite plan is numbered English, never JSON", () => {
   expect(plan.steps[0].title.toLowerCase()).toMatch(/title/);
   expect(plan.steps[0].detail.toLowerCase()).toMatch(/google title/);
   expect(plan.steps[0].detail.toLowerCase()).not.toMatch(/paid-intent/);
+  expect(plan.steps[0].detail.toLowerCase()).not.toMatch(/\bthe the\b/);
   expect(plan.intro).not.toMatch(/\{/);
   expect(JSON.stringify(plan)).not.toMatch(/"score"/);
 });
 
+test("a rewrite plan reads JSON buried in Claude prose and fences", () => {
+  const body = `Here is the audit for recycle waste services.
+
+\`\`\`json
+{"score":42,"checks":[
+  {"item":"Title tag","status":"fail","fix":"No title tag content provided. Create one using the paid-intent keyword."},
+  {"item":"Meta description","status":"fail","fix":"Write a meta description."},
+  {"item":"H1","status":"pass","fix":"Looks fine"}
+]}
+\`\`\`
+
+Let me know if you want a deeper pass.`;
+  const plan = rewritePlanFromBody(body, {
+    keyword: "recycle waste services",
+    url: "https://www.junkfree.ca/services/recycling-donation-services",
+  });
+  expect(plan.steps).toHaveLength(2);
+  expect(plan.intro).toMatch(/recycle waste services/);
+  expect(plan.intro).not.toMatch(/could not turn the review/);
+  expect(plan.steps[0].detail.toLowerCase()).toMatch(/google title/);
+  expect(plan.steps[0].detail.toLowerCase()).not.toMatch(/paid-intent/);
+  expect(JSON.stringify(plan)).not.toMatch(/"score"/);
+});
+
+test("older issue-shaped audits still become a numbered plan", () => {
+  const body = "Notes first.\n" + JSON.stringify({
+    issues: [
+      { problem: "Missing H1", severity: "high", fix: "Add one main heading." },
+    ],
+  });
+  const plan = rewritePlanFromBody(body, { keyword: "junk removal" });
+  expect(plan.steps).toHaveLength(1);
+  expect(plan.steps[0].title.toLowerCase()).toMatch(/heading/);
+});
+
+test("why copy talks like the agent and uses the actual findings", () => {
+  const body = JSON.stringify({
+    score: 40,
+    checks: [
+      { item: "Title tag", status: "fail", fix: "Add a title tag." },
+      { item: "Meta description", status: "fail", fix: "Add a meta description." },
+    ],
+  });
+  const why = decisionWhy({
+    kind: "draft",
+    taskType: "improve_content",
+    keyword: "recycle waste services",
+    url: "https://www.junkfree.ca/services/recycling-donation-services",
+    rationale: "Search-intent qualification.",
+    body,
+  });
+  expect(why).toMatch(/recycle waste services/);
+  expect(why).toMatch(/recycling-donation-services/);
+  expect(why).toMatch(/Google title/);
+  expect(why).toMatch(/ready to book/);
+  expect(why.toLowerCase()).not.toMatch(/title tag/);
+  expect(why.toLowerCase()).not.toMatch(/paid-intent/);
+  expect(why.toLowerCase()).not.toMatch(/schema\.org/);
+  expect(why).not.toMatch(/could not turn/);
+});
+
+test("a new blog why does not invent competitor ranks", () => {
+  const why = decisionWhy({
+    kind: "draft",
+    taskType: "new_blog",
+    keyword: "furniture disposal vancouver",
+    rationale: "High-intent local topic with no matching post.",
+  });
+  expect(why).toMatch(/furniture disposal vancouver/);
+  expect(why.toLowerCase()).not.toMatch(/competitor \d/);
+  expect(why.toLowerCase()).not.toMatch(/ranking #/);
+});
+
 test("boilerplate why-copy is rewritten for a customer", () => {
-  expect(decisionWhy("draft", "Search-intent qualification.")).toMatch(/ready to book/);
-  expect(decisionWhy("google_post", null)).toMatch(/Business Profile/);
-  expect(decisionWhy("backlink", "Chamber listing that competitors already have.")).toMatch(/Chamber/);
+  expect(decisionWhy({
+    kind: "draft",
+    taskType: "fix_meta",
+    rationale: "Search-intent qualification.",
+    keyword: "junk removal",
+  })).toMatch(/ready to book/);
+  expect(decisionWhy({ kind: "google_post" })).toMatch(/Business Profile/);
+  expect(decisionWhy({
+    kind: "backlink",
+    title: "Calgary Chamber",
+    rationale: "Chamber listing that competitors already have.",
+  })).toMatch(/Chamber/);
 });
 
 test("recommendation queues show title, URL, Preview, Approve and Why — not the draft body", () => {
@@ -125,4 +208,8 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(portal).not.toMatch(/Open Preview to see/);
   expect(portal).not.toMatch(/body=\{draft\.body\}/);
   expect(portal).not.toMatch(/body=\{post\.body\}/);
+
+  const overlay = fs.readFileSync(path.join(process.cwd(), "app/_components/WorkPreview.tsx"), "utf8");
+  expect(overlay).toContain("Why I queued this");
+  expect(overlay).toContain("rewritePlanFromBody");
 });

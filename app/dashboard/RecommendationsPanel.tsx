@@ -221,7 +221,15 @@ export default function RecommendationsPanel({
               targetKeyword: d.target_keyword,
               siteUrl: brand.site_url,
             });
-            const why = decisionWhy("draft", d.rationale);
+            const why = decisionWhy({
+              kind: "draft",
+              taskType: d.task_type,
+              title: d.title,
+              keyword: d.target_keyword,
+              url: d.target_url || href,
+              rationale: d.rationale,
+              body: d.body,
+            });
             return (
               <article className="card" key={d.id}>
                 <div className="meta">
@@ -281,7 +289,7 @@ export default function RecommendationsPanel({
                     </button>
                   )}
                 </div>
-                {whyId === d.id && why && <p className="why">{why}</p>}
+                {whyId === d.id && why && <div className="why">{why}</div>}
                 {cardFeedbackId === d.id && (
                   <div className="fb">
                     <Field
@@ -317,7 +325,7 @@ export default function RecommendationsPanel({
       {section === "google_posts" && (
         <>
           {pendingGbp.map((g) => {
-            const why = decisionWhy("google_post", null);
+            const why = decisionWhy({ kind: "google_post", title: g.title, body: g.body });
             return (
               <article className="card" key={g.id}>
                 <div className="meta">
@@ -330,7 +338,7 @@ export default function RecommendationsPanel({
                     onClick={() => {
                       setPreviewKind("gbp");
                       setPreviewId(g.id);
-                      setPreview({ title: g.title, body: g.body, taskType: "google_post", cta: g.cta, rationale: why });
+                      setPreview({ title: g.title, body: g.body, taskType: "google_post", cta: g.cta });
                     }}
                   >
                     Preview
@@ -351,7 +359,7 @@ export default function RecommendationsPanel({
                     </button>
                   )}
                 </div>
-                {whyId === g.id && why && <p className="why">{why}</p>}
+                {whyId === g.id && why && <div className="why">{why}</div>}
               </article>
             );
           })}
@@ -369,7 +377,12 @@ export default function RecommendationsPanel({
       {section === "backlinks" && (
         <>
           {pendingCites.map((c) => {
-            const why = decisionWhy("backlink", c.rationale);
+            const why = decisionWhy({
+              kind: "backlink",
+              title: c.name,
+              url: c.url,
+              rationale: c.rationale,
+            });
             return (
               <article className="card row" key={c.id}>
                 <div>
@@ -383,7 +396,7 @@ export default function RecommendationsPanel({
                       {c.url}
                     </a>
                   )}
-                  {whyId === c.id && why && <p className="why">{why}</p>}
+                  {whyId === c.id && why && <div className="why">{why}</div>}
                 </div>
                 <div className="acts">
                   <button className="primary" onClick={() => onRowAct("citations", c.id, "live")}>
@@ -438,9 +451,6 @@ export default function RecommendationsPanel({
               ? () => { onDraftAct(previewId, "approve?action=dismiss"); setPreview(null); }
               : undefined
         }
-        why={previewKind === "gbp"
-          ? decisionWhy("google_post", preview?.rationale)
-          : decisionWhy("draft", preview?.rationale)}
         feedback={previewKind === "draft" ? {
           value: feedbackText,
           onChange: onFeedbackText,
@@ -469,6 +479,7 @@ const REC_CSS = `
 .rec-blurb { margin:0 0 14px; font-size:12.5px; color:var(--muted); }
 .rec .link { display:block; margin:6px 0 4px; }
 .rec .acts + .why, .rec .acts + .fb { margin-top:12px; }
+.rec .why { white-space:pre-wrap; max-width:68ch; }
 .fb { display:flex; gap:8px; margin-top:12px; align-items:flex-end; }
 .fb-input-wrap { flex:1; min-width:0; }
 `;
