@@ -106,7 +106,7 @@ export default function WorkPreview({
 
         {whyText && (
           <div className="wp-why-block">
-            <div className="wp-kicker">Why I queued this</div>
+            <div className="wp-kicker">Why this is queued</div>
             <p className="wp-why">{whyText}</p>
           </div>
         )}

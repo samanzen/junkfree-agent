@@ -156,6 +156,7 @@ test("why copy talks like the agent and uses the actual findings", () => {
   expect(why).toMatch(/recycling-donation-services/);
   expect(why).toMatch(/Google title/);
   expect(why).toMatch(/ready to book/);
+  expect(why.toLowerCase()).not.toMatch(/i opened/);
   expect(why.toLowerCase()).not.toMatch(/title tag/);
   expect(why.toLowerCase()).not.toMatch(/paid-intent/);
   expect(why.toLowerCase()).not.toMatch(/schema\.org/);
@@ -183,7 +184,8 @@ test("why cites stored search volume instead of a generic people-search line", (
   });
   expect(why).toMatch(/1[,.]?200/);
   expect(why).toMatch(/junk removal cost/);
-  expect(why).toMatch(/not ranking/);
+  expect(why.toLowerCase()).toMatch(/search volume/);
+  expect(why.toLowerCase()).not.toMatch(/not ranking/);
   expect(why.toLowerCase()).not.toMatch(/blah/);
 });
 
@@ -200,16 +202,63 @@ test("a new page why without a stored volume does not invent search demand", () 
   expect(why.toLowerCase()).not.toMatch(/real search volume/);
 });
 
-test("the decision report has a measured section and never invents competitors", () => {
+test("the decision report is the technical logic and omits facts we do not have", () => {
   const report = buildDecisionReport({
     kind: "draft",
     taskType: "new_page",
     keyword: "junk removal cost",
     rationale: "Core high-intent query.",
   });
-  expect(report.sections.some((s) => s.heading === "What we measured")).toBe(true);
-  expect(report.sections.some((s) => s.heading === "Who worked on this")).toBe(true);
+  const headings = report.sections.map((s) => s.heading);
+  expect(headings).toContain("The decision");
+  expect(headings).toContain("Why");
+  expect(headings).not.toContain("What we measured");
+  expect(headings).not.toContain("Who worked on this");
+  expect(headings).not.toContain("Signals used");
   expect(JSON.stringify(report).toLowerCase()).not.toMatch(/ranking #/);
+  expect(JSON.stringify(report).toLowerCase()).not.toMatch(/not stored/);
+  expect(JSON.stringify(report).toLowerCase()).not.toMatch(/does not exist/);
+  expect(JSON.stringify(report).toLowerCase()).not.toMatch(/i opened/);
+});
+
+test("the decision report lists audit problems and recommended changes", () => {
+  const body = JSON.stringify({
+    score: 40,
+    checks: [
+      { item: "Title tag", status: "fail", fix: "Create a title using the paid-intent keyword." },
+      { item: "H1", status: "fail", fix: "Add one main heading." },
+      { item: "Images", status: "pass", fix: "Looks fine" },
+    ],
+  });
+  const report = buildDecisionReport({
+    kind: "draft",
+    taskType: "improve_content",
+    keyword: "recycle waste services",
+    url: "https://www.junkfree.ca/services/recycling-donation-services",
+    body,
+  });
+  const blob = JSON.stringify(report);
+  expect(report.sections.some((s) => s.heading === "Technical problems")).toBe(true);
+  expect(report.sections.some((s) => s.heading === "Recommended changes")).toBe(true);
+  expect(blob).toMatch(/40\/100/);
+  expect(blob).toMatch(/Google title/);
+  expect(blob.toLowerCase()).not.toMatch(/paid-intent/);
+  expect(blob.toLowerCase()).not.toMatch(/i opened/);
+});
+
+test("a new-page report includes the draft outline when the body has headings", () => {
+  const report = buildDecisionReport({
+    kind: "draft",
+    taskType: "new_page",
+    keyword: "junk removal cost",
+    title: "Page: junk removal cost",
+    rationale: "A dedicated pricing-transparency page captures cost-focused searchers.",
+    body: "TITLE TAG: Junk removal cost in Vancouver\nMETA: See how quotes are priced.\n\n# Junk removal cost\n\n## How quotes work\n\n## What affects the price\n\n## Request a quote\n",
+  });
+  const outline = report.sections.find((s) => s.heading === "What the draft covers");
+  expect(outline?.body).toMatch(/How quotes work/);
+  expect(outline?.body).toMatch(/Request a quote/);
+  expect(report.sections.some((s) => s.heading === "Signals used")).toBe(false);
 });
 
 test("boilerplate why-copy is rewritten for a customer", () => {
@@ -254,6 +303,6 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(portal).not.toMatch(/body=\{post\.body\}/);
 
   const overlay = fs.readFileSync(path.join(process.cwd(), "app/_components/WorkPreview.tsx"), "utf8");
-  expect(overlay).toContain("Why I queued this");
+  expect(overlay).toContain("Why this is queued");
   expect(overlay).toContain("rewritePlanFromBody");
 });
