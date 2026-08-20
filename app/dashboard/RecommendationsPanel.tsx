@@ -2,7 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Field from "@/app/_components/Field";
 import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
-import { decisionWhy, displayWorkTitle, plannedPageUrl } from "@/lib/recommendations/preview";
+import DecisionReport from "@/app/_components/DecisionReport";
+import { decisionWhy, displayWorkTitle, plannedPageUrl, type DecisionWhyInput, type KeywordFacts } from "@/lib/recommendations/preview";
+import { uniqueByTopic, factsKey } from "@/lib/recommendations/topic";
 import {
   RECOMMENDATION_SECTIONS,
   isSectionAutopilot,
@@ -51,12 +53,18 @@ const LABEL: Record<string, string> = {
   geo_answers: "AI-answer (GEO)",
 };
 
+function factsFor(brandId: string | undefined, keyword: string | null | undefined, map: Record<string, KeywordFacts>): KeywordFacts | null {
+  if (!brandId || !keyword) return null;
+  return map[factsKey(brandId, keyword)] || null;
+}
+
 type Props = {
   brand: BrandLike;
   isLocal: boolean;
   drafts: Draft[];
   gbp: Gbp[];
   citations: Cite[];
+  keywordFacts?: Record<string, KeywordFacts>;
   running: boolean;
   busy: string;
   feedbackText: string;
@@ -81,6 +89,7 @@ export default function RecommendationsPanel({
   drafts,
   gbp,
   citations,
+  keywordFacts = {},
   running,
   busy,
   feedbackText,
@@ -99,6 +108,7 @@ export default function RecommendationsPanel({
   const [previewId, setPreviewId] = useState<string>("");
   const [previewKind, setPreviewKind] = useState<"draft" | "gbp" | null>(null);
   const [whyId, setWhyId] = useState("");
+  const [reportInput, setReportInput] = useState<DecisionWhyInput | null>(null);
   const [cardFeedbackId, setCardFeedbackId] = useState("");
   const autopilot = readAutopilotMap(brand);
   const sectionAuto = isSectionAutopilot(brand, section);
@@ -126,19 +136,20 @@ export default function RecommendationsPanel({
         targetKeyword: d.target_keyword,
         siteUrl: brand.site_url,
       }),
+      facts: factsFor(brand.id, d.target_keyword, keywordFacts),
     });
-  }, [drafts, previewId, previewKind, brand.site_url]);
+  }, [drafts, previewId, previewKind, brand.site_url, brand.id, keywordFacts]);
 
   const pageDrafts = useMemo(
-    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "pages"),
+    () => uniqueByTopic(drafts.filter((d) => sectionForTaskType(d.task_type) === "pages")),
     [drafts]
   );
   const contentDrafts = useMemo(
-    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "content"),
+    () => uniqueByTopic(drafts.filter((d) => sectionForTaskType(d.task_type) === "content")),
     [drafts]
   );
   const metaDrafts = useMemo(
-    () => drafts.filter((d) => sectionForTaskType(d.task_type) === "meta"),
+    () => uniqueByTopic(drafts.filter((d) => sectionForTaskType(d.task_type) === "meta")),
     [drafts]
   );
   const pendingGbp = useMemo(
@@ -221,15 +232,18 @@ export default function RecommendationsPanel({
               targetKeyword: d.target_keyword,
               siteUrl: brand.site_url,
             });
-            const why = decisionWhy({
-              kind: "draft",
+            const facts = factsFor(brand.id, d.target_keyword, keywordFacts);
+            const whyInput = {
+              kind: "draft" as const,
               taskType: d.task_type,
               title: d.title,
               keyword: d.target_keyword,
               url: d.target_url || href,
               rationale: d.rationale,
               body: d.body,
-            });
+              facts,
+            };
+            const why = decisionWhy(whyInput);
             return (
               <article className="card" key={d.id}>
                 <div className="meta">
@@ -254,6 +268,7 @@ export default function RecommendationsPanel({
                         targetKeyword: d.target_keyword,
                         rationale: d.rationale,
                         plannedUrl: href,
+                        facts,
                       });
                       onFeedbackFor(d.id);
                       onFeedbackText("");
@@ -288,8 +303,21 @@ export default function RecommendationsPanel({
                       Why
                     </button>
                   )}
+                  <button
+                    className="ghost"
+                    onClick={() => { setReportInput(whyInput); setWhyId(""); setCardFeedbackId(""); }}
+                  >
+                    More
+                  </button>
                 </div>
-                {whyId === d.id && why && <div className="why">{why}</div>}
+                {whyId === d.id && why && (
+                  <div className="why">
+                    {why}
+                    <button type="button" className="why-more" onClick={() => setReportInput(whyInput)}>
+                      Full report
+                    </button>
+                  </div>
+                )}
                 {cardFeedbackId === d.id && (
                   <div className="fb">
                     <Field
@@ -325,7 +353,8 @@ export default function RecommendationsPanel({
       {section === "google_posts" && (
         <>
           {pendingGbp.map((g) => {
-            const why = decisionWhy({ kind: "google_post", title: g.title, body: g.body });
+            const whyInput: DecisionWhyInput = { kind: "google_post", title: g.title, body: g.body };
+            const why = decisionWhy(whyInput);
             return (
               <article className="card" key={g.id}>
                 <div className="meta">
@@ -358,8 +387,18 @@ export default function RecommendationsPanel({
                       Why
                     </button>
                   )}
+                  <button className="ghost" onClick={() => setReportInput(whyInput)}>
+                    More
+                  </button>
                 </div>
-                {whyId === g.id && why && <div className="why">{why}</div>}
+                {whyId === g.id && why && (
+                  <div className="why">
+                    {why}
+                    <button type="button" className="why-more" onClick={() => setReportInput(whyInput)}>
+                      Full report
+                    </button>
+                  </div>
+                )}
               </article>
             );
           })}
@@ -377,12 +416,13 @@ export default function RecommendationsPanel({
       {section === "backlinks" && (
         <>
           {pendingCites.map((c) => {
-            const why = decisionWhy({
+            const whyInput: DecisionWhyInput = {
               kind: "backlink",
               title: c.name,
               url: c.url,
               rationale: c.rationale,
-            });
+            };
+            const why = decisionWhy(whyInput);
             return (
               <article className="card row" key={c.id}>
                 <div>
@@ -410,6 +450,9 @@ export default function RecommendationsPanel({
                       Why
                     </button>
                   )}
+                  <button className="ghost" onClick={() => setReportInput(whyInput)}>
+                    More
+                  </button>
                 </div>
               </article>
             );
@@ -459,6 +502,12 @@ export default function RecommendationsPanel({
         } : undefined}
       />
 
+      <DecisionReport
+        open={!!reportInput}
+        onClose={() => setReportInput(null)}
+        input={reportInput}
+      />
+
       <style>{REC_CSS}</style>
     </div>
   );
@@ -480,6 +529,7 @@ const REC_CSS = `
 .rec .link { display:block; margin:6px 0 4px; }
 .rec .acts + .why, .rec .acts + .fb { margin-top:12px; }
 .rec .why { white-space:pre-wrap; max-width:68ch; }
+.rec .why-more { display:inline-block; margin-top:10px; background:none; border:0; color:#6C5CE7; font:inherit; font-weight:600; font-size:13px; padding:0; cursor:pointer; }
 .fb { display:flex; gap:8px; margin-top:12px; align-items:flex-end; }
 .fb-input-wrap { flex:1; min-width:0; }
 `;

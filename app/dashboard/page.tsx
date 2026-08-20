@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import Overview from "./Overview";
 import RecommendationsPanel from "./RecommendationsPanel";
 import type { RecommendationAutopilot, RecommendationSection } from "@/lib/recommendations/sections";
+import { uniqueByTopic } from "@/lib/recommendations/topic";
 
 // MEASURED: the Intelligence tab pulls seven components plus Recharts — the
 // 353 kB chunk that dominated this route's bundle. It is not the default tab,
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [gbp, setGbp] = useState<Gbp[]>([]);
   const [citations, setCitations] = useState<Cite[]>([]);
+  const [keywordFacts, setKeywordFacts] = useState<Record<string, import("@/lib/recommendations/preview").KeywordFacts>>({});
   const [brandId, setBrandId] = useState("");
   const [tab, setTab] = useState<"overview" | "recommendations" | "intelligence" | "brands">("overview");
   const [loading, setLoading] = useState(true);
@@ -187,6 +189,7 @@ export default function Dashboard() {
     // Customers only see their own brand; admins see all.
     if (role === "customer" && myBrand) bs = bs.filter((b) => b.id === myBrand);
     setBrands(bs); setDrafts(d.drafts || []); setGbp(d.gbp || []); setCitations(d.citations || []);
+    setKeywordFacts(d.keywordFacts || {});
     if (!brandId && bs[0]) setBrandId(bs[0].id);
     setLoading(false);
   }
@@ -318,7 +321,7 @@ export default function Dashboard() {
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
   const bGbp = gbp.filter((g) => g.brand_id === brandId && (g.status === "pending_review" || g.status === "approved"));
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
-  const recommendationCount = bDrafts.length
+  const recommendationCount = uniqueByTopic(bDrafts).length
     + (activeBrandIsLocal ? bGbp.filter((g) => g.status === "pending_review").length : 0)
     + (activeBrandIsLocal ? bCites.filter((c) => c.status === "suggested" || c.status === "in_progress" || c.status === "pending_review").length : 0);
 
@@ -391,6 +394,7 @@ export default function Dashboard() {
             drafts={bDrafts}
             gbp={bGbp}
             citations={bCites}
+            keywordFacts={keywordFacts}
             running={running}
             busy={busy}
             feedbackText={feedbackText}

@@ -3,6 +3,7 @@ import path from "path";
 import { test, expect } from "vitest";
 import {
   absolutizeMarkdownImages,
+  buildDecisionReport,
   decisionWhy,
   displayWorkTitle,
   firstMarkdownImage,
@@ -173,6 +174,44 @@ test("a new blog why does not invent competitor ranks", () => {
   expect(why.toLowerCase()).not.toMatch(/ranking #/);
 });
 
+test("why cites stored search volume instead of a generic people-search line", () => {
+  const why = decisionWhy({
+    kind: "draft",
+    taskType: "new_page",
+    keyword: "junk removal cost",
+    facts: { volume: 1200 },
+  });
+  expect(why).toMatch(/1[,.]?200/);
+  expect(why).toMatch(/junk removal cost/);
+  expect(why).toMatch(/not ranking/);
+  expect(why.toLowerCase()).not.toMatch(/blah/);
+});
+
+test("a new page why without a stored volume does not invent search demand", () => {
+  const why = decisionWhy({
+    kind: "draft",
+    taskType: "new_page",
+    keyword: "junk removal cost",
+    rationale: "No baseline data exists yet, and this is a core high-intent commercial query with real search volume. A dedicated pricing-transparency page captures cost-focused searchers.",
+  });
+  expect(why).toMatch(/junk removal cost/);
+  expect(why).toMatch(/pricing-transparency/);
+  expect(why.toLowerCase()).not.toMatch(/people search/);
+  expect(why.toLowerCase()).not.toMatch(/real search volume/);
+});
+
+test("the decision report has a measured section and never invents competitors", () => {
+  const report = buildDecisionReport({
+    kind: "draft",
+    taskType: "new_page",
+    keyword: "junk removal cost",
+    rationale: "Core high-intent query.",
+  });
+  expect(report.sections.some((s) => s.heading === "What we measured")).toBe(true);
+  expect(report.sections.some((s) => s.heading === "Who worked on this")).toBe(true);
+  expect(JSON.stringify(report).toLowerCase()).not.toMatch(/ranking #/);
+});
+
 test("boilerplate why-copy is rewritten for a customer", () => {
   expect(decisionWhy({
     kind: "draft",
@@ -194,6 +233,9 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(rec).toMatch(/>\s*Preview\s*</);
   expect(rec).toMatch(/>\s*Approve\s*</);
   expect(rec).toMatch(/>\s*Why\s*</);
+  expect(rec).toMatch(/>\s*More\s*</);
+  expect(rec).toContain("uniqueByTopic");
+  expect(rec).toContain("DecisionReport");
   expect(rec).not.toContain("DraftBody");
   expect(rec).not.toMatch(/Open Preview to see/);
   expect(rec).not.toMatch(/<pre[\s>]/);
@@ -205,6 +247,8 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(portal).toMatch(/>\s*Preview\s*</);
   expect(portal).toContain('"Approve"');
   expect(portal).toMatch(/>\s*Why\s*</);
+  expect(portal).toMatch(/>\s*More\s*</);
+  expect(portal).toContain("DecisionReport");
   expect(portal).not.toMatch(/Open Preview to see/);
   expect(portal).not.toMatch(/body=\{draft\.body\}/);
   expect(portal).not.toMatch(/body=\{post\.body\}/);

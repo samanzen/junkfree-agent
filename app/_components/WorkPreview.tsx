@@ -15,6 +15,7 @@ import {
   previewKindFor,
   resolvePreviewSrc,
   rewritePlanFromBody,
+  type KeywordFacts,
   type PreviewKind,
 } from "@/lib/recommendations/preview";
 
@@ -27,6 +28,7 @@ export type WorkPreviewModel = {
   cta?: string;
   rationale?: string | null;
   plannedUrl?: string | null;
+  facts?: KeywordFacts | null;
 };
 
 type Props = {
@@ -76,6 +78,7 @@ export default function WorkPreview({
     url: work.targetUrl || href,
     rationale: work.rationale,
     body: work.body,
+    facts: work.facts,
   });
 
   return (

@@ -19,6 +19,7 @@ import { slugify, splitFrontMatter } from "./utils";
 import { executeChange } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
 import { isDraftAutopilot, isSectionAutopilot } from "./recommendations/sections";
+import { overlapsTopic, topicKey, topicSlug } from "./recommendations/topic";
 import { stepAiVisibility } from "./ai-visibility/run";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
@@ -39,43 +40,106 @@ async function currentRun(brandId: string): Promise<string> {
 // that's already published or already queued, and catches keyword
 // cannibalization (two pages competing for the same topic).
 
-type ExistingTopic = { keyword: string | null; url: string | null; title: string };
-
-function normalizeTopic(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/^(blog|page|new blog|new page|intent fix|meta rewrite|audit \+ rewrite):\s*/i, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
+type ExistingTopic = { keyword: string | null; url: string | null; title: string; task_type?: string | null };
 
 async function existingTopics(brandId: string): Promise<ExistingTopic[]> {
   const [{ data: content }, { data: drafts }] = await Promise.all([
     db.from("content").select("slug, title").eq("brand_id", brandId),
     db.from("drafts")
-      .select("target_keyword, target_url, title")
+      .select("target_keyword, target_url, title, task_type")
       .eq("brand_id", brandId)
       .neq("status", "dismissed")
       .in("task_type", ["new_page", "new_blog", "improve_content"]),
   ]);
   return [
     ...(content || []).map((c) => ({ keyword: null as string | null, url: c.slug as string, title: c.title as string })),
-    ...(drafts || []).map((d) => ({ keyword: d.target_keyword, url: d.target_url, title: d.title })),
+    ...(drafts || []).map((d) => ({
+      keyword: d.target_keyword,
+      url: d.target_url,
+      title: d.title,
+      task_type: d.task_type,
+    })),
   ];
 }
 
 // First existing topic that substantially overlaps a candidate keyword/title,
 // or null if it looks genuinely new.
 function findExistingMatch(candidate: string | undefined | null, existing: ExistingTopic[]): ExistingTopic | null {
-  const norm = candidate ? normalizeTopic(candidate) : "";
-  if (!norm) return null;
-  for (const e of existing) {
-    const eKeyword = e.keyword ? normalizeTopic(e.keyword) : "";
-    const eTitle = normalizeTopic(e.title || "");
-    if (eKeyword && (eKeyword === norm || eKeyword.includes(norm) || norm.includes(eKeyword))) return e;
-    if (eTitle && (eTitle === norm || eTitle.includes(norm) || norm.includes(eTitle))) return e;
+  if (!candidate) return null;
+  return existing.find((e) => overlapsTopic(candidate, {
+    keyword: e.keyword,
+    title: e.title,
+    url: e.url,
+    task_type: e.task_type,
+  })) || null;
+}
+
+function alreadyQueued(
+  task: { task_type?: string; target_keyword?: string; target_url?: string; title?: string },
+  existing: ExistingTopic[]
+): boolean {
+  if (!topicSlug(task) && !task.target_keyword) return false;
+  const key = topicKey({
+    taskType: task.task_type,
+    keyword: task.target_keyword,
+    url: task.target_url,
+    title: task.title,
+  });
+  return existing.some((e) => {
+    const eKey = topicKey({
+      taskType: e.task_type || task.task_type,
+      keyword: e.keyword,
+      url: e.url,
+      title: e.title,
+    });
+    if (topicSlug(task) && eKey === key) return true;
+    return overlapsTopic(task.target_keyword || topicSlug(task), e);
+  });
+}
+
+function readPlanKeyword(t: { target_keyword?: string; keyword?: string; target_url?: string }): string {
+  return (t.target_keyword || t.keyword || "").trim();
+}
+
+function factRationale(
+  task: { target_keyword?: string; rationale: string },
+  strategy: { targets?: { keyword: string; volume: number | null; why?: string; intent?: string }[] } | null,
+  recon: { gaps?: { keyword: string; volume: number; why?: string; competitor?: string; competitor_position?: number }[] } | null,
+  striking: { keyword: string; impressions: number; position: number }[] | null
+): string {
+  const kw = task.target_keyword || "";
+  const slug = topicSlug({ keyword: kw });
+  const facts: string[] = [];
+  const target = strategy?.targets?.find((t) => topicSlug({ keyword: t.keyword }) === slug);
+  if (target?.volume != null && target.volume > 0) {
+    facts.push(`Google records about ${target.volume.toLocaleString()} searches a month for this.`);
   }
-  return null;
+  if (target?.intent) {
+    facts.push(`This is a ${target.intent} search.`);
+  }
+  const gap = recon?.gaps?.find((g) => topicSlug({ keyword: g.keyword }) === slug);
+  if (gap?.competitor) {
+    const host = gap.competitor.replace(/^www\./, "");
+    if (gap.competitor_position != null && gap.competitor_position > 0) {
+      facts.push(`${host} currently ranks around position ${gap.competitor_position} for this search.`);
+    } else {
+      facts.push(`${host} already ranks for this search.`);
+    }
+  } else if (gap?.volume && !(target?.volume != null && target.volume > 0)) {
+    facts.push(`A tracked competitor already ranks for this search, which has about ${gap.volume.toLocaleString()} monthly searches.`);
+  }
+  if (gap?.why) facts.push(gap.why);
+  const gsc = striking?.find((s) => topicSlug({ keyword: s.keyword }) === slug);
+  if (gsc) {
+    facts.push(`Search Console shows about ${gsc.impressions.toLocaleString()} impressions, currently around position ${gsc.position}.`);
+  }
+  const rationale = (task.rationale || "").trim();
+  if (!facts.length) return rationale;
+  const extra = facts.join(" ");
+  if (!rationale) return extra;
+  if (target?.volume && rationale.includes(String(target.volume))) return rationale;
+  if (gap?.volume && rationale.includes(String(gap.volume))) return rationale;
+  return `${rationale}\n\n${extra}`;
 }
 
 // PLAN: gather intelligence, decide tasks, and enqueue the execution jobs.
@@ -133,23 +197,40 @@ ${JSON.stringify(lowCtr || [], null, 2)}
 Return ONLY JSON array of up to ${MAX_TASKS}:
 [{"task_type":"fix_meta|improve_content|new_page|new_blog","target_url":"...","target_keyword":"...","rationale":"..."}]`,
     });
-    tasks = (extractJSON<{ task_type: TaskType; target_url?: string; target_keyword?: string; rationale: string }[]>(planText) || []).slice(0, MAX_TASKS);
+    tasks = (extractJSON<{
+      task_type: TaskType;
+      target_url?: string;
+      target_keyword?: string;
+      keyword?: string;
+      rationale: string;
+    }[]>(planText) || []).slice(0, MAX_TASKS).map((t) => ({
+      ...t,
+      target_keyword: readPlanKeyword(t) || undefined,
+      rationale: factRationale(
+        { target_keyword: readPlanKeyword(t), rationale: t.rationale || "" },
+        strategy as { targets?: { keyword: string; volume: number | null; why?: string; intent?: string }[] } | null,
+        recon as { gaps?: { keyword: string; volume: number; why?: string; competitor?: string; competitor_position?: number }[] } | null,
+        striking as { keyword: string; impressions: number; position: number }[] | null
+      ),
+    }));
 
     // Hard safety net — never enqueue a second open draft for an overlapping
     // topic, and never create new_page/new_blog when published content exists.
     const claimedThisBatch: string[] = [];
-    const openDraftTopics = existingList.filter((e) => !!e.keyword);
+    const openDraftTopics = existingList.filter((e) => !!e.keyword || !!e.url || !!e.title);
     tasks = tasks.flatMap((t) => {
-      const norm = normalizeTopic(t.target_keyword || t.target_url || "");
-      if (norm && claimedThisBatch.includes(norm)) return [];
-
-      // Already has an open draft for this keyword/topic → skip (don't stack).
-      if (findExistingMatch(t.target_keyword, openDraftTopics)) return [];
+      const key = topicKey({
+        taskType: t.task_type,
+        keyword: t.target_keyword,
+        url: t.target_url,
+      });
+      if (topicSlug(t) && claimedThisBatch.includes(key)) return [];
+      if (alreadyQueued(t, openDraftTopics)) return [];
 
       if (t.task_type === "new_page" || t.task_type === "new_blog") {
         const published = findExistingMatch(t.target_keyword, existingList.filter((e) => !e.keyword));
         if (published) {
-          if (norm) claimedThisBatch.push(norm);
+          if (topicSlug(t)) claimedThisBatch.push(key);
           return [{
             ...t,
             task_type: "improve_content" as TaskType,
@@ -159,7 +240,7 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
         }
       }
 
-      if (norm) claimedThisBatch.push(norm);
+      if (topicSlug(t)) claimedThisBatch.push(key);
       return [t];
     });
   } else {
@@ -193,16 +274,21 @@ Return ONLY JSON array of up to ${MAX_TASKS}:
 // CONTENT: execute one task -> one draft.
 export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   const runId = p.runId as string;
-  const kw = (p.target_keyword as string) || "";
+  const kw = String(p.target_keyword || p.keyword || "").trim();
   const type = p.task_type as TaskType;
 
-  // Final guard: if an open draft already covers this keyword, do not insert
-  // another review card (this is what produced "junk removal cost" twice).
-  if (kw && !p.intent) {
+  // Final guard: if an open draft already covers this topic, do not insert
+  // another review card. Check by slug (keyword OR planned URL), not just the
+  // raw keyword string — that is what produced "junk removal cost" twice.
+  if (!p.intent) {
     const existing = await existingTopics(brand.id);
-    const openDrafts = existing.filter((e) => !!e.keyword);
-    if (findExistingMatch(kw, openDrafts)) {
-      console.log(`[stepContent] ${brand.slug}: skip duplicate draft for "${kw}"`);
+    if (alreadyQueued({
+      task_type: type,
+      target_keyword: kw,
+      target_url: (p.target_url as string) || undefined,
+      title: kw,
+    }, existing)) {
+      console.log(`[stepContent] ${brand.slug}: skip duplicate draft for "${kw || p.target_url}"`);
       return;
     }
   }
@@ -251,6 +337,21 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     title = `Meta rewrite: ${p.target_url || kw}`; body = await rewriteMeta(brand, (p.target_url as string) || "", `Target keyword: ${kw}`);
   }
   if (!body) return;
+
+  // Re-check after the slow write. Two jobs can both pass the first guard,
+  // spend 30s writing, then both insert the same page.
+  if (!p.intent) {
+    const existing = await existingTopics(brand.id);
+    if (alreadyQueued({
+      task_type: (p.intent ? "fix_meta" : type) as string,
+      target_keyword: kw,
+      target_url: (p.target_url as string) || undefined,
+      title,
+    }, existing)) {
+      console.log(`[stepContent] ${brand.slug}: skip duplicate insert for "${kw || title}"`);
+      return;
+    }
+  }
 
   // Per-section autopilot (Pages / Content / Meta tabs). Autopilot Meta still
   // respects the legacy auto_publish_meta flag via readAutopilotMap.

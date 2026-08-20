@@ -303,7 +303,7 @@ const BOILERPLATE_WHY: Record<string, string> = {
     "This search is bringing the wrong visitors. The page should speak to people who are ready to book, not people looking for a free option.",
 };
 
-function cleanRationale(text: string): string {
+function cleanRationale(text: string, facts?: KeywordFacts | null): string {
   let t = text.trim();
   if (!t) return "";
   const mapped = BOILERPLATE_WHY[t.toLowerCase()];
@@ -314,6 +314,13 @@ function cleanRationale(text: string): string {
   ).trim();
   const redirected = /redirected from new page/i.test(text);
   t = customerFix(t);
+  const hasVolume = facts?.volume != null && facts.volume > 0;
+  if (!hasVolume) {
+    t = t.replace(/\bno baseline data exists yet,?\s*/gi, "");
+    t = t.replace(/\s*with real search volume\b/gi, "");
+    t = t.replace(/\band this is a core high-intent commercial query\.?/gi, "");
+    t = t.replace(/\s{2,}/g, " ").replace(/^\s*and\s+/i, "").replace(/^,\s*/, "").replace(/\s+\./g, ".").trim();
+  }
   if (redirected && t) {
     return `${t} You already have a page on this topic, so I am improving that page instead of creating a new one.`;
   }
@@ -351,6 +358,16 @@ function joinFindings(items: string[]): string {
   return `${items.slice(0, -1).join("; ")}; and ${items[items.length - 1]}`;
 }
 
+export type KeywordFacts = {
+  volume?: number | null;
+  position?: number | null;
+  impressions?: number | null;
+  clicks?: number | null;
+  intent?: string | null;
+  opportunity?: string | null;
+  source?: string | null;
+};
+
 export type DecisionWhyInput = {
   kind: "draft" | "google_post" | "backlink";
   taskType?: string | null;
@@ -359,7 +376,30 @@ export type DecisionWhyInput = {
   url?: string | null;
   rationale?: string | null;
   body?: string | null;
+  facts?: KeywordFacts | null;
 };
+
+function factParagraph(facts: KeywordFacts | null | undefined, quoted: string): string | null {
+  if (!facts) return null;
+  const bits: string[] = [];
+  if (facts.volume != null && facts.volume > 0) {
+    bits.push(`Google records about ${facts.volume.toLocaleString()} searches a month${quoted ? ` for ${quoted}` : ""}.`);
+  }
+  if (facts.position != null && Number(facts.position) > 0) {
+    bits.push(`Your best saved ranking is around position ${Number(facts.position)}.`);
+  } else if (facts.volume != null && facts.volume > 0) {
+    bits.push("You are not ranking for this search yet.");
+  }
+  if (facts.impressions != null && facts.impressions > 0) {
+    bits.push(`Search Console counted about ${facts.impressions.toLocaleString()} impressions recently.`);
+  }
+  if (facts.clicks != null && facts.clicks > 0) {
+    bits.push(`That brought about ${facts.clicks.toLocaleString()} clicks.`);
+  }
+  if (facts.intent) bits.push(`This is a ${facts.intent} search.`);
+  if (facts.opportunity) bits.push(customerFix(facts.opportunity));
+  return bits.length ? bits.join(" ") : null;
+}
 
 /**
  * Agent-voice explanation of why this work is in the queue.
@@ -369,10 +409,11 @@ export type DecisionWhyInput = {
 export function decisionWhy(input: DecisionWhyInput): string {
   const keyword = input.keyword?.trim() || "";
   const url = input.url?.trim() || "";
-  const rationale = cleanRationale(input.rationale || "");
+  const rationale = cleanRationale(input.rationale || "", input.facts);
   const type = input.taskType || "";
   const findings = failedFindings(input.body);
   const quoted = keyword ? `“${keyword}”` : "";
+  const measured = factParagraph(input.facts, quoted);
 
   if (input.kind === "google_post") {
     return [
@@ -395,6 +436,7 @@ export function decisionWhy(input: DecisionWhyInput): string {
       ? `I opened ${url}${quoted ? ` and reviewed it for people searching ${quoted}` : ""}.`
       : `I reviewed this page${quoted ? ` for people searching ${quoted}` : ""}.`;
     const bits = [opened];
+    if (measured) bits.push(measured);
     if (findings.length) {
       bits.push(`Here is what I found: ${joinFindings(findings)}. That is why I queued this rewrite instead of leaving the page as-is.`);
     } else if (rationale) {
@@ -409,9 +451,11 @@ export function decisionWhy(input: DecisionWhyInput): string {
 
   if (type === "new_blog") {
     const bits = [
-      quoted
-        ? `I looked at the searches you could rank for and picked ${quoted}. You do not have a blog post aimed at that search yet, so I drafted one.`
-        : "I drafted this blog post because you do not have an article covering this topic yet.",
+      measured
+        ? `${measured} You do not have a blog post aimed at that search yet, so I drafted one.`
+        : quoted
+          ? `I looked at the searches you could rank for and picked ${quoted}. You do not have a blog post aimed at that search yet, so I drafted one.`
+          : "I drafted this blog post because you do not have an article covering this topic yet.",
     ];
     if (rationale) bits.push(rationale);
     bits.push("A focused article gives Google — and AI assistants — something to show when people ask about this.");
@@ -420,9 +464,11 @@ export function decisionWhy(input: DecisionWhyInput): string {
 
   if (type === "new_page") {
     const bits = [
-      quoted
-        ? `People search ${quoted} when they are ready to hire this kind of service, and you do not have a page aimed at that search yet. I drafted one.`
-        : "I drafted this service page because you do not have a page covering this offer yet.",
+      measured
+        ? `${measured} You do not have a page aimed at that search yet, so I drafted one.`
+        : quoted
+          ? `You do not have a page aimed at ${quoted} yet, so I drafted one.`
+          : "I drafted this service page because you do not have a page covering this offer yet.",
     ];
     if (rationale) bits.push(rationale);
     bits.push("A dedicated page is what Google ranks for that search, and it is the page we can send paid traffic to later.");
@@ -435,7 +481,8 @@ export function decisionWhy(input: DecisionWhyInput): string {
         ? `I looked at how ${url} appears in Google.`
         : "I looked at how this page appears in Google.",
     ];
-    if (quoted) {
+    if (measured) bits.push(measured);
+    else if (quoted) {
       bits.push(`People searching ${quoted} should understand from the title and the short line under it that you can help. Right now that listing is not doing the job.`);
     }
     const metaWhy = metaFromBody(input.body || "")?.why;
@@ -451,13 +498,55 @@ export function decisionWhy(input: DecisionWhyInput): string {
         ? `People — and AI assistants — ask ${quoted}. I drafted short, direct answers so those questions can point back to you.`
         : "I drafted short answers to the questions people ask about this service, so Google and AI assistants have something clear to quote.",
     ];
+    if (measured) bits.push(measured);
     if (rationale) bits.push(rationale);
     return bits.join("\n\n");
   }
 
   const bits: string[] = [];
-  if (quoted) bits.push(`I queued this for people searching ${quoted}.`);
+  if (measured) bits.push(measured);
+  else if (quoted) bits.push(`I queued this for people searching ${quoted}.`);
   if (rationale) bits.push(rationale);
   if (!bits.length) bits.push("I queued this because it is the next highest-impact change for the site.");
   return bits.join("\n\n");
+}
+
+export type DecisionSection = { heading: string; body: string };
+
+export function buildDecisionReport(input: DecisionWhyInput): { title: string; sections: DecisionSection[] } {
+  const keyword = input.keyword?.trim() || displayWorkTitle(input.title || "this work");
+  const measured = factParagraph(input.facts, keyword ? `“${keyword}”` : "");
+  const rationale = cleanRationale(input.rationale || "", input.facts);
+  const findings = failedFindings(input.body);
+  const sections: DecisionSection[] = [];
+
+  sections.push({ heading: "The decision", body: decisionWhy(input) });
+
+  sections.push({
+    heading: "What we measured",
+    body: measured
+      || "No monthly search count or ranking is stored for this keyword yet. The planner still queued this from the keyword list and competitor gaps it had at the time.",
+  });
+
+  if (findings.length) {
+    sections.push({ heading: "What I found on the page", body: `${joinFindings(findings)}.` });
+  }
+  if (rationale) {
+    sections.push({ heading: "Planner note", body: rationale });
+  }
+
+  const who: string[] = [];
+  if (input.facts?.volume != null) who.push("Keyword research stored a monthly search count from Google.");
+  if (input.facts?.impressions != null) who.push("Search Console contributed recent impressions.");
+  if (input.facts?.position != null) who.push("A saved ranking was on file.");
+  if (input.facts?.opportunity) who.push("The opportunity note came from the keyword analyst.");
+  if (findings.length) who.push("The page auditor listed the gaps on the live URL.");
+  if (rationale) who.push("The planner wrote the original reason this was queued.");
+  if (!who.length) {
+    who.push("The planner queued this from the current keyword and competitor research. Individual search numbers were not stored against this item.");
+  }
+  who.push("A person still approves or declines. Feedback on this card goes back to the writer.");
+  sections.push({ heading: "Who worked on this", body: who.join(" ") });
+
+  return { title: keyword, sections };
 }

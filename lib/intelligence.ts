@@ -13,6 +13,7 @@ import {
   geoOf,
   type KeywordData,
 } from "./dataforseo";
+import { attachGapSources } from "./intelligence/gaps";
 
 // ---- 1. KEYWORD STRATEGIST -------------------------------------------------
 // Builds the topical-authority target list: real long-tails with volume,
@@ -117,5 +118,5 @@ Pick the 10 best GAP opportunities: high-value keywords we should target too (bu
 Return ONLY JSON: {"gaps":[{"keyword":"...","volume":<number>,"why":"one line","page_type":"new_page|new_blog|improve_existing"}]}`,
   });
   const parsed = extractJSON<{ gaps: { keyword: string; volume: number; why: string; page_type: string }[] }>(text);
-  return { competitors, gaps: parsed?.gaps || [] };
+  return { competitors, gaps: attachGapSources(parsed?.gaps || [], all) };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { loadKeywordFacts } from "@/lib/recommendations/facts";
 
 // Feeds the admin dashboard. Accepts an optional ?brand=<uuid> query param
 // for server-side filtering — used by the customer portal to load only one
@@ -34,11 +35,17 @@ export async function GET(req: NextRequest) {
     brandFilter ? reviewsQuery.eq("brand_id", brandFilter) : reviewsQuery,
   ]);
 
+  const draftRows = drafts.data || [];
+  const keywordFacts = await loadKeywordFacts(
+    draftRows.map((d) => ({ brand_id: d.brand_id, target_keyword: d.target_keyword }))
+  );
+
   return NextResponse.json({
     brands: brands.data || [],
-    drafts: drafts.data || [],
+    drafts: draftRows,
     gbp: gbp.data || [],
     citations: citations.data || [],
     reviews: reviews.data || [],
+    keywordFacts,
   });
 }

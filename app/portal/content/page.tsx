@@ -15,7 +15,9 @@ import { Stagger, fadeUp, EASE } from "../_components/motion";
 import { IconContent, IconSparkle, IconCheck } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
-import { decisionWhy, displayWorkTitle, plannedPageUrl } from "@/lib/recommendations/preview";
+import { uniqueByTopic, factsKey } from "@/lib/recommendations/topic";
+import DecisionReport from "@/app/_components/DecisionReport";
+import { decisionWhy, displayWorkTitle, plannedPageUrl, type DecisionWhyInput, type KeywordFacts } from "@/lib/recommendations/preview";
 import { useToast } from "@/app/_components/Notify";
 import Field from "@/app/_components/Field";
 import { authedFetch } from "@/lib/authedFetch";
@@ -40,7 +42,8 @@ export default function ContentPage() {
 
   const drafts = data?.drafts ?? [];
   const gbp = data?.gbp ?? [];
-  const pending = drafts.filter((d) => d.status === "pending_review");
+  const keywordFacts = data?.keywordFacts ?? {};
+  const pending = uniqueByTopic(drafts.filter((d) => d.status === "pending_review"));
   const published = drafts.filter((d) => d.status === "published" || d.status === "approved");
   const pendingGbp = gbp.filter((g) => g.status === "pending_review");
 
@@ -80,7 +83,7 @@ export default function ContentPage() {
           <EmptyState icon="✓" title="Nothing waiting on you" sub="When your agents draft new content, it lands here for your approval before going live." />
         ) : (
           <Stagger className="p-cardlist">
-            {pending.map((d) => <DraftCard key={d.id} draft={d} brandName={brand.name} siteUrl={brand.site_url} />)}
+            {pending.map((d) => <DraftCard key={d.id} draft={d} brandName={brand.name} siteUrl={brand.site_url} facts={keywordFacts[factsKey(brand.id, d.target_keyword || "")]} />)}
           </Stagger>
         )
       ) : tab === "published" ? (
@@ -170,7 +173,9 @@ export default function ContentPage() {
   );
 }
 
-function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: string; siteUrl: string }) {
+function DraftCard({ draft, brandName, siteUrl, facts }: {
+  draft: Draft; brandName: string; siteUrl: string; facts?: KeywordFacts;
+}) {
   const href = plannedPageUrl({
     taskType: draft.task_type,
     title: draft.title,
@@ -178,20 +183,23 @@ function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: str
     targetKeyword: draft.target_keyword,
     siteUrl,
   });
+  const whyInput: DecisionWhyInput = {
+    kind: "draft",
+    taskType: draft.task_type,
+    title: draft.title,
+    keyword: draft.target_keyword,
+    url: draft.target_url || href,
+    rationale: draft.rationale,
+    body: draft.body,
+    facts: facts || null,
+  };
   return (
     <PreviewPlanCard
       kind={TYPE_LABEL[draft.task_type] || draft.task_type}
       title={displayWorkTitle(draft.title)}
       href={href}
-      why={decisionWhy({
-        kind: "draft",
-        taskType: draft.task_type,
-        title: draft.title,
-        keyword: draft.target_keyword,
-        url: draft.target_url || href,
-        rationale: draft.rationale,
-        body: draft.body,
-      })}
+      why={decisionWhy(whyInput)}
+      whyInput={whyInput}
       meta={
         <>
           {draft.target_keyword && <span>🎯 {draft.target_keyword}</span>}
@@ -206,6 +214,7 @@ function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: str
         targetKeyword: draft.target_keyword,
         rationale: draft.rationale,
         plannedUrl: href,
+        facts: facts || null,
       }}
       brandName={brandName}
       siteUrl={siteUrl}
@@ -225,11 +234,13 @@ function DraftCard({ draft, brandName, siteUrl }: { draft: Draft; brandName: str
 }
 
 function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: string; siteUrl: string }) {
+  const whyInput: DecisionWhyInput = { kind: "google_post", title: post.title, body: post.body };
   return (
     <PreviewPlanCard
       kind="Google post"
       title={post.title || "Google Business Profile post"}
-      why={decisionWhy({ kind: "google_post", title: post.title, body: post.body })}
+      why={decisionWhy(whyInput)}
+      whyInput={whyInput}
       meta={<span>{new Date(post.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
       work={{ title: post.title || "Google post", body: post.body, taskType: "google_post", cta: post.cta || "" }}
       brandName={brandName}
@@ -242,12 +253,13 @@ function GbpCard({ post, brandName, siteUrl }: { post: GbpPost; brandName: strin
 }
 
 function PreviewPlanCard({
-  kind, title, href, why, meta, work, brandName, siteUrl, approveLabel, onApprove, onDismiss, onFeedback,
+  kind, title, href, why, whyInput, meta, work, brandName, siteUrl, approveLabel, onApprove, onDismiss, onFeedback,
 }: {
   kind: string;
   title: string;
   href?: string | null;
   why?: string | null;
+  whyInput?: DecisionWhyInput | null;
   meta?: ReactNode;
   work: WorkPreviewModel;
   brandName: string;
@@ -262,6 +274,7 @@ function PreviewPlanCard({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<"" | "approved" | "dismissed">("");
   const [whyOpen, setWhyOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
 
@@ -322,7 +335,16 @@ function PreviewPlanCard({
             {meta && <div className="p-approve-meta">{meta}</div>}
           </div>
         </div>
-        {whyOpen && why && <p className="p-approve-why">{why}</p>}
+        {whyOpen && why && (
+          <div className="p-approve-why">
+            <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{why}</p>
+            {whyInput && (
+              <button type="button" className="p-btn ghost" style={{ marginTop: 10 }} onClick={() => setReportOpen(true)}>
+                Full report
+              </button>
+            )}
+          </div>
+        )}
         {feedbackOpen && onFeedback && (
           <div style={{ display: "flex", gap: 8, margin: "8px 0 4px", alignItems: "flex-end" }}>
             <Field
@@ -357,6 +379,11 @@ function PreviewPlanCard({
                 Why
               </m.button>
             )}
+            {whyInput && (
+              <m.button type="button" className="p-btn ghost" onClick={() => setReportOpen(true)} whileTap={{ scale: 0.97 }}>
+                More
+              </m.button>
+            )}
           </div>
         </div>
       </m.article>
@@ -377,6 +404,7 @@ function PreviewPlanCard({
           sending: busy,
         } : undefined}
       />
+      <DecisionReport open={reportOpen} onClose={() => setReportOpen(false)} input={whyInput || null} />
     </>
   );
 }

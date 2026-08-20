@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { slugify, splitFrontMatter } from "@/lib/utils";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { siblingDrafts } from "@/lib/recommendations/topic";
 
 // Human gate. Approving a blog/page/GEO draft publishes it into the `content`
 // table that the live site reads from. Meta/intent drafts are just marked approved.
@@ -17,6 +18,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const accessErr = requireBrandAccess(auth, draft.brand_id);
   if (accessErr) return accessErr;
+
+  const { data: openSiblings } = await db.from("drafts")
+    .select("id, task_type, target_keyword, target_url, title, status, body")
+    .eq("brand_id", draft.brand_id)
+    .in("status", ["pending_review", "approved"])
+    .neq("id", id);
+  const twinIds = siblingDrafts(draft, openSiblings || []).map((row) => row.id);
+  if (twinIds.length) {
+    await db.from("drafts").update({ status: "dismissed" }).in("id", twinIds);
+  }
 
   if (dismiss) {
     await db.from("drafts").update({ status: "dismissed" }).eq("id", id);
