@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { absolutePageUrl, evaluateLivePage, expectedSnippet } from "./index";
+import { absolutePageUrl, evaluateLivePage, expectedSnippet, evaluateCertificationTokens } from "./index";
 
 test("relative paths resolve against the site origin", () => {
   expect(absolutePageUrl("https://junkfree.ca/", "yard-waste")).toBe("https://junkfree.ca/yard-waste");
@@ -130,4 +130,95 @@ test("expected snippet strips title/meta lines", () => {
   const s = expectedSnippet("TITLE TAG: Hello\nMETA: Desc\n\nPeople hire us for junk removal every week in Toronto.");
   expect(s).toMatch(/People hire us/);
   expect(s).not.toMatch(/TITLE TAG/);
+});
+
+test("certification requires the unique tokens, not a title prefix heuristic", () => {
+  const expected = {
+    url: "https://junkfree.ca/seo-cert-ab",
+    siteUrl: "https://junkfree.ca",
+    titleToken: "CT-unique12ab",
+    bodyToken: "CB-unique24ab",
+    mode: "present" as const,
+  };
+  const miss = evaluateCertificationTokens(
+    {
+      ok: true,
+      status: 200,
+      url: "https://junkfree.ca/seo-cert-ab",
+      title: "Yard waste removal in Toronto",
+      text: "Plenty of words about junk removal.",
+      canonical: "",
+    },
+    expected
+  );
+  expect(miss.ok).toBe(false);
+
+  const hit = evaluateCertificationTokens(
+    {
+      ok: true,
+      status: 200,
+      url: "https://junkfree.ca/seo-cert-ab",
+      title: "Publishing test CT-unique12ab",
+      text: "Temporary publishing test CB-unique24ab please ignore",
+      canonical: "",
+    },
+    expected
+  );
+  expect(hit.ok).toBe(true);
+});
+
+test("certification rollback accepts 404 or a 200 without tokens", () => {
+  const expected = {
+    url: "https://junkfree.ca/seo-cert-ab",
+    siteUrl: "https://junkfree.ca",
+    titleToken: "CT-x",
+    bodyToken: "CB-y",
+    mode: "absent" as const,
+  };
+  expect(
+    evaluateCertificationTokens(
+      { ok: true, status: 404, url: "https://junkfree.ca/seo-cert-ab", title: "", text: "", canonical: "" },
+      expected
+    ).ok
+  ).toBe(true);
+  expect(
+    evaluateCertificationTokens(
+      {
+        ok: true,
+        status: 200,
+        url: "https://junkfree.ca/seo-cert-ab",
+        title: "Home",
+        text: "Welcome",
+        canonical: "",
+      },
+      expected
+    ).ok
+  ).toBe(true);
+  expect(
+    evaluateCertificationTokens(
+      {
+        ok: true,
+        status: 200,
+        url: "https://junkfree.ca/seo-cert-ab",
+        title: "Publishing test CT-x",
+        text: "CB-y still here",
+        canonical: "",
+      },
+      expected
+    ).ok
+  ).toBe(false);
+});
+
+test("a fetch error is not treated as a successful rollback", () => {
+  const result = evaluateCertificationTokens(
+    { ok: false, error: "timeout" },
+    {
+      url: "https://junkfree.ca/seo-cert-ab",
+      siteUrl: "https://junkfree.ca",
+      titleToken: "CT-x",
+      bodyToken: "CB-y",
+      mode: "absent",
+    }
+  );
+  expect(result.ok).toBe(false);
 });

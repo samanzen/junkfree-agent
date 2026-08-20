@@ -152,10 +152,14 @@ test("website publishing is not shown as fully connected from credentials alone"
   expect(src).toMatch(/\| "limited"/);
   expect(src).toMatch(/publishing is not proven yet/);
   expect(src).toMatch(/Needs proof/);
+  expect(src).toMatch(/Prove publishing/);
+  expect(src).toMatch(/Testing…/);
   expect(src).not.toMatch(/Connected — approved changes can be published to your site/);
   const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
   expect(panel).toMatch(/limited: \{ cls: "amber", label: "Not proven yet" \}/);
   expect(panel).toMatch(/row\.operations/);
+  expect(panel).toMatch(/publishingProof/);
+  expect(panel).toMatch(/\/api\/portal\/certify/);
 });
 
 test("only genuinely actionable services are listed as such", () => {

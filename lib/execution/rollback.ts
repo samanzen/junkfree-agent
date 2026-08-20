@@ -18,9 +18,10 @@ export function buildRollbackChange(row: {
   change_type: string;
   target: string | null;
   previous: Record<string, unknown> | null;
+  remote_id?: string | null;
 }): SiteChange | null {
-  if (!row.previous || !row.target) return null;
   if (row.change_type === "update_meta") {
+    if (!row.previous || !row.target) return null;
     return {
       type: "update_meta",
       url: row.target,
@@ -32,21 +33,29 @@ export function buildRollbackChange(row: {
     };
   }
   if (row.change_type === "upsert_page") {
-    // Only restore when we have markdown (or an explicit bodyMarkdown). HTML
-    // from WordPress content.raw must NOT be fed back through markdownToHtml.
-    const title = row.previous.title;
-    const bodyMarkdown = row.previous.bodyMarkdown;
-    if (typeof title !== "string" || typeof bodyMarkdown !== "string") {
-      return null;
+    if (!row.target) return null;
+    const title = row.previous?.title;
+    const bodyMarkdown = row.previous?.bodyMarkdown;
+    if (typeof title === "string" && typeof bodyMarkdown === "string") {
+      return {
+        type: "upsert_page",
+        slug: row.target,
+        title,
+        metaDescription:
+          (row.previous?.metaDescription as string | null | undefined) ?? null,
+        bodyMarkdown,
+      };
     }
-    return {
-      type: "upsert_page",
-      slug: row.target,
-      title,
-      metaDescription:
-        (row.previous.metaDescription as string | null | undefined) ?? null,
-      bodyMarkdown,
-    };
+    // Create (including canaries): delete the resource. Do not delete an
+    // existing page whose previous state is HTML we cannot restore.
+    if (!row.previous || row.previous.canary === true) {
+      return {
+        type: "delete_page",
+        slug: row.target,
+        remoteId: typeof row.remote_id === "string" && row.remote_id ? row.remote_id : null,
+      };
+    }
+    return null;
   }
   return null;
 }
@@ -76,24 +85,29 @@ export async function assessRollback(
   if (data.status !== "succeeded") {
     return { ok: false, reason: "Only successful executions can be rolled back.", code: "unsupported" };
   }
-  if (!data.previous) {
-    return { ok: false, reason: "No prior state was captured for this execution.", code: "no_previous" };
-  }
   const change = buildRollbackChange({
     change_type: data.change_type,
     target: data.target,
-    previous: data.previous as Record<string, unknown>,
+    previous: (data.previous as Record<string, unknown> | null) ?? null,
+    remote_id: data.remote_id,
   });
   if (!change) {
     return {
       ok: false,
       reason: "Prior state is incomplete — automatic rollback is not supported for this change.",
-      code: "unsupported",
+      code: data.previous ? "unsupported" : "no_previous",
     };
   }
 
   const target = await resolvePublishTarget(brandId);
-  if (!target.ok || !target.adapter.capabilities.includes(change.type)) {
+  if (!target.ok) {
+    return {
+      ok: false,
+      reason: "Connected adapter cannot perform the inverse operation.",
+      code: "unsupported",
+    };
+  }
+  if (change.type !== "delete_page" && !target.adapter.capabilities.includes(change.type)) {
     return {
       ok: false,
       reason: "Connected adapter cannot perform the inverse operation.",

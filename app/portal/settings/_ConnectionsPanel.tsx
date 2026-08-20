@@ -400,6 +400,8 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm());
 
+  const [sotChoice, setSotChoice] = useState("");
+
   const load = useCallback(async () => {
     try {
       const res = await authedFetch(`/api/portal/connections?brand=${brandId}`);
@@ -418,6 +420,15 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   }, [brandId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!rows) return;
+    const proving = rows.find((r) => r.key === "website_publishing")?.publishingProof;
+    if (proving?.confirmed) setSotChoice(proving.confirmed);
+    if (!proving?.certifying) return;
+    const t = window.setInterval(() => { void load(); }, 2500);
+    return () => window.clearInterval(t);
+  }, [rows, load]);
 
   /** Load what this Google connection can be pointed at. */
   const loadGoogleOptions = useCallback(async (key: string) => {
@@ -551,6 +562,52 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
       toast.success("Copied", `${label} is on your clipboard.`);
     } catch {
       toast.error("Couldn't copy", "Select the text and copy it yourself.");
+    }
+  }
+
+  async function saveSourceOfTruth(row: PublicConnectionState) {
+    const confirmed = sotChoice || row.publishingProof?.confirmed;
+    if (!confirmed) return;
+    setBusy("website_publishing:sot");
+    try {
+      const res = await authedFetch("/api/portal/source-of-truth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId, confirmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't save that", undefined);
+        return;
+      }
+      toast.success("Saved", data.message || undefined);
+      await load();
+    } catch {
+      toast.error("We couldn't save that", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function provePublishing() {
+    setBusy("website_publishing:prove");
+    try {
+      const res = await authedFetch("/api/portal/certify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't start that test", undefined);
+        return;
+      }
+      toast.success(data.queued ? "Testing publishing" : "Already testing", data.message || undefined);
+      await load();
+    } catch {
+      toast.error("We couldn't start that test", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -726,6 +783,54 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                     {op.label} — {op.stateLabel}
                   </div>
                 ))}
+
+                {row.publishingProof && (
+                  <div className="p-conn-pick" style={{ marginTop: 8 }}>
+                    <Field
+                      as="select"
+                      label={row.publishingProof.question}
+                      value={sotChoice || row.publishingProof.confirmed || ""}
+                      onChange={(e) => setSotChoice(e.target.value)}
+                    >
+                      <option value="">Select where pages are saved…</option>
+                      {row.publishingProof.options.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </Field>
+                    {row.publishingProof.guessLabel && !row.publishingProof.confirmed && (
+                      <div className="p-conn-meta">We think it might be {row.publishingProof.guessLabel} — confirm to continue.</div>
+                    )}
+                    <button
+                      className="p-btn ghost"
+                      style={{ marginTop: 8 }}
+                      onClick={() => void saveSourceOfTruth(row)}
+                      disabled={!!busy || !(sotChoice || row.publishingProof.confirmed)}
+                      data-busy={busy === "website_publishing:sot" || undefined}
+                    >
+                      <span>{busy === "website_publishing:sot" ? "Saving…" : "Save"}</span>
+                    </button>
+                    {row.publishingProof.unknownHint && (
+                      <div className="p-conn-note">
+                        <IconAlert size={13} />
+                        <span>{row.publishingProof.unknownHint}</span>
+                      </div>
+                    )}
+                    {row.publishingProof.certifying && (
+                      <div className="p-conn-meta">Testing… this usually takes a minute.</div>
+                    )}
+                    {row.publishingProof.canProve && (
+                      <button
+                        className="p-btn primary"
+                        style={{ marginTop: 8 }}
+                        onClick={() => void provePublishing()}
+                        disabled={!!busy}
+                        data-busy={busy === "website_publishing:prove" || undefined}
+                      >
+                        <span>{busy === "website_publishing:prove" ? "Starting…" : row.publishingProof.proveLabel}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {row.detail && <div className="p-conn-account">{row.detail}</div>}
 

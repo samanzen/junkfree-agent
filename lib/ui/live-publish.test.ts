@@ -47,6 +47,20 @@ test("execution honesty migration extends brands instead of adding site tables",
   expect(sql).not.toMatch(/create table/i);
 });
 
+test("source of truth is one jsonb column on brands, not a sites table", () => {
+  const sql = read("supabase/021_source_of_truth.sql");
+  expect(sql).toMatch(/source_of_truth jsonb/);
+  expect(sql).not.toMatch(/create table/i);
+});
+
+test("certify is a job kind on the existing queue", () => {
+  const queue = read("lib/queue.ts");
+  expect(queue).toMatch(/\| "certify"/);
+  expect(read("lib/steps.ts")).toMatch(/case "certify"/);
+  expect(read("lib/steps.ts")).toMatch(/isOperationAutopilotReady/);
+  expect(read("lib/execution/certify.ts")).toMatch(/enqueue\(brand\.id, "certify"/);
+});
+
 test("the execution status endpoint distinguishes transport from proven publishing", () => {
   const src = read("app/api/execution/route.ts");
   expect(src).toMatch(/check_is_transport_only: true/);

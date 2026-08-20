@@ -25,7 +25,15 @@ export type OperationCapability = {
   /** Customer-facing; never implementation vocabulary. */
   reason: string;
   certified_at: string | null;
+  last_execution_id: string | null;
+  fail_count: number;
 };
+
+export const CERTIFIED_REASON = "Working";
+export const UNVERIFIED_NEEDS_PROOF = "Publishing is not proven yet.";
+export const STALE_REASON = "Publishing needs to be proven again.";
+export const FAILED_APPEAR_REASON = "We reached the site, but the test page never appeared.";
+export const FAILED_REMOVE_REASON = "The test page could not be removed.";
 
 export type SiteCapabilityMap = Partial<Record<AdapterCapability, OperationCapability>>;
 
@@ -66,6 +74,8 @@ export function capabilityMapFor(adapter: PublishAdapter): SiteCapabilityMap {
         writer,
         reason: unverifiedReason(writer, op),
         certified_at: null,
+        last_execution_id: null,
+        fail_count: 0,
       };
     } else {
       map[op] = {
@@ -73,6 +83,8 @@ export function capabilityMapFor(adapter: PublishAdapter): SiteCapabilityMap {
         writer,
         reason: unverifiedReason(writer, op),
         certified_at: null,
+        last_execution_id: null,
+        fail_count: 0,
       };
     }
   }
@@ -108,6 +120,8 @@ export function parseCapabilityMap(raw: unknown): SiteCapabilityMap {
       writer: r.writer,
       reason: typeof r.reason === "string" && r.reason.trim() ? r.reason : unverifiedReason(r.writer, op),
       certified_at: typeof r.certified_at === "string" ? r.certified_at : null,
+      last_execution_id: typeof r.last_execution_id === "string" ? r.last_execution_id : null,
+      fail_count: typeof r.fail_count === "number" && Number.isFinite(r.fail_count) ? r.fail_count : 0,
     };
   }
   return map;
@@ -115,7 +129,7 @@ export function parseCapabilityMap(raw: unknown): SiteCapabilityMap {
 
 /** True only when Slice 1 (or later) has proven the op. Slice 0 is always false. */
 export function isOperationCertified(
-  map: SiteCapabilityMap | null | undefined,
+  map: SiteCapabilityMap | null | undefined | unknown,
   op: AdapterCapability
 ): boolean {
   return parseCapabilityMap(map)[op]?.state === "certified";
@@ -174,5 +188,67 @@ export async function persistBrandWriter(
 }
 
 export async function clearBrandWriter(brandId: string): Promise<void> {
-  await persistBrandWriter(brandId, null, emptyCapabilityMap());
+  const { error } = await db
+    .from("brands")
+    .update({
+      primary_writer: null,
+      site_capabilities: emptyCapabilityMap(),
+      source_of_truth: {},
+    })
+    .eq("id", brandId);
+  if (error) {
+    await persistBrandWriter(brandId, null, emptyCapabilityMap());
+  }
+}
+
+export async function patchOperationCapability(
+  brandId: string,
+  op: AdapterCapability,
+  patch: Partial<OperationCapability> & Pick<OperationCapability, "state" | "writer">
+): Promise<SiteCapabilityMap> {
+  const { data } = await db
+    .from("brands")
+    .select("primary_writer, site_capabilities")
+    .eq("id", brandId)
+    .maybeSingle();
+  const map = parseCapabilityMap(data?.site_capabilities);
+  const prev = map[op];
+  map[op] = {
+    state: patch.state,
+    writer: patch.writer,
+    reason: patch.reason ?? prev?.reason ?? unverifiedReason(patch.writer, op),
+    certified_at: patch.certified_at === undefined ? prev?.certified_at ?? null : patch.certified_at,
+    last_execution_id:
+      patch.last_execution_id === undefined ? prev?.last_execution_id ?? null : patch.last_execution_id,
+    fail_count: patch.fail_count === undefined ? prev?.fail_count ?? 0 : patch.fail_count,
+  };
+  const writer =
+    data?.primary_writer && isSitePlatform(data.primary_writer) ? data.primary_writer : patch.writer;
+  await persistBrandWriter(brandId, writer, map);
+  return map;
+}
+
+/** Previously certified ops become stale. Unverified rows are left alone. */
+export async function markCertifiedOperationsStale(brandId: string): Promise<void> {
+  const { data } = await db
+    .from("brands")
+    .select("primary_writer, site_capabilities")
+    .eq("id", brandId)
+    .maybeSingle();
+  const map = parseCapabilityMap(data?.site_capabilities);
+  let changed = false;
+  for (const op of ALL_OPS) {
+    const row = map[op];
+    if (!row || row.state !== "certified") continue;
+    map[op] = { ...row, state: "stale", reason: STALE_REASON };
+    changed = true;
+  }
+  if (!changed) return;
+  const writer =
+    data?.primary_writer && isSitePlatform(data.primary_writer) ? data.primary_writer : null;
+  await persistBrandWriter(brandId, writer, map);
+}
+
+export function failedCertificationState(failCount: number): OperationState {
+  return failCount >= 3 ? "temporarily_failed" : "supported_unverified";
 }

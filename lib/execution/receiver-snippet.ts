@@ -7,6 +7,11 @@
 //
 // This file is the snippet source of truth. The Connections panel renders it;
 // tests pin that it verifies X-Signature-256 the same way the adapter signs.
+//
+// Slice 1: a receiver that only returns {ok:true} cannot become certified.
+// The snippet must persist upsert_page, return an absolute url, and delete
+// the same resource on delete_page. Do not advertise operations it does not
+// implement.
 
 export const CODED_SITE_SECRET_PLACEHOLDER = "YOUR_SECRET";
 
@@ -32,6 +37,7 @@ export async function POST(req: NextRequest) {
 
   let payload: {
     event?: string;
+    site?: string;
     change?: {
       type?: string;
       slug?: string;
@@ -39,6 +45,7 @@ export async function POST(req: NextRequest) {
       bodyMarkdown?: string;
       url?: string;
       metaDescription?: string | null;
+      remoteId?: string | null;
     };
   };
   try {
@@ -48,16 +55,27 @@ export async function POST(req: NextRequest) {
   }
 
   if (payload.event === "check") {
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, protocolVersion: 1, capabilities: ["upsert_page"] });
   }
 
   if (payload.event === "apply") {
-    // Write payload.change into your content store, then return the live URL.
-    const slug = payload.change?.slug;
-    return NextResponse.json({
-      ok: true,
-      url: slug ? \`/\${slug}\` : payload.change?.url || null,
-    });
+    const change = payload.change || {};
+    const site = (payload.site || "").replace(/\\/+$/, "");
+
+    if (change.type === "upsert_page") {
+      // Persist change.slug / title / bodyMarkdown in YOUR content store.
+      // Returning ok without writing will not prove publishing.
+      const slug = change.slug;
+      const url = slug ? (site ? \`\${site}/\${slug}\` : \`/\${slug}\`) : null;
+      return NextResponse.json({ ok: true, url, created: true, remoteId: slug || null });
+    }
+
+    if (change.type === "delete_page") {
+      // Delete the page you created for slug or remoteId.
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ ok: false, error: "unsupported change" }, { status: 422 });
   }
 
   return NextResponse.json({ ok: false, error: "unknown event" }, { status: 400 });

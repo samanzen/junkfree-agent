@@ -47,6 +47,15 @@ export type SiteChange =
       url: string;
       title: string | null;
       metaDescription: string | null;
+    }
+  | {
+      /**
+       * Internal inverse of a create. Not a customer-facing operation and not
+       * advertised in adapter.capabilities. Used to roll back canary pages.
+       */
+      type: "delete_page";
+      slug: string;
+      remoteId: string | null;
     };
 
 /** Everything an adapter needs, resolved by the engine before it is called. */
@@ -99,5 +108,6 @@ export interface PublishAdapter {
 }
 
 export function supports(adapter: PublishAdapter, change: SiteChange): boolean {
+  if (change.type === "delete_page") return true;
   return adapter.capabilities.includes(change.type);
 }

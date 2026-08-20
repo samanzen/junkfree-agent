@@ -75,6 +75,8 @@ const CUSTOMER_FACING = [
   "lib/connections.ts",
   "app/api/portal/connections/route.ts",
   "app/api/portal/publishing/route.ts",
+  "app/api/portal/source-of-truth/route.ts",
+  "app/api/portal/certify/route.ts",
   "app/portal/settings/_ConnectionsPanel.tsx",
   "lib/execution/receiver-failure.ts",
 ];

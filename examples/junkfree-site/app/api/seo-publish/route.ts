@@ -29,6 +29,7 @@ type Change = {
   bodyMarkdown?: string;
   url?: string;
   metaDescription?: string | null;
+  remoteId?: string | null;
 };
 
 export async function POST(req: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  let payload: { event?: string; change?: Change };
+  let payload: { event?: string; site?: string; change?: Change };
   try {
     payload = JSON.parse(raw);
   } catch {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (payload.event === "check") {
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, protocolVersion: 1, capabilities: ["upsert_page"] });
   }
 
   if (payload.event === "apply") {
@@ -55,7 +56,22 @@ export async function POST(req: NextRequest) {
       if (!written.ok) {
         return NextResponse.json({ ok: false, error: written.error }, { status: 500 });
       }
-      return NextResponse.json({ ok: true, url: `/${change.slug}` });
+      const site = (payload.site || "").replace(/\/+$/, "");
+      return NextResponse.json({
+        ok: true,
+        created: true,
+        remoteId: change.slug,
+        url: site ? `${site}/${change.slug}` : `/${change.slug}`,
+      });
+    }
+    if (change.type === "delete_page") {
+      const slug = change.slug || change.remoteId;
+      if (!slug) return NextResponse.json({ ok: false, error: "missing slug" }, { status: 422 });
+      const deleted = await deletePage(slug);
+      if (!deleted.ok) {
+        return NextResponse.json({ ok: false, error: deleted.error }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true });
     }
     if (change.type === "update_meta" && change.url) {
       return NextResponse.json(
@@ -100,6 +116,31 @@ async function writePage(
       },
       { onConflict: "brand_id,slug" }
     );
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function deletePage(slug: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, error: "content store is not configured" };
+  }
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+    const { data: brand, error: brandErr } = await db
+      .from("brands")
+      .select("id")
+      .eq("slug", "junkfree")
+      .maybeSingle();
+    if (brandErr || !brand?.id) {
+      return { ok: false, error: "brand not found" };
+    }
+    const { error } = await db.from("content").delete().eq("brand_id", brand.id).eq("slug", slug);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {

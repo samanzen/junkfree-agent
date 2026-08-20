@@ -28,7 +28,9 @@ import { recordActivity, updateAgentTask, linkQaResultToDraft, countPendingConte
 import { MAX_MANAGER_ITEMS, clampConfidence, normalizeRisk, type ProposedActionType, type RiskLevel } from "./agents/contracts";
 import { absolutePageUrl, checkPublishedPage, expectedSnippet } from "./publish-check";
 import { reportOutcomes } from "./outcomes";
-import { capabilityForTaskType, isOperationCertified } from "./execution/site-capabilities";
+import { capabilityForTaskType } from "./execution/site-capabilities";
+import { isOperationAutopilotReady } from "./execution/source-of-truth";
+import { stepCertify } from "./execution/certify";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -376,7 +378,7 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     reversible: effectiveType === "fix_meta",
     withinRunLimits: pendingContent <= MAX_MANAGER_ITEMS + 4,
     requiresLivePublish: liveOp !== null,
-    operationCertified: liveOp ? isOperationCertified(brand.site_capabilities, liveOp) : false,
+    operationCertified: liveOp ? isOperationAutopilotReady(brand, liveOp) : false,
     cannibalizationSuspected: rationale.includes("topic already exists"),
   });
 
@@ -649,7 +651,7 @@ function siteHealthScore(issues: { severity: string }[]): number {
 }
 
 // Dispatch a claimed job to the right step.
-export async function runJob(job: { brand_id: string; kind: JobKind; payload: Record<string, unknown> }) {
+export async function runJob(job: { id?: string; brand_id: string; kind: JobKind; payload: Record<string, unknown> }) {
   const b = (await getBrandById(job.brand_id)) as Brand | null;
   if (!b) return;
   switch (job.kind) {
@@ -664,6 +666,7 @@ export async function runJob(job: { brand_id: string; kind: JobKind; payload: Re
     case "rank_enrich": return void (await stepRankEnrich(b));
     case "ai_visibility": return void (await stepAiVisibility(b));
     case "publish": return void (await stepPublish(b, job.payload));
+    case "certify": return void (await stepCertify(b, { ...job.payload, jobId: job.id }));
   }
 }
 
@@ -726,7 +729,7 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     reversible: draft.task_type === "fix_meta",
     withinRunLimits: true,
     requiresLivePublish: true,
-    operationCertified: liveOp ? isOperationCertified(brand.site_capabilities, liveOp) : false,
+    operationCertified: liveOp ? isOperationAutopilotReady(brand, liveOp) : false,
   });
 
   // BLOCK always stops. Autopilot AUTO_EXECUTE without linked QA PASS stops.
@@ -767,7 +770,9 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     outcome.url ||
     (change.type === "upsert_page"
       ? absolutePageUrl(brand.site_url, change.slug)
-      : change.url);
+      : change.type === "update_meta"
+        ? change.url
+        : null);
   if (!liveUrl) {
     throw new Error("stepPublish: write succeeded but no live address was returned to verify.");
   }
@@ -777,7 +782,7 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     {
       url: liveUrl,
       changeType: change.type,
-      title: change.title,
+      title: change.type === "delete_page" ? null : change.title,
       keyword: draft.target_keyword,
       bodySnippet: change.type === "upsert_page" ? expectedSnippet(change.bodyMarkdown) : null,
       metaDescription: change.type === "update_meta" ? change.metaDescription : null,

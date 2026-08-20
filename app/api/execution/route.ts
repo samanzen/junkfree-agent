@@ -68,6 +68,7 @@ const accessErr = requireBrandAccess(auth, brandId);
     primary_writer: brand?.primary_writer ?? (target.ok ? target.platform : null),
     execution_grade: grade,
     site_capabilities: capabilities,
+    source_of_truth: brand?.source_of_truth ?? {},
     // check() proves transport, not that a write lands on the public site.
     check_is_transport_only: true,
     // Surfaced on purpose: an unapplied migration is the single most expensive
@@ -139,6 +140,6 @@ const accessErr = requireBrandAccess(auth, brand_id);
     queued: true,
     platform: target.platform,
     change_type: translation.change.type,
-    target: translation.change.type === "upsert_page" ? translation.change.slug : translation.change.url,
+    target: translation.change.type === "upsert_page" ? translation.change.slug : translation.change.type === "update_meta" ? translation.change.url : translation.change.slug,
   });
 }

@@ -34,7 +34,9 @@ export type JobKind =
   // Applies an approved draft to the brand's LIVE site via lib/execution.
   // Every other kind above produces a row for a human to read; this is the
   // only kind that changes something outside this platform.
-  | "publish";
+  | "publish"
+  // Slice 1: prove upsert_page (write → production → delete → gone). Same queue.
+  | "certify";
 
 export type Job = { id: string; brand_id: string; kind: JobKind; payload: Record<string, unknown> };
 

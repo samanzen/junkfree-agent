@@ -47,6 +47,11 @@ export type Brand = {
   primary_writer?: "wordpress" | "shopify" | "webhook" | null;
   /** Per-operation execution state for the primary writer. See lib/execution/site-capabilities.ts. */
   site_capabilities?: Record<string, unknown> | null;
+  /**
+   * Detected vs confirmed where new pages are saved. Slice 1.
+   * Optional until supabase/021 is applied. See lib/execution/source-of-truth.ts.
+   */
+  source_of_truth?: Record<string, unknown> | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;

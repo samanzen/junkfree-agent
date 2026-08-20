@@ -51,6 +51,7 @@ test("connect pins the writer and stores an unverified capability map", () => {
   const src = read("app/api/portal/publishing/route.ts");
   expect(src).toMatch(/persistBrandWriter\(brandId, platform, capabilityMapFor\(adapter\)\)/);
   expect(src).toMatch(/clearBrandWriter\(brandId\)/);
+  expect(src).toMatch(/detectAndStoreSourceOfTruth/);
   expect(src).not.toMatch(/Approved pages can go live/);
   expect(src).toMatch(/Automatic publishing stays off until publishing is proven/);
 });

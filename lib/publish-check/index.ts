@@ -199,3 +199,184 @@ export function absolutePageUrl(siteUrl: string | null | undefined, pageUrl: str
   const path = page.startsWith("/") ? page : `/${page}`;
   return `${origin}${path}`;
 }
+
+const FETCH_MS = 10_000;
+
+export type CertificationMode = "present" | "absent";
+
+export type CertificationExpectation = {
+  url: string;
+  siteUrl: string;
+  titleToken: string;
+  bodyToken: string;
+  mode: CertificationMode;
+};
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+function normalizeCert(s: string): string {
+  return decodeEntities(s).normalize("NFC").replace(/\s+/g, " ").trim();
+}
+
+export function hostMatchesSite(pageUrl: string, siteUrl: string): boolean {
+  try {
+    const pageHost = new URL(pageUrl).hostname.replace(/^www\./i, "").toLowerCase();
+    const siteHost = new URL(siteUrl).hostname.replace(/^www\./i, "").toLowerCase();
+    return pageHost === siteHost;
+  } catch {
+    return false;
+  }
+}
+
+export type CertSnapshot =
+  | { ok: true; status: number; url: string; title: string; text: string; canonical: string }
+  | { ok: false; error: string };
+
+export async function fetchCertificationSnapshot(url: string): Promise<CertSnapshot> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "SEO-Platform-Auditor" },
+      signal: AbortSignal.timeout(FETCH_MS),
+      redirect: "follow",
+    });
+    const html = await res.text();
+    const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "";
+    const canonical =
+      html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i)?.[1]?.trim() ||
+      html.match(/<link[^>]+href=["']([^"']*)["'][^>]*rel=["']canonical["']/i)?.[1]?.trim() ||
+      "";
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return {
+      ok: true,
+      status: res.status,
+      url: res.url || url,
+      title,
+      text,
+      canonical,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export function evaluateCertificationTokens(
+  live: CertSnapshot,
+  expected: CertificationExpectation
+): PublishCheckResult {
+  const fail = (reason: string, url = expected.url, title: string | null = null, words = 0): PublishCheckResult => ({
+    ok: false,
+    url,
+    reason,
+    liveTitle: title,
+    liveWords: words,
+  });
+
+  if (!live.ok) {
+    return fail("Live URL could not be fetched after publish.");
+  }
+
+  const title = normalizeCert(live.title);
+  const text = normalizeCert(live.text);
+  const titleToken = expected.titleToken;
+  const bodyToken = expected.bodyToken;
+  const words = live.text ? live.text.split(" ").length : 0;
+
+  if (!hostMatchesSite(expected.url, expected.siteUrl)) {
+    return fail("The test page address is not on this website.", live.url, live.title, words);
+  }
+  if (!hostMatchesSite(live.url, expected.siteUrl)) {
+    return fail("The live page redirected off this website.", live.url, live.title, words);
+  }
+  if (live.canonical && /^https?:\/\//i.test(live.canonical) && !hostMatchesSite(live.canonical, expected.siteUrl)) {
+    return fail("The live page points at a different website.", live.url, live.title, words);
+  }
+
+  if (expected.mode === "present") {
+    if (live.status !== 200) {
+      return fail("The test page is not live yet.", live.url, live.title, words);
+    }
+    if (!titleToken || !title.includes(titleToken)) {
+      return fail("Live title does not contain the unique test marker.", live.url, live.title, words);
+    }
+    if (!bodyToken || !text.includes(bodyToken)) {
+      return fail("Live page does not contain the unique test marker.", live.url, live.title, words);
+    }
+    return {
+      ok: true,
+      url: live.url,
+      reason: "Live page shows the unique test markers.",
+      liveTitle: live.title || null,
+      liveWords: words,
+    };
+  }
+
+  // absent: 404/410 OR 200 without either token
+  if (live.status === 404 || live.status === 410) {
+    return {
+      ok: true,
+      url: live.url,
+      reason: "Test page is gone from the live site.",
+      liveTitle: live.title || null,
+      liveWords: words,
+    };
+  }
+  if (live.status === 200 && (!title.includes(titleToken) && !text.includes(bodyToken))) {
+    return {
+      ok: true,
+      url: live.url,
+      reason: "Test markers are gone from the live site.",
+      liveTitle: live.title || null,
+      liveWords: words,
+    };
+  }
+  return fail("The test page is still visible on the live site.", live.url, live.title, words);
+}
+
+export async function checkCertificationPage(
+  brand: Brand,
+  expected: CertificationExpectation,
+  opts: { attempts?: number; delayMs?: number } = {}
+): Promise<PublishCheckResult> {
+  const attempts = Math.max(1, opts.attempts ?? 1);
+  const delayMs = opts.delayMs ?? 3000;
+  let result: PublishCheckResult | null = null;
+
+  for (let i = 0; i < attempts; i++) {
+    const live = await fetchCertificationSnapshot(expected.url);
+    result = evaluateCertificationTokens(live, expected);
+    if (result.ok) break;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  const finalResult = result!;
+  await db
+    .from("publish_checks")
+    .insert({
+      brand_id: brand.id,
+      url: finalResult.url,
+      ok: finalResult.ok,
+      reason: finalResult.reason,
+      live_title: finalResult.liveTitle,
+      live_words: finalResult.liveWords,
+      change_type: "certify_upsert_page",
+      target_keyword: expected.titleToken,
+    })
+    .then(({ error }) => {
+      if (error) console.warn(`[publish-check] could not store cert result: ${error.message}`);
+    });
+
+  return finalResult;
+}

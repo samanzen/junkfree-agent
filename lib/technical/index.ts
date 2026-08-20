@@ -3,7 +3,7 @@
 
 import { RENDER_THRESHOLD_WORDS, type AuditedPage } from "../auditor";
 import { executeChange, resolvePublishTarget } from "../execution/engine";
-import { isOperationCertified } from "../execution/site-capabilities";
+import { isOperationAutopilotReady } from "../execution/source-of-truth";
 import type { SiteChange } from "../execution/types";
 import { enqueue } from "../queue";
 import { db } from "../supabase";
@@ -145,7 +145,7 @@ export async function attemptTechnicalFix(
     reversible: true,
     withinRunLimits: true,
     requiresLivePublish: true,
-    operationCertified: isOperationCertified(brand.site_capabilities, "update_meta"),
+    operationCertified: isOperationAutopilotReady(brand, "update_meta"),
   });
 
   if (policy.decision !== "AUTO_EXECUTE") {

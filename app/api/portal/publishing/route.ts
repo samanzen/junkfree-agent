@@ -10,6 +10,7 @@ import {
 import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "@/lib/execution/registry";
 import type { SitePlatform } from "@/lib/execution/types";
 import { capabilityMapFor, clearBrandWriter, persistBrandWriter } from "@/lib/execution/site-capabilities";
+import { detectAndStoreSourceOfTruth } from "@/lib/execution/source-of-truth";
 
 export const maxDuration = 60;
 
@@ -186,6 +187,7 @@ export async function POST(req: NextRequest) {
   }
 
   await persistBrandWriter(brandId, platform, capabilityMapFor(adapter));
+  await detectAndStoreSourceOfTruth(brandId, brand.site_url, platform);
 
   const messages: Record<SitePlatform, string> = {
     wordpress:

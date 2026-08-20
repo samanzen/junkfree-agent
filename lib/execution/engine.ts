@@ -119,10 +119,14 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
 }
 
 export type ExecutionOutcome =
-  | { status: "succeeded"; platform: SitePlatform; url: string | null; remoteId: string | null }
-  | { status: "failed"; platform: SitePlatform | null; error: string; retryable: boolean };
+  | { status: "succeeded"; platform: SitePlatform; url: string | null; remoteId: string | null; executionId: string | null }
+  | { status: "failed"; platform: SitePlatform | null; error: string; retryable: boolean; executionId: string | null };
 
-type ExecutionMeta = { draftId?: string | null; jobId?: string | null };
+type ExecutionMeta = {
+  draftId?: string | null;
+  jobId?: string | null;
+  canary?: { titleToken: string; bodyToken: string } | null;
+};
 
 /**
  * Apply one change to a brand's live site.
@@ -147,8 +151,9 @@ export async function executeChange(
       // Only an unreachable credential store is worth retrying unattended;
       // the rest need a human to connect or re-enter something.
       retryable: target.code === "unreadable",
+      executionId: null,
     };
-    await recordExecution(brand.id, null, change, outcome, null, meta);
+    outcome.executionId = await recordExecution(brand.id, null, change, outcome, null, meta);
     return outcome;
   }
 
@@ -160,8 +165,9 @@ export async function executeChange(
         `${target.adapter.label} cannot perform "${change.type}". ` +
         `It supports: ${target.adapter.capabilities.join(", ")}.`,
       retryable: false,
+      executionId: null,
     };
-    await recordExecution(brand.id, target.platform, change, outcome, null, meta);
+    outcome.executionId = await recordExecution(brand.id, target.platform, change, outcome, null, meta);
     return outcome;
   }
 
@@ -176,24 +182,37 @@ export async function executeChange(
     }));
 
   const outcome: ExecutionOutcome = result.ok
-    ? { status: "succeeded", platform: target.platform, url: result.url, remoteId: result.remoteId }
-    : { status: "failed", platform: target.platform, error: result.error, retryable: result.retryable };
+    ? { status: "succeeded", platform: target.platform, url: result.url, remoteId: result.remoteId, executionId: null }
+    : { status: "failed", platform: target.platform, error: result.error, retryable: result.retryable, executionId: null };
 
-  await recordExecution(
+  const recordedPrevious =
+    result.ok && meta.canary
+      ? {
+          ...(result.previous || {}),
+          canary: true,
+          titleToken: meta.canary.titleToken,
+          bodyToken: meta.canary.bodyToken,
+        }
+      : result.ok
+        ? result.previous
+        : null;
+
+  const executionId = await recordExecution(
     brand.id,
     target.platform,
     change,
     outcome,
-    result.ok ? result.previous : null,
+    recordedPrevious,
     meta
   );
 
-  return outcome;
+  return { ...outcome, executionId };
 }
 
 /** Slug or URL a change was aimed at — the useful identifier in a log. */
 function targetOf(change: SiteChange): string {
-  return change.type === "upsert_page" ? change.slug : change.url;
+  if (change.type === "update_meta") return change.url;
+  return change.slug;
 }
 
 /**
@@ -209,17 +228,22 @@ async function recordExecution(
   outcome: ExecutionOutcome,
   previous: Record<string, unknown> | null,
   meta: ExecutionMeta
-): Promise<void> {
+): Promise<string | null> {
   try {
+    const canRestoreMarkdown =
+      change.type === "upsert_page" &&
+      typeof previous?.title === "string" &&
+      typeof previous?.bodyMarkdown === "string";
+    const canDeleteCreate =
+      change.type === "upsert_page" &&
+      outcome.status === "succeeded" &&
+      (!previous || previous.canary === true);
     const rollbackSupported =
       outcome.status === "succeeded" &&
-      !!previous &&
-      (change.type === "update_meta" ||
-        (change.type === "upsert_page" &&
-          typeof previous.title === "string" &&
-          typeof previous.bodyMarkdown === "string"));
+      change.type !== "delete_page" &&
+      ((change.type === "update_meta" && !!previous) || canRestoreMarkdown || canDeleteCreate);
 
-    const { error } = await db.from("publish_executions").insert({
+    const row = {
       brand_id: brandId,
       draft_id: meta.draftId ?? null,
       job_id: meta.jobId ?? null,
@@ -238,10 +262,15 @@ async function recordExecution(
         : outcome.status === "succeeded"
           ? "unsupported"
           : null,
-    });
-    if (error && !MIGRATION_MISSING.has(error.code)) {
-      // Older schema without rollback columns — retry minimal insert.
-      const { error: e2 } = await db.from("publish_executions").insert({
+    };
+
+    const { data, error } = await db.from("publish_executions").insert(row).select("id").maybeSingle();
+    if (!error) return (data?.id as string | undefined) || null;
+    if (MIGRATION_MISSING.has(error.code)) return null;
+    // Older schema without rollback columns — retry minimal insert.
+    const { data: d2, error: e2 } = await db
+      .from("publish_executions")
+      .insert({
         brand_id: brandId,
         draft_id: meta.draftId ?? null,
         job_id: meta.jobId ?? null,
@@ -254,13 +283,16 @@ async function recordExecution(
         error: outcome.status === "failed" ? outcome.error : null,
         previous,
         executed_at: new Date().toISOString(),
-      });
-      if (e2 && !MIGRATION_MISSING.has(e2.code)) {
-        console.warn(`[execution] could not record execution for brand ${brandId}: ${e2.message}`);
-      }
+      })
+      .select("id")
+      .maybeSingle();
+    if (e2 && !MIGRATION_MISSING.has(e2.code)) {
+      console.warn(`[execution] could not record execution for brand ${brandId}: ${e2.message}`);
     }
+    return (d2?.id as string | undefined) || null;
   } catch (e) {
     console.warn(`[execution] could not record execution for brand ${brandId}: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
   }
 }
 

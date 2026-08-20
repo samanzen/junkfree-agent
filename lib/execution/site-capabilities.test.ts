@@ -93,3 +93,18 @@ test("malformed stored json does not throw and is not certified", () => {
   expect(parseCapabilityMap("wordpress")).toEqual({});
   expect(isOperationCertified(undefined, "upsert_page")).toBe(false);
 });
+
+test("parser keeps last_execution_id and fail_count", () => {
+  const map = parseCapabilityMap({
+    upsert_page: {
+      state: "certified",
+      writer: "wordpress",
+      reason: "Working",
+      certified_at: "x",
+      last_execution_id: "ex1",
+      fail_count: 2,
+    },
+  });
+  expect(map.upsert_page?.last_execution_id).toBe("ex1");
+  expect(map.upsert_page?.fail_count).toBe(2);
+});

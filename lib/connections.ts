@@ -32,6 +32,12 @@ import {
   parseCapabilityMap,
   type OperationState,
 } from "./execution/site-capabilities";
+import {
+  CONFIRMED_OPTIONS,
+  parseSourceOfTruth,
+  sourceOfTruthMatchesWriter,
+} from "./execution/source-of-truth";
+import { pendingCount } from "./queue";
 import { db } from "./supabase";
 import { googleConfigured } from "./google/oauth";
 import { readGoogle, type GoogleMetadata } from "./google/store";
@@ -100,6 +106,17 @@ export type ConnectionState = {
   requirement: string | null;
   /** Per-operation execution honesty for website publishing. */
   operations?: { label: string; stateLabel: string }[] | null;
+  /** Slice 1: where pages are saved + prove publishing. Website publishing only. */
+  publishingProof?: {
+    question: string;
+    confirmed: string | null;
+    guessLabel: string | null;
+    unknownHint: string | null;
+    canProve: boolean;
+    certifying: boolean;
+    proveLabel: string;
+    options: { value: string; label: string }[];
+  } | null;
 };
 
 /**
@@ -296,10 +313,14 @@ function operationLabel(op: AdapterCapability): string {
   return "Titles and descriptions";
 }
 
-function operationStateLabel(state: OperationState): string {
+function operationStateLabel(state: OperationState, certifying: boolean): string {
+  if (certifying && (state === "supported_unverified" || state === "stale" || state === "temporarily_failed" || state === "certified")) {
+    return "Testing…";
+  }
   if (state === "unsupported") return "Not supported";
   if (state === "certified") return "Working";
   if (state === "revoked") return "Needs reconnect";
+  if (state === "temporarily_failed") return "Needs attention";
   return "Needs proof";
 }
 
@@ -373,9 +394,22 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const stored = parseCapabilityMap(brand.site_capabilities);
   const map = Object.keys(stored).length ? stored : capabilityMapForWriter(writer);
   const grade = executionGrade(map, true);
+  const certifying = (await pendingCount(brand.id, ["certify"])) > 0;
+  const sot = parseSourceOfTruth(brand.source_of_truth);
+  const matches = sourceOfTruthMatchesWriter(sot, writer);
+  const pageState = map.upsert_page?.state || "unsupported";
+  const canProve =
+    matches &&
+    !certifying &&
+    pageState !== "unsupported" &&
+    pageState !== "certified";
+  const guessLabel = CONFIRMED_OPTIONS.find((o) => o.value === sot.detected)?.label
+    || (sot.detected === "git" || sot.detected === "sanity"
+      ? "a system we cannot publish to automatically yet"
+      : null);
   const operations = (["upsert_page", "update_meta"] as AdapterCapability[]).map((op) => ({
     label: operationLabel(op),
-    stateLabel: operationStateLabel(map[op]?.state || "unsupported"),
+    stateLabel: operationStateLabel(map[op]?.state || "unsupported", op === "upsert_page" && certifying),
   }));
 
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
@@ -389,6 +423,13 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
         ? `Some publishing is proven on ${name}; the rest still needs proof. Automatic publishing stays off for anything that isn't proven.`
         : transportWhy;
 
+  const unknownHint =
+    sot.confirmed === "unknown"
+      ? "Send this to whoever looks after your website: we can reach it, but we need to know where new pages are saved before we can prove publishing."
+      : sot.confirmed && !matches
+        ? "Connect the website that actually stores new pages before proving publishing."
+        : null;
+
   return {
     ...base,
     status,
@@ -399,6 +440,16 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     lastError: null,
     actions: ["reconnect", "disconnect"],
     operations,
+    publishingProof: {
+      question: "Where do new pages or blog posts actually get saved?",
+      confirmed: sot.confirmed,
+      guessLabel,
+      unknownHint,
+      canProve,
+      certifying,
+      proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove publishing",
+      options: CONFIRMED_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    },
   };
 }
 
