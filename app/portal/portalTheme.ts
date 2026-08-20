@@ -472,6 +472,7 @@ ${down.md} {
 .p-btn.primary:hover { filter:brightness(1.08); transform:translateY(-1px); }
 .p-btn.ghost { background:var(--surface); border-color:var(--line); color:var(--text); box-shadow:var(--sh-1); }
 .p-btn.ghost:hover { border-color:var(--accent-line); color:var(--accent); }
+.p-btn.ghost.on { background:var(--accent-dim, rgba(108,92,231,.1)); border-color:var(--accent-line); color:var(--accent); }
 .p-btn:disabled { opacity:.45; cursor:not-allowed; filter:none; transform:none; }
 
 /* ══ KPI cards ══════════════════════════════════════════════════════ */

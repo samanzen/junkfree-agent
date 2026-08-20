@@ -297,18 +297,13 @@ export default function RecommendationsPanel({
                   </button>
                   {why && (
                     <button
-                      className="ghost"
+                      className={`ghost${whyId === d.id ? " on" : ""}`}
+                      aria-pressed={whyId === d.id}
                       onClick={() => { setWhyId(whyId === d.id ? "" : d.id); setCardFeedbackId(""); }}
                     >
                       Why
                     </button>
                   )}
-                  <button
-                    className="ghost"
-                    onClick={() => { setReportInput(whyInput); setWhyId(""); setCardFeedbackId(""); }}
-                  >
-                    More
-                  </button>
                 </div>
                 {whyId === d.id && why && (
                   <div className="why">
@@ -381,15 +376,13 @@ export default function RecommendationsPanel({
                   </button>
                   {why && (
                     <button
-                      className="ghost"
+                      className={`ghost${whyId === g.id ? " on" : ""}`}
+                      aria-pressed={whyId === g.id}
                       onClick={() => setWhyId(whyId === g.id ? "" : g.id)}
                     >
                       Why
                     </button>
                   )}
-                  <button className="ghost" onClick={() => setReportInput(whyInput)}>
-                    More
-                  </button>
                 </div>
                 {whyId === g.id && why && (
                   <div className="why">
@@ -436,7 +429,14 @@ export default function RecommendationsPanel({
                       {c.url}
                     </a>
                   )}
-                  {whyId === c.id && why && <div className="why">{why}</div>}
+                  {whyId === c.id && why && (
+                    <div className="why">
+                      {why}
+                      <button type="button" className="why-more" onClick={() => setReportInput(whyInput)}>
+                        Full report
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="acts">
                   <button className="primary" onClick={() => onRowAct("citations", c.id, "live")}>
@@ -446,13 +446,14 @@ export default function RecommendationsPanel({
                     Decline
                   </button>
                   {why && (
-                    <button className="ghost" onClick={() => setWhyId(whyId === c.id ? "" : c.id)}>
+                    <button
+                      className={`ghost${whyId === c.id ? " on" : ""}`}
+                      aria-pressed={whyId === c.id}
+                      onClick={() => setWhyId(whyId === c.id ? "" : c.id)}
+                    >
                       Why
                     </button>
                   )}
-                  <button className="ghost" onClick={() => setReportInput(whyInput)}>
-                    More
-                  </button>
                 </div>
               </article>
             );
@@ -527,6 +528,7 @@ const REC_CSS = `
 .rec-pill { font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#8B5CF6; }
 .rec-blurb { margin:0 0 14px; font-size:12.5px; color:var(--muted); }
 .rec .link { display:block; margin:6px 0 4px; }
+.rec .ghost.on { background:rgba(108,92,231,.1); border-color:rgba(108,92,231,.45); color:#6C5CE7; font-weight:600; }
 .rec .acts + .why, .rec .acts + .fb { margin-top:12px; }
 .rec .why { white-space:pre-wrap; max-width:68ch; }
 .rec .why-more { display:inline-block; margin-top:10px; background:none; border:0; color:#6C5CE7; font:inherit; font-weight:600; font-size:13px; padding:0; cursor:pointer; }

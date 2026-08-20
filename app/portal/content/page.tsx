@@ -375,13 +375,14 @@ function PreviewPlanCard({
               </m.button>
             )}
             {why && (
-              <m.button type="button" className="p-btn ghost" onClick={() => { setWhyOpen((v) => !v); setFeedbackOpen(false); }} whileTap={{ scale: 0.97 }}>
+              <m.button
+                type="button"
+                className={`p-btn ghost${whyOpen ? " on" : ""}`}
+                aria-pressed={whyOpen}
+                onClick={() => { setWhyOpen((v) => !v); setFeedbackOpen(false); }}
+                whileTap={{ scale: 0.97 }}
+              >
                 Why
-              </m.button>
-            )}
-            {whyInput && (
-              <m.button type="button" className="p-btn ghost" onClick={() => setReportOpen(true)} whileTap={{ scale: 0.97 }}>
-                More
               </m.button>
             )}
           </div>

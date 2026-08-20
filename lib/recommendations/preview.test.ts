@@ -282,7 +282,9 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(rec).toMatch(/>\s*Preview\s*</);
   expect(rec).toMatch(/>\s*Approve\s*</);
   expect(rec).toMatch(/>\s*Why\s*</);
-  expect(rec).toMatch(/>\s*More\s*</);
+  expect(rec).toContain("aria-pressed");
+  expect(rec).toContain("Full report");
+  expect(rec).not.toMatch(/>\s*More\s*</);
   expect(rec).toContain("uniqueByTopic");
   expect(rec).toContain("DecisionReport");
   expect(rec).not.toContain("DraftBody");
@@ -296,7 +298,9 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   expect(portal).toMatch(/>\s*Preview\s*</);
   expect(portal).toContain('"Approve"');
   expect(portal).toMatch(/>\s*Why\s*</);
-  expect(portal).toMatch(/>\s*More\s*</);
+  expect(portal).toContain("aria-pressed");
+  expect(portal).toContain("Full report");
+  expect(portal).not.toMatch(/>\s*More\s*</);
   expect(portal).toContain("DecisionReport");
   expect(portal).not.toMatch(/Open Preview to see/);
   expect(portal).not.toMatch(/body=\{draft\.body\}/);
