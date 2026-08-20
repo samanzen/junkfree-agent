@@ -16,6 +16,7 @@
 
 import { createHmac, timingSafeEqual } from "crypto";
 import type { AdapterContext, PublishAdapter, PublishResult, SiteChange } from "../types";
+import { receiverFailureCopy } from "../receiver-failure";
 
 type ReceiverResponse = {
   ok?: boolean;
@@ -112,8 +113,8 @@ export const webhookAdapter: PublishAdapter = {
 
     const r = await post(ctx, { event: "check", brand: ctx.brand.slug, sentAt: new Date().toISOString() });
     if (r.ok) return { ok: true, detail: `Receiver at ${resolved.url.host} accepted the signed check request.` };
-    if (r.error) return { ok: false, detail: r.error };
-    return { ok: false, detail: `Receiver returned HTTP ${r.status}.` };
+    if (r.error) return { ok: false, detail: receiverFailureCopy(0, r.error) };
+    return { ok: false, detail: receiverFailureCopy(r.status, r.body) };
   },
 
   async apply(ctx, change: SiteChange): Promise<PublishResult> {
@@ -129,7 +130,7 @@ export const webhookAdapter: PublishAdapter = {
       const fromBody = typeof r.body === "object" && r.body?.error ? r.body.error : null;
       return {
         ok: false,
-        error: r.error || fromBody || `Receiver returned HTTP ${r.status}.`,
+        error: fromBody || receiverFailureCopy(r.error ? 0 : r.status, r.body ?? r.error),
         retryable: r.status === 0 || r.status >= 500 || r.status === 429,
       };
     }

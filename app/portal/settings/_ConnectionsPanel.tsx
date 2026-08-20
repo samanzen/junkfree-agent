@@ -371,7 +371,7 @@ function PublishingSetup({
             onChange={(e) => onChange({ endpointUrl: e.target.value })}
             disabled={busy}
             required
-            helper="The HTTPS address of the code you just added."
+            helper="The HTTPS address of the code you just added. Connect fails until that code is live on your site."
           />
         </div>
       )}

@@ -1,12 +1,15 @@
 import { test, expect, vi, beforeEach } from "vitest";
 import { wordpressAdapter } from "./adapters/wordpress";
 
-const enqueue = vi.fn(async () => undefined);
+const enqueue = vi.fn(async (_brandId: string, _kind: string, _payload: Record<string, unknown>) => undefined);
 const resolvePublishTarget = vi.fn();
 
-vi.mock("../queue", () => ({ enqueue: (...a: unknown[]) => enqueue(...a) }));
+vi.mock("../queue", () => ({
+  enqueue: (brandId: string, kind: string, payload: Record<string, unknown>) =>
+    enqueue(brandId, kind, payload),
+}));
 vi.mock("./engine", () => ({
-  resolvePublishTarget: (...a: unknown[]) => resolvePublishTarget(...a),
+  resolvePublishTarget: (brandId: string) => resolvePublishTarget(brandId) as Promise<unknown>,
 }));
 
 const { queueLivePublishIfConnected } = await import("./queue-approved");
