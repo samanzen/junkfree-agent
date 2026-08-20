@@ -28,6 +28,7 @@ import { recordActivity, updateAgentTask, linkQaResultToDraft, countPendingConte
 import { MAX_MANAGER_ITEMS, clampConfidence, normalizeRisk, type ProposedActionType, type RiskLevel } from "./agents/contracts";
 import { absolutePageUrl, checkPublishedPage, expectedSnippet } from "./publish-check";
 import { reportOutcomes } from "./outcomes";
+import { capabilityForTaskType, isOperationCertified } from "./execution/site-capabilities";
 
 const MAX_TASKS = Number(process.env.MAX_TASKS_PER_RUN || 3);
 
@@ -362,6 +363,7 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
   const mode = sectionAuto ? (brandMode === "approval" ? "autopilot" : brandMode) : "approval";
   const actionType = effectiveType as ProposedActionType;
   const pendingContent = await countPendingContentJobs(brand.id);
+  const liveOp = capabilityForTaskType(effectiveType);
   const policy = decidePolicy({
     brandId: brand.id,
     mode,
@@ -373,7 +375,8 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     adapterAvailable: publishTarget.ok,
     reversible: effectiveType === "fix_meta",
     withinRunLimits: pendingContent <= MAX_MANAGER_ITEMS + 4,
-    requiresLivePublish: effectiveType === "new_page" || effectiveType === "new_blog",
+    requiresLivePublish: liveOp !== null,
+    operationCertified: liveOp ? isOperationCertified(brand.site_capabilities, liveOp) : false,
     cannibalizationSuspected: rationale.includes("topic already exists"),
   });
 
@@ -434,30 +437,10 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
       { slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() },
       { onConflict: "brand_id,slug" }
     );
-    await db.from("drafts").update({ status: "published" }).eq("id", inserted.id);
-    await recordActivity({
-      brandId: brand.id,
-      runId,
-      capability: "content",
-      eventType: "auto_published",
-      title: `Auto-published: ${cleanTitle.slice(0, 80)}`,
-      decision: policy.reason,
-      status: "success",
-      metadata: { slug, draftId: inserted.id },
-    });
+    // Live proof happens in stepPublish. Do not mark the draft published from
+    // the in-platform store alone.
     if (publishTarget.ok && publishTarget.adapter.capabilities.includes("upsert_page")) {
       await enqueue(brand.id, "publish", { draftId: inserted.id, runId, agentTaskId });
-    } else {
-      const liveUrl = absolutePageUrl(brand.site_url, slug);
-      if (liveUrl) {
-        await safe(() => checkPublishedPage(brand, {
-          url: liveUrl,
-          changeType: "upsert_page",
-          title: cleanTitle,
-          keyword: kw || null,
-          bodySnippet: expectedSnippet(cleanBody),
-        }));
-      }
     }
   }
 
@@ -728,6 +711,7 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
   const mode = resolveExecutionMode(brand);
   const actionType = (draft.task_type as ProposedActionType) || "new_page";
   const humanApproved = draft.status === "approved" || draft.status === "published";
+  const liveOp = capabilityForTaskType(draft.task_type);
   const policy = decidePolicy({
     brandId: brand.id,
     mode,
@@ -742,6 +726,7 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     reversible: draft.task_type === "fix_meta",
     withinRunLimits: true,
     requiresLivePublish: true,
+    operationCertified: liveOp ? isOperationCertified(brand.site_capabilities, liveOp) : false,
   });
 
   // BLOCK always stops. Autopilot AUTO_EXECUTE without linked QA PASS stops.
@@ -777,18 +762,33 @@ export async function stepPublish(brand: Brand, payload: Record<string, unknown>
     throw new Error(`stepPublish: ${outcome.error}`);
   }
 
-  await db.from("drafts").update({ status: "published" }).eq("id", draftId);
-
-  const liveUrl = outcome.url || absolutePageUrl(brand.site_url, draft.target_url);
-  if (liveUrl) {
-    await safe(() => checkPublishedPage(brand, {
-      url: liveUrl,
-      changeType: translation.change.type,
-      title: draft.title,
-      keyword: draft.target_keyword,
-      bodySnippet: expectedSnippet(draft.body),
-    }));
+  const change = translation.change;
+  const liveUrl =
+    outcome.url ||
+    (change.type === "upsert_page"
+      ? absolutePageUrl(brand.site_url, change.slug)
+      : change.url);
+  if (!liveUrl) {
+    throw new Error("stepPublish: write succeeded but no live address was returned to verify.");
   }
+
+  const verified = await checkPublishedPage(
+    brand,
+    {
+      url: liveUrl,
+      changeType: change.type,
+      title: change.title,
+      keyword: draft.target_keyword,
+      bodySnippet: change.type === "upsert_page" ? expectedSnippet(change.bodyMarkdown) : null,
+      metaDescription: change.type === "update_meta" ? change.metaDescription : null,
+    },
+    { attempts: 3, delayMs: 2000 }
+  );
+  if (!verified.ok) {
+    throw new Error(`stepPublish: live site does not show the change — ${verified.reason}`);
+  }
+
+  await db.from("drafts").update({ status: "published" }).eq("id", draftId);
 
   // A verified, live site change is exactly what seo_action_events was built to
   // mark on position-history charts. /api/intelligence/action logs an event when

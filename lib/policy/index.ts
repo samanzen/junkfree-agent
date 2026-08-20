@@ -28,6 +28,12 @@ export type PolicyActionInput = {
   cannibalizationSuspected?: boolean;
   /** True when the action would change a live CMS via an adapter. */
   requiresLivePublish?: boolean;
+  /**
+   * True only when the writer operation is certified for this brand.
+   * Fail closed: omitted/false blocks Autopilot/Hybrid live execution.
+   * Human Approve does not go through AUTO_EXECUTE.
+   */
+  operationCertified?: boolean;
 };
 
 const LOW_RISK_AUTO: ReadonlySet<string> = new Set(["fix_meta"]);
@@ -100,6 +106,17 @@ export function decidePolicy(input: PolicyActionInput): PolicyDecision {
       ...base,
       decision: "REQUIRE_APPROVAL",
       reason: "Approval mode: site-changing actions wait for a human.",
+    };
+  }
+
+  // Slice 0: transport/credentials are not proof. Autopilot and Hybrid must
+  // not live-write until the operation is certified. Human Approve is not
+  // decided here.
+  if (input.requiresLivePublish && input.operationCertified !== true) {
+    return {
+      ...base,
+      decision: "REQUIRE_APPROVAL",
+      reason: "Automatic publishing needs a proven connection for this kind of change.",
     };
   }
 

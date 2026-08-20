@@ -74,7 +74,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (pubErr) {
       return NextResponse.json({ ok: false, error: "Publish failed: " + pubErr.message }, { status: 500 });
     }
-    await db.from("drafts").update({ status: "published" }).eq("id", id);
     const live = await queueLivePublishIfConnected(
       { id: draft.brand_id, name: brand?.name || "" },
       {
@@ -86,7 +85,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         target_keyword: draft.target_keyword,
       }
     );
-    return NextResponse.json({ ok: true, status: "published", slug, meta, live_queued: live.queued });
+    // In-platform `content` is saved. The public site is only "published"
+    // after stepPublish verifies it. A queued live job leaves the draft approved.
+    const status = live.queued ? "approved" : "published";
+    await db.from("drafts").update({ status }).eq("id", id);
+    return NextResponse.json({ ok: true, status, slug, meta, live_queued: live.queued });
   }
 
   await db.from("drafts").update({ status: "approved" }).eq("id", id);

@@ -9,14 +9,17 @@
 // would be decorative.
 
 import { db } from "../supabase";
-import type { Brand } from "../brands";
+import { getBrandById, type Brand } from "../brands";
 import {
   findConnectedIntegration,
   getDecryptedCredentials,
+  getIntegration,
   integrationsReachable,
+  type BrandIntegration,
   type IntegrationProvider,
 } from "../integrations";
 import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "./registry";
+import { capabilityMapFor, parseCapabilityMap, persistBrandWriter } from "./site-capabilities";
 import { supports, type PublishAdapter, type SiteChange, type SitePlatform } from "./types";
 
 /** Postgres/PostgREST codes meaning the execution-log migration is not applied. */
@@ -32,25 +35,22 @@ export type ResolvedTarget =
  * is unreachable" -- those look identical from the outside and demand
  * completely different fixes.
  */
-export async function resolvePublishTarget(brandId: string): Promise<ResolvedTarget> {
-  const integration = await findConnectedIntegration(brandId, SITE_PLATFORMS as IntegrationProvider[]);
-
-  if (!integration) {
-    const reach = await integrationsReachable();
-    if (!reach.ok) {
-      return {
-        ok: false,
-        code: "unreadable",
-        reason: `The integration store could not be read (${reach.reason}). Publishing cannot be configured until that is fixed.`,
-      };
-    }
+async function notConfiguredOrUnreadable(detail: string): Promise<ResolvedTarget> {
+  const reach = await integrationsReachable();
+  if (!reach.ok) {
     return {
       ok: false,
-      code: "not_configured",
-      reason: `No publishing platform is connected for this brand. Connect one of: ${SITE_PLATFORMS.join(", ")}.`,
+      code: "unreadable",
+      reason: `The integration store could not be read (${reach.reason}). Publishing cannot be configured until that is fixed.`,
     };
   }
+  return { ok: false, code: "not_configured", reason: detail };
+}
 
+async function targetFromIntegration(
+  brandId: string,
+  integration: BrandIntegration
+): Promise<ResolvedTarget> {
   if (!isSitePlatform(integration.provider)) {
     return { ok: false, code: "unknown_platform", reason: `No adapter is registered for "${integration.provider}".` };
   }
@@ -68,7 +68,11 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
     };
   }
   if (!credentials) {
-    return { ok: false, code: "not_configured", reason: `${integration.provider} is marked connected but has no stored credentials.` };
+    return {
+      ok: false,
+      code: "not_configured",
+      reason: `${integration.provider} is marked connected but has no stored credentials.`,
+    };
   }
 
   return {
@@ -78,6 +82,40 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
     credentials,
     config: integration.metadata || {},
   };
+}
+
+export async function resolvePublishTarget(brandId: string): Promise<ResolvedTarget> {
+  const brand = await getBrandById(brandId).catch(() => null);
+  const pinned =
+    brand?.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
+
+  if (pinned) {
+    const integration = await getIntegration(brandId, pinned);
+    if (!integration || integration.status !== "connected") {
+      return notConfiguredOrUnreadable(
+        `The chosen publishing connection (${pinned}) is not connected.`
+      );
+    }
+    return targetFromIntegration(brandId, integration);
+  }
+
+  const integration = await findConnectedIntegration(brandId, SITE_PLATFORMS as IntegrationProvider[]);
+
+  if (!integration) {
+    return notConfiguredOrUnreadable(
+      `No publishing platform is connected for this brand. Connect one of: ${SITE_PLATFORMS.join(", ")}.`
+    );
+  }
+
+  const target = await targetFromIntegration(brandId, integration);
+  // Legacy brands have a connected writer but no pin. Stick it so a later
+  // leftover row cannot silently take over. Do not overwrite an existing map.
+  if (target.ok) {
+    const existing = parseCapabilityMap(brand?.site_capabilities);
+    const map = Object.keys(existing).length ? existing : capabilityMapFor(target.adapter);
+    await persistBrandWriter(brandId, target.platform, map);
+  }
+  return target;
 }
 
 export type ExecutionOutcome =

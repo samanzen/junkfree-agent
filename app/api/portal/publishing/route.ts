@@ -9,6 +9,7 @@ import {
 } from "@/lib/integrations";
 import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "@/lib/execution/registry";
 import type { SitePlatform } from "@/lib/execution/types";
+import { capabilityMapFor, clearBrandWriter, persistBrandWriter } from "@/lib/execution/site-capabilities";
 
 export const maxDuration = 60;
 
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
     for (const provider of SITE_PLATFORMS) {
       await disconnectIntegration(brandId, provider);
     }
+    await clearBrandWriter(brandId);
     return NextResponse.json({
       ok: true,
       message: "Website disconnected. Approved work will need publishing by hand.",
@@ -183,10 +185,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  await persistBrandWriter(brandId, platform, capabilityMapFor(adapter));
+
   const messages: Record<SitePlatform, string> = {
-    wordpress: "WordPress connected. Approved pages can go live on your site.",
-    shopify: "Shopify connected. Approved pages can go live on your store.",
-    webhook: "Your website is connected. Approved pages will be sent there.",
+    wordpress:
+      "WordPress is reachable. We can send approved pages. Automatic publishing stays off until publishing is proven.",
+    shopify:
+      "Shopify is reachable. We can send approved pages. Automatic publishing stays off until publishing is proven.",
+    webhook:
+      "We can reach your website. Approved work can still be sent. Automatic publishing stays off until publishing is proven.",
   };
 
   return NextResponse.json({

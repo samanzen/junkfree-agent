@@ -106,7 +106,7 @@ export default function ApprovalCard({
           {onApprove && (
             <m.button className="p-btn primary" disabled={!!busy} onClick={() => run("approve")}
               whileTap={{ scale: 0.97 }}>
-              {busy === "approve" ? "Publishing…" : approveLabel}
+              {busy === "approve" ? "Approving…" : approveLabel}
             </m.button>
           )}
         </div>

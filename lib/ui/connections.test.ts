@@ -146,6 +146,18 @@ test("freshness is described as data age, not as sync time", () => {
 });
 
 // ── the model itself ────────────────────────────────────────────────────────
+test("website publishing is not shown as fully connected from credentials alone", () => {
+  const src = read("lib/connections.ts");
+  expect(src).toMatch(/"limited" as const/);
+  expect(src).toMatch(/\| "limited"/);
+  expect(src).toMatch(/publishing is not proven yet/);
+  expect(src).toMatch(/Needs proof/);
+  expect(src).not.toMatch(/Connected — approved changes can be published to your site/);
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(panel).toMatch(/limited: \{ cls: "amber", label: "Not proven yet" \}/);
+  expect(panel).toMatch(/row\.operations/);
+});
+
 test("only genuinely actionable services are listed as such", () => {
   expect(ACTIONABLE_KEYS).toContain("search_console");
   expect(ACTIONABLE_KEYS).not.toContain("google_business_profile");

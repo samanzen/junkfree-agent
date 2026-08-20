@@ -14,6 +14,7 @@ export type PublishExpectation = {
   title?: string | null;
   keyword?: string | null;
   bodySnippet?: string | null;
+  metaDescription?: string | null;
 };
 
 export type PublishCheckResult = {
@@ -24,10 +25,23 @@ export type PublishCheckResult = {
   liveWords: number;
 };
 
+export type LivePageSnapshot = {
+  url: string;
+  title: string;
+  text: string;
+  words: number;
+  meta?: string | null;
+};
+
 const TITLE_MIN = 5;
 
 function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function includesNeedle(hay: string, needle: string, max = 40): boolean {
+  const n = normalize(needle).slice(0, max);
+  return n.length > 0 && hay.includes(n);
 }
 
 function snippetOf(body: string | null | undefined): string {
@@ -48,7 +62,7 @@ export function expectedSnippet(body?: string | null): string | null {
 
 /** Pure check used by tests and the live fetcher. */
 export function evaluateLivePage(
-  live: { url: string; title: string; text: string; words: number } | null,
+  live: LivePageSnapshot | null,
   expected: PublishExpectation
 ): PublishCheckResult {
   if (!live) {
@@ -63,111 +77,100 @@ export function evaluateLivePage(
 
   const title = live.title || "";
   const text = live.text || "";
+  const meta = live.meta || "";
   const hay = normalize(`${title} ${text}`);
+  const fail = (reason: string): PublishCheckResult => ({
+    ok: false,
+    url: live.url,
+    reason,
+    liveTitle: title || null,
+    liveWords: live.words,
+  });
+  const pass = (reason: string): PublishCheckResult => ({
+    ok: true,
+    url: live.url,
+    reason,
+    liveTitle: title || null,
+    liveWords: live.words,
+  });
 
   if (expected.changeType === "update_meta") {
-    const want = (expected.title || "").trim();
-    if (want && title.length >= TITLE_MIN && normalize(title).includes(normalize(want).slice(0, 40))) {
-      return {
-        ok: true,
-        url: live.url,
-        reason: "Live title matches the published meta.",
-        liveTitle: title,
-        liveWords: live.words,
-      };
+    const wantTitle = (expected.title || "").trim();
+    const wantMeta = (expected.metaDescription || "").trim();
+    if (!wantTitle && !wantMeta) {
+      return fail("No title or description was provided to verify on the live page.");
     }
-    if (title.length >= TITLE_MIN) {
-      return {
-        ok: true,
-        url: live.url,
-        reason: "Live page has a title after the meta publish.",
-        liveTitle: title,
-        liveWords: live.words,
-      };
+    if (wantTitle && (title.length < TITLE_MIN || !includesNeedle(normalize(title), wantTitle))) {
+      return fail("Live title does not match the published title.");
     }
-    return {
-      ok: false,
-      url: live.url,
-      reason: "Live page still has no usable title after the meta publish.",
-      liveTitle: title || null,
-      liveWords: live.words,
-    };
-  }
-
-  const keyword = (expected.keyword || "").trim();
-  if (keyword && hay.includes(normalize(keyword))) {
-    return {
-      ok: true,
-      url: live.url,
-      reason: "Live page contains the target keyword.",
-      liveTitle: title || null,
-      liveWords: live.words,
-    };
+    if (wantMeta && !includesNeedle(normalize(meta), wantMeta, 48)) {
+      return fail("Live description does not match the published description.");
+    }
+    return pass(
+      wantTitle ? "Live title matches the published meta." : "Live description matches the published meta."
+    );
   }
 
   const snippet = (expected.bodySnippet || "").trim();
-  if (snippet && hay.includes(normalize(snippet).slice(0, 48))) {
-    return {
-      ok: true,
-      url: live.url,
-      reason: "Live page contains published body text.",
-      liveTitle: title || null,
-      liveWords: live.words,
-    };
+  if (snippet && includesNeedle(hay, snippet, 48)) {
+    return pass("Live page contains published body text.");
   }
 
   const wantTitle = (expected.title || "").trim();
-  if (wantTitle && title && normalize(title).includes(normalize(wantTitle).slice(0, 40))) {
-    return {
-      ok: true,
-      url: live.url,
-      reason: "Live title matches the published page.",
-      liveTitle: title,
-      liveWords: live.words,
-    };
+  if (wantTitle && title && includesNeedle(normalize(title), wantTitle)) {
+    return pass("Live title matches the published page.");
   }
 
-  if (live.words >= 80 && title.length >= TITLE_MIN) {
-    return {
-      ok: true,
-      url: live.url,
-      reason: "Live page is present with a title and substantial text.",
-      liveTitle: title,
-      liveWords: live.words,
-    };
+  if (snippet || wantTitle) {
+    return fail("Live page does not show the published content yet.");
   }
 
-  return {
-    ok: false,
-    url: live.url,
-    reason: "Live page does not show the published content yet.",
-    liveTitle: title || null,
-    liveWords: live.words,
-  };
+  return fail("Live page does not show the published content yet.");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function checkPublishedPage(
   brand: Brand,
-  expected: PublishExpectation
+  expected: PublishExpectation,
+  opts: { attempts?: number; delayMs?: number } = {}
 ): Promise<PublishCheckResult> {
-  const live = await inspectPage(expected.url, {
-    render: canUse(brand, "js_rendering"),
-  }).catch(() => null);
+  const attempts = Math.max(1, opts.attempts ?? 1);
+  const delayMs = opts.delayMs ?? 2000;
+  let result: PublishCheckResult | null = null;
 
-  const result = evaluateLivePage(
-    live
-      ? { url: live.url || expected.url, title: live.title, text: live.text, words: live.words }
-      : null,
-    expected
-  );
+  for (let i = 0; i < attempts; i++) {
+    const live = await inspectPage(expected.url, {
+      render: canUse(brand, "js_rendering"),
+    }).catch(() => null);
+
+    result = evaluateLivePage(
+      live
+        ? {
+            url: live.url || expected.url,
+            title: live.title,
+            text: live.text,
+            words: live.words,
+            meta: live.meta,
+          }
+        : null,
+      expected
+    );
+    if (result.ok) break;
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+
+  const finalResult = result!;
 
   await db.from("publish_checks").insert({
     brand_id: brand.id,
-    url: result.url,
-    ok: result.ok,
-    reason: result.reason,
-    live_title: result.liveTitle,
-    live_words: result.liveWords,
+    url: finalResult.url,
+    ok: finalResult.ok,
+    reason: finalResult.reason,
+    live_title: finalResult.liveTitle,
+    live_words: finalResult.liveWords,
     change_type: expected.changeType,
     target_keyword: expected.keyword || null,
   }).then(({ error }) => {
@@ -177,14 +180,14 @@ export async function checkPublishedPage(
   await recordActivity({
     brandId: brand.id,
     capability: "publish_checker",
-    eventType: result.ok ? "publish_verified" : "publish_unverified",
-    title: result.ok ? `Verified live: ${result.url}` : `Not verified live: ${result.url}`,
-    detail: result.reason,
-    status: result.ok ? "success" : "warning",
-    metadata: { liveWords: result.liveWords, liveTitle: result.liveTitle },
+    eventType: finalResult.ok ? "publish_verified" : "publish_unverified",
+    title: finalResult.ok ? `Verified live: ${finalResult.url}` : `Not verified live: ${finalResult.url}`,
+    detail: finalResult.reason,
+    status: finalResult.ok ? "success" : "warning",
+    metadata: { liveWords: finalResult.liveWords, liveTitle: finalResult.liveTitle },
   });
 
-  return result;
+  return finalResult;
 }
 
 export function absolutePageUrl(siteUrl: string | null | undefined, pageUrl: string | null | undefined): string | null {

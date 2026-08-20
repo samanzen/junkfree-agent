@@ -6,6 +6,7 @@ import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { describeConnections, toPublic, type ConnectionKey } from "@/lib/connections";
 import { disconnectIntegration } from "@/lib/integrations";
 import { SITE_PLATFORMS } from "@/lib/execution/registry";
+import { clearBrandWriter } from "@/lib/execution/site-capabilities";
 import { listProperties } from "@/lib/gsc";
 
 export const maxDuration = 60;
@@ -159,6 +160,7 @@ export async function POST(req: NextRequest) {
       for (const provider of SITE_PLATFORMS) {
         await disconnectIntegration(brandId, provider);
       }
+      await clearBrandWriter(brandId);
       return NextResponse.json({
         ok: true,
         message: "Website disconnected. Approved work will need publishing by hand.",

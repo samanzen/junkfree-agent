@@ -39,6 +39,14 @@ export type Brand = {
   autopilot_enabled?: boolean | null;
   /** Owner standing orders for the Manager. Null = use the default playbook. */
   owner_playbook?: string | null;
+  /**
+   * Chosen last-mile writer (wordpress | shopify | webhook). Slice 0.
+   * Optional until supabase/020 is applied. Do not import execution types here
+   * — that module already imports Brand.
+   */
+  primary_writer?: "wordpress" | "shopify" | "webhook" | null;
+  /** Per-operation execution state for the primary writer. See lib/execution/site-capabilities.ts. */
+  site_capabilities?: Record<string, unknown> | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;

@@ -166,6 +166,38 @@ test("run limits and duplicates block execution", () => {
   ).toBe("BLOCK");
 });
 
+test("Autopilot and Hybrid cannot live-execute an uncertified operation", () => {
+  const live = {
+    brandId: "a",
+    autopilotEnabled: true,
+    actionType: "fix_meta" as const,
+    riskLevel: "low" as const,
+    confidence: 0.9,
+    adapterAvailable: true,
+    reversible: true,
+    withinRunLimits: true,
+    qaOutcome: "PASS" as const,
+    requiresLivePublish: true,
+  };
+
+  expect(
+    decidePolicy({ ...live, mode: "autopilot", operationCertified: false }).decision
+  ).toBe("REQUIRE_APPROVAL");
+  expect(
+    decidePolicy({ ...live, mode: "hybrid", operationCertified: false }).decision
+  ).toBe("REQUIRE_APPROVAL");
+  expect(
+    decidePolicy({ ...live, mode: "autopilot" }).decision
+  ).toBe("REQUIRE_APPROVAL");
+
+  expect(
+    decidePolicy({ ...live, mode: "autopilot", operationCertified: true }).decision
+  ).toBe("AUTO_EXECUTE");
+  expect(
+    decidePolicy({ ...live, mode: "hybrid", operationCertified: true }).decision
+  ).toBe("AUTO_EXECUTE");
+});
+
 test("QA parser rejects invalid payloads", () => {
   expect(parseQaEvaluation(null)).toBeNull();
   expect(parseQaEvaluation({ outcome: "MAYBE" })).toBeNull();

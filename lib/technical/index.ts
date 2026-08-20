@@ -1,9 +1,9 @@
 // Feature 01 — Technical SEO execution: detect → prioritize → fix → verify.
 // Never pretends a fix ran when no adapter supports the operation.
 
-import { inspectPage, RENDER_THRESHOLD_WORDS, type AuditedPage } from "../auditor";
-import { canUse } from "../capabilities";
+import { RENDER_THRESHOLD_WORDS, type AuditedPage } from "../auditor";
 import { executeChange, resolvePublishTarget } from "../execution/engine";
+import { isOperationCertified } from "../execution/site-capabilities";
 import type { SiteChange } from "../execution/types";
 import { enqueue } from "../queue";
 import { db } from "../supabase";
@@ -17,6 +17,7 @@ import {
 } from "../agents/contracts";
 import { persistSpecialistResult, recordActivity } from "../agents/store";
 import { decidePolicy, resolveExecutionMode } from "../policy";
+import { checkPublishedPage } from "../publish-check";
 
 export type TechIssue = {
   url: string;
@@ -140,10 +141,11 @@ export async function attemptTechnicalFix(
     riskLevel: "low",
     confidence: 0.75,
     qaOutcome: "PASS", // only callable after an explicit QA PASS upstream
-    adapterAvailable: true,
+    adapterAvailable: target.ok,
     reversible: true,
     withinRunLimits: true,
     requiresLivePublish: true,
+    operationCertified: isOperationCertified(brand.site_capabilities, "update_meta"),
   });
 
   if (policy.decision !== "AUTO_EXECUTE") {
@@ -181,22 +183,13 @@ export async function attemptTechnicalFix(
     };
   }
 
-  // Verify by re-fetching the page (best-effort).
-  let verified = false;
-  try {
-    const live = await inspectPage(issue.url, { render: canUse(brand, "js_rendering") });
-    if (!live) {
-      verified = false;
-    } else if (issue.problem.toLowerCase().includes("title")) {
-      verified = !!(live.title && live.title.length >= 5);
-    } else if (issue.problem.toLowerCase().includes("meta")) {
-      verified = !!(live.meta && live.meta.length >= 40);
-    } else {
-      verified = true;
-    }
-  } catch {
-    verified = false;
-  }
+  const verifiedResult = await checkPublishedPage(brand, {
+    url: issue.url,
+    changeType: "update_meta",
+    title: opts.title ?? null,
+    metaDescription: opts.metaDescription ?? null,
+  });
+  const verified = verifiedResult.ok;
 
   await recordActivity({
     brandId: brand.id,

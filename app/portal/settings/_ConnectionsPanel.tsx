@@ -62,6 +62,7 @@ const BADGE: Record<PublicConnectionState["status"], { cls: string; label: strin
   not_connected: { cls: "", label: "Not connected" },
   expired: { cls: "amber", label: "Access expired" },
   error: { cls: "red", label: "Needs attention" },
+  limited: { cls: "amber", label: "Not proven yet" },
   unavailable: { cls: "", label: "Not available yet" },
 };
 
@@ -594,7 +595,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
         toast.error(data.error || "We couldn't connect that website", data.detail || undefined);
         return;
       }
-      toast.success("Website connected", data.message || undefined);
+      toast.success("Website reachable", data.message || undefined);
       setPublishOpen(false);
       setPublishForm(emptyPublishForm());
       await load();
@@ -719,6 +720,12 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
 
                 {/* Why this status — always present, so no state is unexplained. */}
                 <div className="p-conn-why">{row.why}</div>
+
+                {row.operations?.map((op) => (
+                  <div className="p-conn-meta" key={op.label}>
+                    {op.label} — {op.stateLabel}
+                  </div>
+                ))}
 
                 {row.detail && <div className="p-conn-account">{row.detail}</div>}
 

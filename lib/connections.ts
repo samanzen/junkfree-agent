@@ -24,7 +24,14 @@ import type { Brand } from "./brands";
 import { listProperties, latestDataDate } from "./gsc";
 import { isConfigured as dataForSeoConfigured } from "./dataforseo";
 import { listIntegrations, integrationsReachable } from "./integrations";
-import { describeAdapters } from "./execution/registry";
+import { describeAdapters, isSitePlatform } from "./execution/registry";
+import type { AdapterCapability } from "./execution/types";
+import {
+  capabilityMapForWriter,
+  executionGrade,
+  parseCapabilityMap,
+  type OperationState,
+} from "./execution/site-capabilities";
 import { db } from "./supabase";
 import { googleConfigured } from "./google/oauth";
 import { readGoogle, type GoogleMetadata } from "./google/store";
@@ -36,6 +43,8 @@ export type ConnectionStatus =
   | "not_connected"
   | "expired"
   | "error"
+  /** Writer is reachable but publishing is not proven. Website publishing only. */
+  | "limited"
   /** The platform has no integration for this service yet. Must explain what is required. */
   | "unavailable";
 
@@ -89,6 +98,8 @@ export type ConnectionState = {
   awaitingChoice?: boolean;
   /** For `unavailable` only: exactly what it would take to enable this. */
   requirement: string | null;
+  /** Per-operation execution honesty for website publishing. */
+  operations?: { label: string; stateLabel: string }[] | null;
 };
 
 /**
@@ -280,12 +291,27 @@ function publishingLabel(provider: string): string {
   return provider;
 }
 
+function operationLabel(op: AdapterCapability): string {
+  if (op === "upsert_page") return "Publish pages";
+  return "Titles and descriptions";
+}
+
+function operationStateLabel(state: OperationState): string {
+  if (state === "unsupported") return "Not supported";
+  if (state === "certified") return "Working";
+  if (state === "revoked") return "Needs reconnect";
+  return "Needs proof";
+}
+
 /**
  * Website publishing (WordPress / Shopify / coded-site receiver).
  *
  * Credentials live in brand_integrations and the adapters already exist in
  * lib/execution. This reports their state; live credential checks stay in
  * /api/portal/publishing (connect) and /api/execution (status).
+ *
+ * Slice 0: a passing check() is transport, not a proven publisher. The badge
+ * is "Not proven yet" until an operation is certified (Slice 1).
  */
 async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const base = {
@@ -308,7 +334,12 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
 
   const rows = await listIntegrations(brand.id).catch(() => []);
   const publishable = new Set<string>(describeAdapters().map((a) => a.provider));
-  const active = rows.find((r) => publishable.has(r.provider) && r.status === "connected");
+  const pinnedWriter = brand.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
+  const pinned = pinnedWriter ? rows.find((r) => r.provider === pinnedWriter) : undefined;
+  const active =
+    pinned?.status === "connected"
+      ? pinned
+      : rows.find((r) => publishable.has(r.provider) && r.status === "connected");
 
   if (!active) {
     const errored = rows.find((r) => publishable.has(r.provider) && r.status === "error");
@@ -329,16 +360,45 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     };
   }
 
+  if (!isSitePlatform(active.provider)) {
+    return {
+      ...base, status: "error", detail: publishingLabel(active.provider),
+      why: "This website connection isn't recognised. Reconnect WordPress, Shopify, or your own website.",
+      lastSyncAt: null, lastSyncLabel: null, lastError: `unknown provider ${active.provider}`,
+      actions: ["reconnect", "disconnect"],
+    };
+  }
+
+  const writer = active.provider;
+  const stored = parseCapabilityMap(brand.site_capabilities);
+  const map = Object.keys(stored).length ? stored : capabilityMapForWriter(writer);
+  const grade = executionGrade(map, true);
+  const operations = (["upsert_page", "update_meta"] as AdapterCapability[]).map((op) => ({
+    label: operationLabel(op),
+    stateLabel: operationStateLabel(map[op]?.state || "unsupported"),
+  }));
+
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
+  const name = publishingLabel(writer);
+  const transportWhy = `We can reach ${name}, but publishing is not proven yet. Approved work can still be sent. Automatic publishing stays off.`;
+  const status = grade === "full" ? "connected" as const : "limited" as const;
+  const why =
+    grade === "full"
+      ? `${name} can make the changes listed below, and those changes have been proven on the live site.`
+      : grade === "partial"
+        ? `Some publishing is proven on ${name}; the rest still needs proof. Automatic publishing stays off for anything that isn't proven.`
+        : transportWhy;
+
   return {
     ...base,
-    status: "connected",
-    detail: publishingLabel(active.provider),
-    why: "Connected — approved changes can be published to your site.",
+    status,
+    detail: name,
+    why,
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
     actions: ["reconnect", "disconnect"],
+    operations,
   };
 }
 
