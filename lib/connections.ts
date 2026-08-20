@@ -273,12 +273,19 @@ async function lastSuccessfulSync(brandId: string, kinds: string[]): Promise<str
   return (data as { finished_at: string | null }[] | null)?.[0]?.finished_at || null;
 }
 
+function publishingLabel(provider: string): string {
+  if (provider === "wordpress") return "WordPress";
+  if (provider === "shopify") return "Shopify";
+  if (provider === "webhook") return "Your own website";
+  return provider;
+}
+
 /**
- * Website publishing (WordPress / webhook).
+ * Website publishing (WordPress / Shopify / coded-site receiver).
  *
  * Credentials live in brand_integrations and the adapters already exist in
- * lib/execution. This reports their state; the live credential check stays in
- * /api/execution, which already does it, rather than being duplicated here.
+ * lib/execution. This reports their state; live credential checks stay in
+ * /api/portal/publishing (connect) and /api/execution (status).
  */
 async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const base = {
@@ -307,7 +314,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     const errored = rows.find((r) => publishable.has(r.provider) && r.status === "error");
     if (errored) {
       return {
-        ...base, status: "error", detail: errored.provider,
+        ...base, status: "error", detail: publishingLabel(errored.provider),
         why: "The last publish attempt to your site failed, so publishing is paused.",
         lastSyncAt: errored.last_connected_at, lastSyncLabel: null,
         lastError: errored.last_error,
@@ -316,7 +323,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     }
     return {
       ...base, status: "not_connected", detail: null,
-      why: "No website connection yet, so approved work has to be published by hand.",
+      why: "No website connected yet, so approved work has to be published by hand. Connect WordPress, Shopify, or your own website.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
       actions: ["connect"],
     };
@@ -326,12 +333,12 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   return {
     ...base,
     status: "connected",
-    detail: active.provider,
+    detail: publishingLabel(active.provider),
     why: "Connected — approved changes can be published to your site.",
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
-    actions: ["sync_now", "reconnect", "disconnect"],
+    actions: ["reconnect", "disconnect"],
   };
 }
 

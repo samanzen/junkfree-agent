@@ -6,10 +6,12 @@
 
 import type { PublishAdapter, SitePlatform } from "./types";
 import { wordpressAdapter } from "./adapters/wordpress";
+import { shopifyAdapter } from "./adapters/shopify";
 import { webhookAdapter } from "./adapters/webhook";
 
 const ADAPTERS: Record<SitePlatform, PublishAdapter> = {
   wordpress: wordpressAdapter,
+  shopify: shopifyAdapter,
   webhook: webhookAdapter,
 };
 

@@ -770,6 +770,12 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-conn-note svg { flex-shrink:0; margin-top:1px; }
 .p-conn-pick { margin-top:10px; max-width:380px; }
 .p-conn-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.p-conn-setup { margin-top:14px; padding:14px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface2); max-width:560px; }
+.p-conn-setup-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.p-conn-setup-fields { display:flex; flex-direction:column; gap:12px; }
+.p-conn-setup-help { margin:0; font-size:12.5px; color:var(--muted); line-height:1.55; }
+.p-conn-setup-help strong { color:var(--text); font-weight:600; }
+.p-conn-snippet { font-family:var(--font-mono); font-size:11px; line-height:1.5; }
 .p-inline-link { color:var(--accent); text-decoration:none; white-space:nowrap; }
 .p-inline-link:hover { text-decoration:underline; }
 .p-linkbtn { background:none; border:0; padding:0; font:inherit; color:var(--accent); cursor:pointer; text-decoration:underline; min-height:var(--touch); }

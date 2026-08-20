@@ -1,0 +1,46 @@
+// Approve must enqueue a live publish when a last-mile adapter is connected.
+// Without this, publish_executions and publish_checks stay empty forever.
+
+import fs from "fs";
+import { test, expect } from "vitest";
+import { metaChoiceForHumanApprove } from "../execution/queue-approved";
+import { toSiteChange } from "../execution/changes";
+
+const ROOT = process.cwd();
+const read = (p: string) => fs.readFileSync(`${ROOT}/${p}`, "utf8");
+
+test("human Approve of fix_meta sends option 0, matching Autopilot", () => {
+  expect(metaChoiceForHumanApprove("fix_meta")).toBe(0);
+  expect(metaChoiceForHumanApprove("new_page")).toBeUndefined();
+});
+
+test("improve_content still cannot become a live page", () => {
+  const r = toSiteChange(
+    {
+      task_type: "improve_content",
+      title: "Improve",
+      body: '{"score":1,"checks":[]}',
+      target_url: "https://x.test",
+      target_keyword: null,
+    },
+    "Brand"
+  );
+  expect(r.publishable).toBe(false);
+});
+
+test("the approve route queues live publish after the content write", () => {
+  const src = read("app/api/drafts/[id]/approve/route.ts");
+  expect(src).toMatch(/from "\@\/lib\/execution\/queue-approved"/);
+  const afterUpsert = src.slice(src.indexOf('from("content").upsert'));
+  expect(afterUpsert).toMatch(/queueLivePublishIfConnected/);
+  // Both page upserts and meta-only approvals enqueue; dismiss does not.
+  expect((src.match(/queueLivePublishIfConnected\(/g) || []).length).toBe(2);
+  expect(src.slice(0, src.indexOf("if (dismiss)")).includes("queueLivePublishIfConnected(")).toBe(false);
+});
+
+test("a live-queue failure cannot fail Approve", () => {
+  const src = read("lib/execution/queue-approved.ts");
+  expect(src).toMatch(/try \{/);
+  expect(src).toMatch(/return \{ queued: false \}/);
+  expect(src).toMatch(/enqueue\(brand\.id, "publish"/);
+});

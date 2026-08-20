@@ -4,6 +4,7 @@ import { slugify, splitFrontMatter } from "@/lib/utils";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { siblingDrafts } from "@/lib/recommendations/topic";
 import { recordOwnerTeaching } from "@/lib/playbook/owner";
+import { queueLivePublishIfConnected } from "@/lib/execution/queue-approved";
 
 // Human gate. Approving a blog/page/GEO draft publishes it into the `content`
 // table that the live site reads from. Meta/intent drafts are just marked approved.
@@ -74,9 +75,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ ok: false, error: "Publish failed: " + pubErr.message }, { status: 500 });
     }
     await db.from("drafts").update({ status: "published" }).eq("id", id);
-    return NextResponse.json({ ok: true, status: "published", slug, meta });
+    const live = await queueLivePublishIfConnected(
+      { id: draft.brand_id, name: brand?.name || "" },
+      {
+        id: draft.id,
+        task_type: draft.task_type,
+        title: draft.title,
+        body: draft.body,
+        target_url: draft.target_url,
+        target_keyword: draft.target_keyword,
+      }
+    );
+    return NextResponse.json({ ok: true, status: "published", slug, meta, live_queued: live.queued });
   }
 
   await db.from("drafts").update({ status: "approved" }).eq("id", id);
-  return NextResponse.json({ ok: true, status: "approved" });
+  const live = await queueLivePublishIfConnected(
+    { id: draft.brand_id, name: brand?.name || "" },
+    {
+      id: draft.id,
+      task_type: draft.task_type,
+      title: draft.title,
+      body: draft.body,
+      target_url: draft.target_url,
+      target_keyword: draft.target_keyword,
+    }
+  );
+  return NextResponse.json({ ok: true, status: "approved", live_queued: live.queued });
 }

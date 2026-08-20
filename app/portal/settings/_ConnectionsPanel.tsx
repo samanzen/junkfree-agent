@@ -6,6 +6,45 @@ import Field from "@/app/_components/Field";
 import { Panel, PanelHead } from "../_components/Panel";
 import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
+import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
+
+type PublishPlatform = "wordpress" | "shopify" | "webhook";
+
+type PublishForm = {
+  platform: PublishPlatform;
+  siteUrl: string;
+  username: string;
+  applicationPassword: string;
+  publishStatus: "publish" | "draft";
+  endpointUrl: string;
+  signingSecret: string;
+  shop: string;
+  accessToken: string;
+};
+
+function makeSigningSecret(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const emptyPublishForm = (): PublishForm => ({
+  platform: "wordpress",
+  siteUrl: "",
+  username: "",
+  applicationPassword: "",
+  publishStatus: "publish",
+  endpointUrl: "",
+  signingSecret: "",
+  shop: "",
+  accessToken: "",
+});
+
+function platformFromDetail(detail: string | null): PublishPlatform {
+  if (/shopify/i.test(detail || "")) return "shopify";
+  if (/own website|webhook/i.test(detail || "")) return "webhook";
+  return "wordpress";
+}
 
 // THE INTEGRATION CENTER.
 //
@@ -143,6 +182,212 @@ const RETURN_MESSAGE: Record<string, { kind: "success" | "info" | "error"; title
   failed: { kind: "error", title: "That didn't work", detail: "We couldn't complete the connection. Please try again." },
 };
 
+function PublishingSetup({
+  form,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit,
+  onCopy,
+}: {
+  form: PublishForm;
+  busy: boolean;
+  onChange: (patch: Partial<PublishForm>) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  onCopy: (text: string, label: string) => void;
+}) {
+  const pick = (platform: PublishPlatform) => {
+    if (platform === "webhook") {
+      onChange({ platform, signingSecret: form.signingSecret || makeSigningSecret() });
+      return;
+    }
+    onChange({ platform });
+  };
+
+  return (
+    <div className="p-conn-setup">
+      <div className="p-conn-setup-tabs" role="tablist" aria-label="Website type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "wordpress"}
+          className={`p-btn ${form.platform === "wordpress" ? "primary" : "ghost"}`}
+          onClick={() => pick("wordpress")}
+          disabled={busy}
+        >
+          <span>WordPress</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "shopify"}
+          className={`p-btn ${form.platform === "shopify" ? "primary" : "ghost"}`}
+          onClick={() => pick("shopify")}
+          disabled={busy}
+        >
+          <span>Shopify</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "webhook"}
+          className={`p-btn ${form.platform === "webhook" ? "primary" : "ghost"}`}
+          onClick={() => pick("webhook")}
+          disabled={busy}
+        >
+          <span>Your own website</span>
+        </button>
+      </div>
+
+      {form.platform === "wordpress" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            Create an <strong>Application Password</strong> in WordPress under{" "}
+            <em>Users → Profile → Application Passwords</em>, then paste it here.
+            We check the connection before saving anything.
+          </p>
+          <Field
+            label="Website address"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://yoursite.com"
+            value={form.siteUrl}
+            onChange={(e) => onChange({ siteUrl: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="WordPress username"
+            autoComplete="username"
+            value={form.username}
+            onChange={(e) => onChange({ username: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="Application password"
+            type="password"
+            autoComplete="off"
+            value={form.applicationPassword}
+            onChange={(e) => onChange({ applicationPassword: e.target.value })}
+            disabled={busy}
+            required
+            helper="Spaces are fine — WordPress shows them that way."
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+          >
+            <option value="publish">Publish live immediately after approval</option>
+            <option value="draft">Save as a WordPress draft for a final check</option>
+          </Field>
+        </div>
+      ) : form.platform === "shopify" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            In Shopify admin, create a <strong>custom app</strong> with content
+            write permission, install it on the store, then paste the admin access
+            token here. We check before saving.
+          </p>
+          <Field
+            label="Store name"
+            placeholder="mystore.myshopify.com"
+            value={form.shop}
+            onChange={(e) => onChange({ shop: e.target.value })}
+            disabled={busy}
+            required
+            helper="Just the store name is fine — mystore or mystore.myshopify.com."
+          />
+          <Field
+            label="Admin access token"
+            type="password"
+            autoComplete="off"
+            value={form.accessToken}
+            onChange={(e) => onChange({ accessToken: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+          >
+            <option value="publish">Publish the page live after approval</option>
+            <option value="draft">Save as an unpublished Shopify page</option>
+          </Field>
+        </div>
+      ) : (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            Paste this code into your site once, put the secret below into it,
+            and deploy. Then tell us the HTTPS address to send approved pages to.
+            We ping that address before saving, so it has to be live.
+          </p>
+          <Field
+            as="textarea"
+            label="Code for your site"
+            readOnly
+            rows={14}
+            value={codedSiteSnippet(form.signingSecret)}
+            inputClassName="p-conn-snippet"
+          />
+          <div className="p-conn-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="p-btn ghost"
+              onClick={() => onCopy(codedSiteSnippet(form.signingSecret), "Code")}
+              disabled={busy}
+            >
+              <span>Copy code</span>
+            </button>
+            <button
+              type="button"
+              className="p-btn ghost"
+              onClick={() => onChange({ signingSecret: makeSigningSecret() })}
+              disabled={busy}
+            >
+              <span>New secret</span>
+            </button>
+          </div>
+          <Field
+            label="Your secret"
+            value={form.signingSecret}
+            readOnly
+            helper="This has to match the secret in the code on your site."
+          />
+          <Field
+            label="Website address"
+            type="url"
+            inputMode="url"
+            placeholder="https://yoursite.com/api/seo-publish"
+            value={form.endpointUrl}
+            onChange={(e) => onChange({ endpointUrl: e.target.value })}
+            disabled={busy}
+            required
+            helper="The HTTPS address of the code you just added."
+          />
+        </div>
+      )}
+
+      <div className="p-conn-actions">
+        <button className="p-btn primary" onClick={onSubmit} disabled={busy} data-busy={busy || undefined}>
+          <span>{busy ? "Checking connection…" : "Connect website"}</span>
+        </button>
+        <button className="p-btn ghost" onClick={onCancel} disabled={busy}>
+          <span>Cancel</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -151,6 +396,8 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm());
 
   const load = useCallback(async () => {
     try {
@@ -297,10 +544,82 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
   }
 
+  async function copyText(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied", `${label} is on your clipboard.`);
+    } catch {
+      toast.error("Couldn't copy", "Select the text and copy it yourself.");
+    }
+  }
+
+  async function connectPublishing() {
+    setBusy("website_publishing:connect");
+    try {
+      const payload =
+        publishForm.platform === "wordpress"
+          ? {
+              brand_id: brandId,
+              action: "connect" as const,
+              platform: "wordpress" as const,
+              siteUrl: publishForm.siteUrl,
+              username: publishForm.username,
+              applicationPassword: publishForm.applicationPassword,
+              publishStatus: publishForm.publishStatus,
+            }
+          : publishForm.platform === "shopify"
+            ? {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "shopify" as const,
+                shop: publishForm.shop,
+                accessToken: publishForm.accessToken,
+                publishStatus: publishForm.publishStatus,
+              }
+            : {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "webhook" as const,
+                endpointUrl: publishForm.endpointUrl,
+                signingSecret: publishForm.signingSecret,
+              };
+
+      const res = await authedFetch("/api/portal/publishing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't connect that website", data.detail || undefined);
+        return;
+      }
+      toast.success("Website connected", data.message || undefined);
+      setPublishOpen(false);
+      setPublishForm(emptyPublishForm());
+      await load();
+    } catch {
+      toast.error("We couldn't connect that website", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function act(row: PublicConnectionState, action: ConnectionAction) {
     // Connecting or reconnecting a Google product means signing in at Google.
     if (GOOGLE_KEYS.has(row.key) && (action === "connect" || action === "reconnect")) {
       await startGoogle(row);
+      return;
+    }
+
+    if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
+      const platform = platformFromDetail(row.detail);
+      setPublishForm({
+        ...emptyPublishForm(),
+        platform,
+        signingSecret: platform === "webhook" ? makeSigningSecret() : "",
+      });
+      setPublishOpen(true);
       return;
     }
 
@@ -341,15 +660,11 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
           });
       const data = await res.json().catch(() => ({}));
 
-      if (data.redirect) {
-        toast.info(data.message || "Continue setup", "Taking you to the right page.");
-        window.location.href = data.redirect;
-        return;
-      }
       if (!res.ok) {
         toast.error(data.error || "That didn't work", data.detail || undefined);
         return;
       }
+      if (row.key === "website_publishing") setPublishOpen(false);
       toast.success(ACTION_LABEL[action], data.message || undefined);
       await load();
     } catch {
@@ -476,7 +791,18 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.actions.length > 0 && (
+                {row.key === "website_publishing" && publishOpen && (
+                  <PublishingSetup
+                    form={publishForm}
+                    busy={busy === "website_publishing:connect"}
+                    onChange={(patch) => setPublishForm((f) => ({ ...f, ...patch }))}
+                    onCancel={() => setPublishOpen(false)}
+                    onSubmit={() => void connectPublishing()}
+                    onCopy={copyText}
+                  />
+                )}
+
+                {row.actions.length > 0 && !(row.key === "website_publishing" && publishOpen) && (
                   <div className="p-conn-actions">
                     {row.actions.map((a) => {
                       const key = `${row.key}:${a}`;

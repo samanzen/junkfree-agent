@@ -54,10 +54,15 @@ export function signPayload(body: string, secret: string): string {
   return createHmac("sha256", secret).update(body, "utf8").digest("hex");
 }
 
-/** Constant-time comparison, exported so a receiver implementation can reuse it. */
+/**
+ * Constant-time comparison, exported so a receiver can reuse it.
+ * Accepts the raw header value (`sha256=…`) or the hex digest alone.
+ */
 export function verifySignature(body: string, secret: string, signature: string): boolean {
+  const trimmed = (signature || "").trim();
+  const hex = trimmed.startsWith("sha256=") ? trimmed.slice("sha256=".length) : trimmed;
   const expected = Buffer.from(signPayload(body, secret), "utf8");
-  const given = Buffer.from(signature || "", "utf8");
+  const given = Buffer.from(hex, "utf8");
   if (expected.length !== given.length) return false;
   return timingSafeEqual(expected, given);
 }

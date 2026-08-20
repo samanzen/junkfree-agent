@@ -149,6 +149,7 @@ const WIRED: Record<string, string> = {
   "app/api/intelligence/competitors/discover/route.ts": "external",
   "app/api/intelligence/competitors/route.ts": "external",
   "app/api/execution/route.ts": "dispatch",
+  "app/api/portal/publishing/route.ts": "dispatch",
   "app/api/intelligence/action/route.ts": "dispatch",
   "app/api/images/process/route.ts": "dispatch",
 };

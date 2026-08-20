@@ -19,12 +19,12 @@ import { encryptCredentials, decryptCredentials } from "./crypto";
 // Known providers today. The `provider` column itself is plain text (see
 // migration comments) specifically so a future provider can be added with
 // just a new string value here -- no migration required.
-// "wordpress" and "webhook" are the first providers that are actually
-// implemented (lib/execution/adapters/*). The rest remain declared-but-unbuilt.
+// "wordpress", "shopify" and "webhook" are the last-mile publishers
+// (lib/execution/adapters/*). The rest remain declared-but-unbuilt.
 // The column is plain text by design, so adding these needs no migration.
 export type IntegrationProvider =
   | "ga4" | "highlevel" | "stripe" | "quickbooks" | "jobber"
-  | "wordpress" | "webhook"
+  | "wordpress" | "shopify" | "webhook"
   // One row per brand holds EVERY linked Google account and every Google
   // product selection (see lib/google/store.ts). Deliberately not one provider
   // per Google product: the table is unique on (brand_id, provider), and a

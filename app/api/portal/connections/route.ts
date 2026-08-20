@@ -5,7 +5,7 @@ import { enqueue, pendingCount, type JobKind } from "@/lib/queue";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { describeConnections, toPublic, type ConnectionKey } from "@/lib/connections";
 import { disconnectIntegration } from "@/lib/integrations";
-import type { SitePlatform } from "@/lib/execution/types";
+import { SITE_PLATFORMS } from "@/lib/execution/registry";
 import { listProperties } from "@/lib/gsc";
 
 export const maxDuration = 60;
@@ -48,7 +48,6 @@ type Action = "connect" | "disconnect" | "reconnect" | "sync_now";
 const SYNC_JOBS: Partial<Record<ConnectionKey, JobKind[]>> = {
   search_console: ["rank_sync"],
   keyword_data: ["rank_enrich"],
-  website_publishing: ["publish"],
 };
 
 // POST — act on a connection.
@@ -156,21 +155,24 @@ export async function POST(req: NextRequest) {
   // ── Website publishing ────────────────────────────────────────────────────
   if (key === "website_publishing") {
     if (action === "disconnect") {
-      // Credentials are per-provider; clear whichever is currently stored.
-      const provider = (account === "webhook" ? "webhook" : "wordpress") as SitePlatform;
-      await disconnectIntegration(brandId, provider);
+      // Clear every last-mile adapter so a brand cannot be left half-connected.
+      for (const provider of SITE_PLATFORMS) {
+        await disconnectIntegration(brandId, provider);
+      }
       return NextResponse.json({
         ok: true,
         message: "Website disconnected. Approved work will need publishing by hand.",
       });
     }
-    // Connecting requires credentials, which are entered on the Website page's
-    // existing publishing panel rather than duplicated here.
-    return NextResponse.json({
-      ok: false,
-      redirect: "/portal/website",
-      message: "Website publishing is set up on the Website page.",
-    });
+    // Connect / reconnect open the in-panel form that posts to
+    // /api/portal/publishing. Never redirect to a page with no credential form.
+    return NextResponse.json(
+      {
+        error: "Open the website setup form on this page to connect.",
+        code: "use_publishing_form",
+      },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json(
