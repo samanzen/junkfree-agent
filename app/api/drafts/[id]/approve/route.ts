@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { slugify, splitFrontMatter } from "@/lib/utils";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { siblingDrafts } from "@/lib/recommendations/topic";
+import { recordOwnerTeaching } from "@/lib/playbook/owner";
 
 // Human gate. Approving a blog/page/GEO draft publishes it into the `content`
 // table that the live site reads from. Meta/intent drafts are just marked approved.
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (dismiss) {
     await db.from("drafts").update({ status: "dismissed" }).eq("id", id);
+    await recordOwnerTeaching(
+      draft.brand_id,
+      `Declined "${draft.title}"${draft.target_keyword ? ` (${draft.target_keyword})` : ""}. Do not propose this again unless the facts change.`
+    ).catch(() => undefined);
     return NextResponse.json({ ok: true, status: "dismissed" });
   }
 

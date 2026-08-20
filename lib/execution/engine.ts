@@ -173,6 +173,14 @@ async function recordExecution(
   meta: ExecutionMeta
 ): Promise<void> {
   try {
+    const rollbackSupported =
+      outcome.status === "succeeded" &&
+      !!previous &&
+      (change.type === "update_meta" ||
+        (change.type === "upsert_page" &&
+          typeof previous.title === "string" &&
+          typeof previous.bodyMarkdown === "string"));
+
     const { error } = await db.from("publish_executions").insert({
       brand_id: brandId,
       draft_id: meta.draftId ?? null,
@@ -186,9 +194,32 @@ async function recordExecution(
       error: outcome.status === "failed" ? outcome.error : null,
       previous,
       executed_at: new Date().toISOString(),
+      rollback_supported: rollbackSupported,
+      rollback_status: rollbackSupported
+        ? "available"
+        : outcome.status === "succeeded"
+          ? "unsupported"
+          : null,
     });
     if (error && !MIGRATION_MISSING.has(error.code)) {
-      console.warn(`[execution] could not record execution for brand ${brandId}: ${error.message}`);
+      // Older schema without rollback columns — retry minimal insert.
+      const { error: e2 } = await db.from("publish_executions").insert({
+        brand_id: brandId,
+        draft_id: meta.draftId ?? null,
+        job_id: meta.jobId ?? null,
+        provider: platform,
+        change_type: change.type,
+        target: targetOf(change),
+        status: outcome.status,
+        remote_id: outcome.status === "succeeded" ? outcome.remoteId : null,
+        result_url: outcome.status === "succeeded" ? outcome.url : null,
+        error: outcome.status === "failed" ? outcome.error : null,
+        previous,
+        executed_at: new Date().toISOString(),
+      });
+      if (e2 && !MIGRATION_MISSING.has(e2.code)) {
+        console.warn(`[execution] could not record execution for brand ${brandId}: ${e2.message}`);
+      }
     }
   } catch (e) {
     console.warn(`[execution] could not record execution for brand ${brandId}: ${e instanceof Error ? e.message : String(e)}`);

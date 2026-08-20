@@ -4,6 +4,7 @@
 
 import { db } from "./supabase";
 import type { RecommendationAutopilot } from "./recommendations/sections";
+import { ownerPlaybookBlock } from "./playbook/owner";
 
 // Vertical classification (Sprint 6.2). Free text at the DB layer (see
 // supabase/007_business_model.sql), same convention as IntegrationProvider
@@ -32,6 +33,12 @@ export type Brand = {
   auto_publish_meta: boolean;
   /** Per AI Recommendations tab autopilot. See lib/recommendations/sections.ts */
   recommendation_autopilot?: RecommendationAutopilot | null;
+  /** Feature 01 brand-wide mode. Optional until migration 013 is applied. */
+  execution_mode?: "approval" | "hybrid" | "autopilot" | null;
+  /** Feature 01 kill switch. False forces every auto path back to approval. */
+  autopilot_enabled?: boolean | null;
+  /** Owner standing orders for the Manager. Null = use the default playbook. */
+  owner_playbook?: string | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;
@@ -77,6 +84,8 @@ export function brandBlock(b: Brand): string {
   }${
     b.intent_notes ? `\n- SEARCH-INTENT NOTE: ${b.intent_notes}` : ""
   }
+
+${ownerPlaybookBlock(b)}
 
 COMPETITOR RULE: A competitor is another business in the SAME industry competing for the same customers (e.g. other movers for a moving company). Social networks, directories, dealerships in unrelated verticals, and generic platforms are NOT competitors.`;
 }
