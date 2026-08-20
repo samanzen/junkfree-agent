@@ -280,7 +280,11 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   const rec = fs.readFileSync(path.join(process.cwd(), "app/dashboard/RecommendationsPanel.tsx"), "utf8");
   expect(rec).toContain("WorkPreview");
   expect(rec).toMatch(/>\s*Preview\s*</);
-  expect(rec).toMatch(/>\s*Approve\s*</);
+  expect(rec).toContain('aria-label="Approve"');
+  expect(rec).toContain('aria-label="Decline"');
+  expect(rec).toContain("QUEUE_FILTERS");
+  expect(rec).toContain("matchesQueueFilter");
+  expect(rec).toContain("useConfirm");
   expect(rec).toMatch(/>\s*Why\s*</);
   expect(rec).toContain("aria-pressed");
   expect(rec).toContain("Full report");
@@ -296,7 +300,8 @@ test("recommendation queues show title, URL, Preview, Approve and Why — not th
   const portal = fs.readFileSync(path.join(process.cwd(), "app/portal/content/page.tsx"), "utf8");
   expect(portal).toContain("WorkPreview");
   expect(portal).toMatch(/>\s*Preview\s*</);
-  expect(portal).toContain('"Approve"');
+  expect(portal).toContain('aria-label="Approve"');
+  expect(portal).toContain('aria-label="Decline"');
   expect(portal).toMatch(/>\s*Why\s*</);
   expect(portal).toContain("aria-pressed");
   expect(portal).toContain("Full report");

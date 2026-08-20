@@ -473,6 +473,11 @@ ${down.md} {
 .p-btn.ghost { background:var(--surface); border-color:var(--line); color:var(--text); box-shadow:var(--sh-1); }
 .p-btn.ghost:hover { border-color:var(--accent-line); color:var(--accent); }
 .p-btn.ghost.on { background:var(--accent-dim, rgba(108,92,231,.1)); border-color:var(--accent-line); color:var(--accent); }
+.p-btn.icon-ok, .p-btn.icon-no { width:36px; height:36px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+.p-btn.icon-ok { background:#E8F8EF; border-color:#B7E4C7; color:#18794E; box-shadow:none; }
+.p-btn.icon-ok:hover { filter:none; background:#D4F0E0; color:#18794E; }
+.p-btn.icon-no { background:#FDECEC; border-color:#F5C2C2; color:#C0392B; box-shadow:none; }
+.p-btn.icon-no:hover { filter:none; background:#FAD4D4; color:#C0392B; }
 .p-btn:disabled { opacity:.45; cursor:not-allowed; filter:none; transform:none; }
 
 /* ══ KPI cards ══════════════════════════════════════════════════════ */

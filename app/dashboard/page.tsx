@@ -321,7 +321,8 @@ export default function Dashboard() {
   const bDrafts = drafts.filter((d) => d.brand_id === brandId && d.status !== "dismissed" && d.status !== "published");
   const bGbp = gbp.filter((g) => g.brand_id === brandId && (g.status === "pending_review" || g.status === "approved"));
   const bCites = citations.filter((c) => c.brand_id === brandId && c.status !== "skipped");
-  const recommendationCount = uniqueByTopic(bDrafts).length
+  const pendingDrafts = uniqueByTopic(bDrafts.filter((d) => d.status === "pending_review"));
+  const recommendationCount = pendingDrafts.length
     + (activeBrandIsLocal ? bGbp.filter((g) => g.status === "pending_review").length : 0)
     + (activeBrandIsLocal ? bCites.filter((c) => c.status === "suggested" || c.status === "in_progress" || c.status === "pending_review").length : 0);
 

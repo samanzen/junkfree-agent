@@ -12,13 +12,13 @@ import ConnectCard from "../_components/ConnectCard";
 import StatTile from "../_components/StatTile";
 import { Panel, PanelHead } from "../_components/Panel";
 import { Stagger, fadeUp, EASE } from "../_components/motion";
-import { IconContent, IconSparkle, IconCheck } from "../icons";
+import { IconContent, IconSparkle, IconCheck, IconClose } from "../icons";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
 import WorkPreview, { type WorkPreviewModel } from "@/app/_components/WorkPreview";
 import { uniqueByTopic, factsKey } from "@/lib/recommendations/topic";
 import DecisionReport from "@/app/_components/DecisionReport";
 import { decisionWhy, displayWorkTitle, plannedPageUrl, type DecisionWhyInput, type KeywordFacts } from "@/lib/recommendations/preview";
-import { useToast } from "@/app/_components/Notify";
+import { useToast, useConfirm } from "@/app/_components/Notify";
 import Field from "@/app/_components/Field";
 import { authedFetch } from "@/lib/authedFetch";
 import { m } from "framer-motion";
@@ -270,6 +270,7 @@ function PreviewPlanCard({
   onFeedback?: (text: string) => Promise<boolean>;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<"" | "approved" | "dismissed">("");
@@ -302,6 +303,18 @@ function PreviewPlanCard({
     } else {
       toast.error("That didn't go through", "Please try again in a moment.");
     }
+  }
+
+  async function decline() {
+    const ok = await confirm({
+      title: "Decline this recommendation?",
+      body: `“${title}” will leave the queue.`,
+      confirmLabel: "Decline",
+      cancelLabel: "Keep it",
+      danger: true,
+    });
+    if (!ok) return;
+    void run("dismiss");
   }
 
   if (done) {
@@ -366,8 +379,27 @@ function PreviewPlanCard({
             <m.button type="button" className="p-btn primary" onClick={() => setOpen(true)} whileTap={{ scale: 0.97 }}>
               Preview
             </m.button>
-            <m.button type="button" className="p-btn primary" disabled={busy} onClick={() => void run("approve")} whileTap={{ scale: 0.97 }}>
-              {busy ? "…" : approveLabel.startsWith("Approve") ? "Approve" : approveLabel}
+            <m.button
+              type="button"
+              className="p-btn icon-ok"
+              disabled={busy}
+              aria-label="Approve"
+              title="Approve"
+              onClick={() => void run("approve")}
+              whileTap={{ scale: 0.97 }}
+            >
+              <IconCheck size={16} />
+            </m.button>
+            <m.button
+              type="button"
+              className="p-btn icon-no"
+              disabled={busy}
+              aria-label="Decline"
+              title="Decline"
+              onClick={() => void decline()}
+              whileTap={{ scale: 0.97 }}
+            >
+              <IconClose size={16} />
             </m.button>
             {onFeedback && (
               <m.button type="button" className="p-btn ghost" onClick={() => { setFeedbackOpen((v) => !v); setWhyOpen(false); }} whileTap={{ scale: 0.97 }}>
@@ -397,7 +429,7 @@ function PreviewPlanCard({
         approveLabel={approveLabel}
         busy={busy}
         onApprove={() => { void run("approve"); }}
-        onDecline={() => { void run("dismiss"); }}
+        onDecline={() => { void decline(); }}
         feedback={onFeedback ? {
           value: feedbackText,
           onChange: setFeedbackText,
