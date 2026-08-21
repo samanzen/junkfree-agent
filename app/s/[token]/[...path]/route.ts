@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/supabase";
-import { resolveProxyToken, verifyHost } from "@/lib/proxy/resolve";
+import { resolveProxyToken, resolvePublicHost } from "@/lib/proxy/resolve";
 import { renderPage, renderNotFound } from "@/lib/proxy/render";
 import { isCanarySlug } from "@/lib/execution/certify";
 
@@ -28,8 +28,9 @@ export async function GET(
   const brand = await resolveProxyToken(token);
   if (!brand) return notFound("<!doctype html><title>Not found</title>");
 
-  const host = verifyHost(req.headers, brand);
-  if (!host) return notFound("<!doctype html><title>Not found</title>");
+  // Token authenticates the request. Host may be the app origin under a Vercel
+  // external rewrite — still publish canonicals on the brand's site_url host.
+  const host = resolvePublicHost(req.headers, brand);
 
   // Incoming path must be /{namespace}/{slug...} (rewrite keeps the namespace).
   const [ns, ...rest] = path;

@@ -1,6 +1,6 @@
 import { expect, test, afterEach } from "vitest";
 import fs from "fs";
-import { verifyHost, clearProxyTokenCache, type ProxyBrand } from "./resolve";
+import { verifyHost, resolvePublicHost, clearProxyTokenCache, type ProxyBrand } from "./resolve";
 import { renderPage, renderNotFound, resolveMetaDescription } from "./render";
 
 afterEach(() => clearProxyTokenCache());
@@ -27,6 +27,13 @@ test("verifyHost accepts www/non-www match and rejects foreign hosts", () => {
   expect(verifyHost(new Headers({ "x-forwarded-host": "acme.example" }), brand)).toBe("acme.example");
   expect(verifyHost(new Headers({ host: "www.acme.example" }), brand)).toBe("www.acme.example");
   expect(verifyHost(new Headers({ "x-forwarded-host": "evil.example" }), brand)).toBeNull();
+});
+
+test("resolvePublicHost falls back to site_url when Vercel rewrite sends app host", () => {
+  expect(resolvePublicHost(new Headers({ host: "pub.volohub.com" }), brand)).toBe("www.acme.example");
+  expect(resolvePublicHost(new Headers({ "x-forwarded-host": "www.acme.example" }), brand)).toBe(
+    "www.acme.example"
+  );
 });
 
 test("renderPage emits canonical on the customer host and noindexes canaries", () => {
@@ -69,10 +76,10 @@ test("not-found is a real 404 body with noindex", () => {
   expect(html).toMatch(/Page not found/);
 });
 
-test("public origin route exists and validates namespace + host", () => {
+test("public origin route exists and validates namespace; host falls back for Vercel rewrites", () => {
   const src = read("app/s/[token]/[...path]/route.ts");
   expect(src).toMatch(/resolveProxyToken/);
-  expect(src).toMatch(/verifyHost/);
+  expect(src).toMatch(/resolvePublicHost/);
   expect(src).toMatch(/sitemap\.xml/);
   expect(src).toMatch(/ns !== brand\.namespace/);
   expect(src).toMatch(/isCanarySlug/);
