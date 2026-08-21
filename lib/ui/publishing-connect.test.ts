@@ -34,7 +34,9 @@ test("WordPress, Shopify and coded sites are all first-class", () => {
   expect(src).toMatch(/platform === "shopify"/);
   expect(src).toMatch(/applicationPassword/);
   expect(src).toMatch(/signingSecret/);
-  expect(SITE_PLATFORMS).toEqual(expect.arrayContaining(["wordpress", "shopify", "webhook"]));
+  expect(SITE_PLATFORMS).toEqual(
+    expect.arrayContaining(["wordpress", "shopify", "webhook", "proxy"])
+  );
 });
 
 test("http addresses are refused", () => {
@@ -44,7 +46,7 @@ test("http addresses are refused", () => {
 
 test("switching platforms disconnects the other publisher", () => {
   const src = read("app/api/portal/publishing/route.ts");
-  expect(src).toMatch(/disconnectIntegration\(brandId, other\)/);
+  expect(src).toMatch(/disconnectIntegration\(brandId, other/);
 });
 
 test("connect pins the writer and stores an unverified capability map", () => {
@@ -59,7 +61,7 @@ test("connect pins the writer and stores an unverified capability map", () => {
 test("connect fails closed when honesty columns cannot be saved", () => {
   const src = read("app/api/portal/publishing/route.ts");
   expect(src).toMatch(/Could not save the publishing connection/);
-  expect(src).toMatch(/await disconnectIntegration\(brandId, platform\)/);
+  expect(src).toMatch(/await disconnectIntegration\(brandId, platform/);
   expect(src).toMatch(/status: 500/);
 });
 
@@ -83,7 +85,7 @@ test("panel never redirects away to set up publishing", () => {
 
 test("disconnect clears every last-mile adapter, not a guessed one", () => {
   const src = read("app/api/portal/connections/route.ts");
-  expect(src).toMatch(/for \(const provider of SITE_PLATFORMS\)/);
+  expect(src).toMatch(/for \(const provider of INTEGRATION_SITE_PLATFORMS\)/);
   expect(src).toMatch(/disconnectIntegration\(brandId, provider\)/);
   expect(src).not.toMatch(/account === "webhook" \? "webhook" : "wordpress"/);
 });

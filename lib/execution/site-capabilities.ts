@@ -56,6 +56,12 @@ const UNSUPPORTED_REASON: Record<SitePlatform, Record<AdapterCapability, string>
     update_meta:
       "Your website receiver only handles new pages today. Title and description updates are not supported yet.",
   },
+  proxy: {
+    upsert_page:
+      "New pages under your chosen path are served by this platform. Publishing is not proven yet.",
+    update_meta:
+      "Editing existing pages needs a CMS connection (WordPress or Shopify).",
+  },
 };
 
 function unverifiedReason(writer: SitePlatform, op: AdapterCapability): string {
@@ -200,9 +206,14 @@ export async function clearBrandWriter(brandId: string): Promise<void> {
       primary_writer: null,
       site_capabilities: emptyCapabilityMap(),
       source_of_truth: {},
+      proxy_site_token: null,
+      proxy_namespace: null,
+      proxy_claim_check: {},
+      proxy_token_rotated_at: null,
     })
     .eq("id", brandId);
   if (error) {
+    // Older DBs may lack 022 columns — still clear the honesty pin.
     await persistBrandWriter(brandId, null, emptyCapabilityMap());
   }
 }

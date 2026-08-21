@@ -34,6 +34,7 @@ test("confirmed SoT maps to the V1 writer", () => {
   expect(writerForConfirmed("wordpress")).toBe("wordpress");
   expect(writerForConfirmed("shopify")).toBe("shopify");
   expect(writerForConfirmed("application_database")).toBe("webhook");
+  expect(writerForConfirmed("platform_proxy")).toBe("proxy");
   expect(writerForConfirmed("unknown")).toBeNull();
 });
 

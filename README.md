@@ -20,7 +20,7 @@ Auto-publishing unreviewed AI pages at volume is a real ranking risk (Google's s
 ## Setup
 
 1. `npm install`
-2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`, `007_business_model.sql`, `008_content_tenant_isolation.sql`, `009_brand_locks_service_role_grant.sql`, `010_page_audits.sql`, `011_publish_executions.sql`, `012_rate_limits.sql`, `013_agentic_seo_team.sql`, `014_feature01_hardening.sql`, `016_agent_health_reset.sql`, `017_recommendation_autopilot.sql`, `018_ai_visibility.sql`, `019_owner_company.sql`, `020_execution_honesty.sql`, `021_source_of_truth.sql`. All are additive/idempotent, so re-running an already-applied file is safe. `platform.sql` seeds the two bootstrap brands (Junk Free, POMO BUILD) — this is the only brand-seeding done via SQL; see "Adding a new brand" below for every brand after those two.
+2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`, `007_business_model.sql`, `008_content_tenant_isolation.sql`, `009_brand_locks_service_role_grant.sql`, `010_page_audits.sql`, `011_publish_executions.sql`, `012_rate_limits.sql`, `013_agentic_seo_team.sql`, `014_feature01_hardening.sql`, `016_agent_health_reset.sql`, `017_recommendation_autopilot.sql`, `018_ai_visibility.sql`, `019_owner_company.sql`, `020_execution_honesty.sql`, `021_source_of_truth.sql`, `022_proxy_publishing.sql`. All are additive/idempotent, so re-running an already-applied file is safe. `platform.sql` seeds the two bootstrap brands (Junk Free, POMO BUILD) — this is the only brand-seeding done via SQL; see "Adding a new brand" below for every brand after those two.
 3. Create a Google Cloud service account, enable the Search Console API, and add the service-account email as a user on the `junkfree.ca` property. Put its email + private key in the env.
 4. Copy `.env.example` → `.env.local` and fill it in.
 5. `npm run dev`, open `/dashboard`, click **Run agents now** to watch a full cycle.
@@ -101,25 +101,32 @@ languages, competitors, cited pages and the questions nobody named you for.
 ## Website publishing (last mile)
 
 Connections → **Website publishing** lets a customer attach WordPress, Shopify,
-or a coded-site receiver so Approve can push pages to the live site.
+a coded-site receiver, or (next) a **subdirectory proxy** on their domain so
+Approve can push pages live.
 
-1. Run migrations `020_execution_honesty.sql` and `021_source_of_truth.sql`.
-2. Set `INTEGRATION_ENCRYPTION_KEY` (see `.env.example`).
+1. Run migrations `020_execution_honesty.sql`, `021_source_of_truth.sql`, and
+   `022_proxy_publishing.sql`.
+2. Set `INTEGRATION_ENCRYPTION_KEY` (see `.env.example`) for WP/Shopify/webhook.
 3. In Portal → Settings → Connections, connect the site. We live-check before
-   credentials are stored.
-4. Confirm **where new pages are saved** (Source of Truth).
+   credentials are stored (WP/Shopify/webhook).
+4. Confirm **where new pages are saved** (Source of Truth). For proxy, SoT is
+   this platform under the chosen path (`platform_proxy`).
 5. Click **Prove publishing** — we write a temporary page, verify it on the
    public site, then delete it. Autopilot stays off until that succeeds.
 6. Approve a draft — a `publish` job sends the change through the connected
    writer and only marks the draft published after the live page shows it.
 
-Coded sites: paste the snippet from Connections, or copy
-`examples/junkfree-site/app/api/seo-publish/route.ts` into the customer Next
-app. Env: `SEO_PUBLISH_SECRET` (must match Connections) and optional
-`SEO_PUBLISH_BRAND_SLUG` (defaults to `junkfree`).
+**Proxy (custom sites, preferred path once public origin ships):** rewrite
+`/{namespace}/*` to this platform’s public origin with a per-brand
+`proxy_site_token`. No API route on the customer app. Schema is in migration
+`022`; Connect UI + public origin are the next slices.
 
-Title/meta-only updates (`fix_meta`) are not live-writable on WordPress or
-Shopify yet — those stay in-platform until an SEO-plugin adapter ships.
+Coded-site API receiver remains a developer escape hatch: paste the snippet
+from Connections, or copy the example under `examples/`. Env:
+`SEO_PUBLISH_SECRET` (must match Connections).
+
+Title/meta-only updates (`fix_meta`) are not live-writable on WordPress,
+Shopify, or proxy yet — those stay in-platform / become a CMS upsell.
 
 ## Env
 

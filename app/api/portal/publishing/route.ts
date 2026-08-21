@@ -7,10 +7,11 @@ import {
   disconnectIntegration,
   getIntegration,
 } from "@/lib/integrations";
-import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "@/lib/execution/registry";
+import { getAdapter, isSitePlatform, SITE_PLATFORMS, INTEGRATION_SITE_PLATFORMS } from "@/lib/execution/registry";
 import type { SitePlatform } from "@/lib/execution/types";
 import { capabilityMapFor, clearBrandWriter, persistBrandWriter } from "@/lib/execution/site-capabilities";
 import { detectAndStoreSourceOfTruth } from "@/lib/execution/source-of-truth";
+import type { IntegrationProvider } from "@/lib/integrations";
 
 export const maxDuration = 60;
 
@@ -85,11 +86,20 @@ export async function POST(req: NextRequest) {
     );
   }
   const platform: SitePlatform = platformRaw;
+  if (platform === "proxy") {
+    return NextResponse.json(
+      {
+        error:
+          "Subdirectory publishing connects from a dedicated setup flow once the public page server is live.",
+      },
+      { status: 400 }
+    );
+  }
   const adapter = getAdapter(platform);
 
   if (action === "disconnect") {
-    for (const provider of SITE_PLATFORMS) {
-      await disconnectIntegration(brandId, provider);
+    for (const provider of INTEGRATION_SITE_PLATFORMS) {
+      await disconnectIntegration(brandId, provider as IntegrationProvider);
     }
     await clearBrandWriter(brandId);
     return NextResponse.json({
@@ -176,13 +186,13 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  await upsertIntegrationCredentials(brandId, platform, credentials, config);
+  await upsertIntegrationCredentials(brandId, platform as IntegrationProvider, credentials, config);
 
-  for (const other of SITE_PLATFORMS) {
+  for (const other of INTEGRATION_SITE_PLATFORMS) {
     if (other === platform) continue;
-    const prior = await getIntegration(brandId, other);
+    const prior = await getIntegration(brandId, other as IntegrationProvider);
     if (prior?.status === "connected") {
-      await disconnectIntegration(brandId, other);
+      await disconnectIntegration(brandId, other as IntegrationProvider);
     }
   }
 
@@ -192,7 +202,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // Roll back the credential row so Connections does not show Connected
     // when the honesty columns are missing.
-    await disconnectIntegration(brandId, platform);
+    await disconnectIntegration(brandId, platform as IntegrationProvider);
     return NextResponse.json(
       {
         error: e instanceof Error ? e.message : "Could not save the publishing connection.",
@@ -201,7 +211,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const messages: Record<SitePlatform, string> = {
+  const messages: Record<Exclude<SitePlatform, "proxy">, string> = {
     wordpress:
       "WordPress is reachable. We can send approved pages. Automatic publishing stays off until publishing is proven.",
     shopify:

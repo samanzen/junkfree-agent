@@ -40,11 +40,11 @@ export type Brand = {
   /** Owner standing orders for the Manager. Null = use the default playbook. */
   owner_playbook?: string | null;
   /**
-   * Chosen last-mile writer (wordpress | shopify | webhook). Slice 0.
+   * Chosen last-mile writer (wordpress | shopify | webhook | proxy).
    * Optional until supabase/020 is applied. Do not import execution types here
    * — that module already imports Brand.
    */
-  primary_writer?: "wordpress" | "shopify" | "webhook" | null;
+  primary_writer?: "wordpress" | "shopify" | "webhook" | "proxy" | null;
   /** Per-operation execution state for the primary writer. See lib/execution/site-capabilities.ts. */
   site_capabilities?: Record<string, unknown> | null;
   /**
@@ -52,6 +52,14 @@ export type Brand = {
    * Optional until supabase/021 is applied. See lib/execution/source-of-truth.ts.
    */
   source_of_truth?: Record<string, unknown> | null;
+  /**
+   * Proxy subdirectory publishing (supabase/022). Token is the public-origin
+   * credential; no brand_integrations row. Null until proxy is connected.
+   */
+  proxy_site_token?: string | null;
+  proxy_namespace?: string | null;
+  proxy_claim_check?: Record<string, unknown> | null;
+  proxy_token_rotated_at?: string | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;

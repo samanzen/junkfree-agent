@@ -5,7 +5,7 @@ import { enqueue, pendingCount, type JobKind } from "@/lib/queue";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { describeConnections, toPublic, type ConnectionKey } from "@/lib/connections";
 import { disconnectIntegration } from "@/lib/integrations";
-import { SITE_PLATFORMS } from "@/lib/execution/registry";
+import { SITE_PLATFORMS, INTEGRATION_SITE_PLATFORMS } from "@/lib/execution/registry";
 import { clearBrandWriter } from "@/lib/execution/site-capabilities";
 import { listProperties } from "@/lib/gsc";
 
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
   if (key === "website_publishing") {
     if (action === "disconnect") {
       // Clear every last-mile adapter so a brand cannot be left half-connected.
-      for (const provider of SITE_PLATFORMS) {
+      for (const provider of INTEGRATION_SITE_PLATFORMS) {
         await disconnectIntegration(brandId, provider);
       }
       await clearBrandWriter(brandId);

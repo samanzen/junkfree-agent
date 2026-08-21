@@ -180,7 +180,7 @@ async function preconditions(brand: Brand): Promise<{ ok: true } | { ok: false; 
 
 async function recordCertFailure(
   brand: Brand,
-  writer: "wordpress" | "shopify" | "webhook",
+  writer: "wordpress" | "shopify" | "webhook" | "proxy",
   reason: string,
   extra?: { last_execution_id?: string | null }
 ): Promise<void> {
@@ -222,7 +222,7 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
 
   try {
     const writer = brand.primary_writer;
-    if (writer !== "wordpress" && writer !== "shopify" && writer !== "webhook") {
+    if (writer !== "wordpress" && writer !== "shopify" && writer !== "webhook" && writer !== "proxy") {
       throw new Error("stepCertify: no publishing connection is pinned.");
     }
 

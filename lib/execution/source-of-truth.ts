@@ -27,6 +27,7 @@ export type ConfirmedSourceOfTruth =
   | "wordpress"
   | "shopify"
   | "application_database"
+  | "platform_proxy"
   | "unknown";
 
 export type SourceConfidence = "low" | "medium" | "high";
@@ -46,6 +47,7 @@ export const CONFIRMED_OPTIONS: { value: ConfirmedSourceOfTruth; label: string }
   { value: "wordpress", label: "WordPress" },
   { value: "shopify", label: "Shopify" },
   { value: "application_database", label: "In our own website or database" },
+  { value: "platform_proxy", label: "On a path we host for you on your domain" },
   { value: "unknown", label: "I don't know" },
 ];
 
@@ -67,6 +69,7 @@ export function isConfirmedSourceOfTruth(value: unknown): value is ConfirmedSour
     value === "wordpress" ||
     value === "shopify" ||
     value === "application_database" ||
+    value === "platform_proxy" ||
     value === "unknown"
   );
 }
@@ -109,6 +112,7 @@ export function writerForConfirmed(confirmed: ConfirmedSourceOfTruth | null): Si
   if (confirmed === "wordpress") return "wordpress";
   if (confirmed === "shopify") return "shopify";
   if (confirmed === "application_database") return "webhook";
+  if (confirmed === "platform_proxy") return "proxy";
   return null;
 }
 
