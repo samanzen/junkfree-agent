@@ -45,10 +45,17 @@ test("portal auth persists admin preview brand in URL and sessionStorage", () =>
   expect(src).toMatch(/syncBrandQueryParam/);
   expect(src).toMatch(/readStoredPreviewBrandId/);
   expect(src).toMatch(/isBrandId\(urlBrand\)/);
+  expect(src).toMatch(/useSearchParams/);
   expect(src).toMatch(/from "\.\/portalBrand"/);
   // Customers stay locked to me.brand_id — URL cannot switch tenants.
   expect(src).toMatch(/me\.brand_id/);
   expect(src).toMatch(/URL \?brand= cannot switch a customer/);
+});
+
+test("portal layout suspends around auth provider for searchParams", () => {
+  const layout = fs.readFileSync("app/portal/layout.tsx", "utf8");
+  expect(layout).toMatch(/Suspense/);
+  expect(layout).toMatch(/PortalAuthProvider/);
 });
 
 test("portal shell and bottom nav stamp brand on links", () => {

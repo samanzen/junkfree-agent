@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "./supabaseBrowser";
 import { authedFetch } from "./authedFetch";
 import {
@@ -53,6 +53,8 @@ export {
 export function PortalAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const brandParam = searchParams.get("brand");
   const [state, setState] = useState<Omit<PortalAuthState, "signOut">>({
     loading: true, error: "", isAdmin: false, brand: null,
   });
@@ -119,12 +121,13 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep ?brand= when the pathname changes without a full remount (client nav).
+  // Keep ?brand= stamped when pathname or search changes without remounting
+  // (sidebar nav, settings tabs, address-bar edits that drop the param).
   useEffect(() => {
     if (!state.isAdmin || !state.brand?.id) return;
-    syncBrandQueryParam(state.brand.id);
+    if (brandParam !== state.brand.id) syncBrandQueryParam(state.brand.id);
     writeStoredPreviewBrandId(state.brand.id);
-  }, [pathname, state.isAdmin, state.brand?.id]);
+  }, [pathname, brandParam, state.isAdmin, state.brand?.id]);
 
   const signOut = () => {
     clearStoredPreviewBrandId();

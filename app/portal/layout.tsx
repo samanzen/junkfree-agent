@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { PortalAuthProvider } from "@/lib/portalAuth";
 import PortalShell from "./PortalShell";
 
@@ -6,10 +7,15 @@ import PortalShell from "./PortalShell";
 // route shares one auth resolution (lib/portalAuth) and one shell (nav +
 // topbar). The admin dashboard (app/dashboard) is a completely separate tree
 // and is untouched by anything here.
+//
+// Suspense wraps the auth provider because it reads useSearchParams to keep
+// ?brand= stamped during client navigations.
 export default function PortalLayout({ children }: { children: ReactNode }) {
   return (
-    <PortalAuthProvider>
-      <PortalShell>{children}</PortalShell>
-    </PortalAuthProvider>
+    <Suspense fallback={null}>
+      <PortalAuthProvider>
+        <PortalShell>{children}</PortalShell>
+      </PortalAuthProvider>
+    </Suspense>
   );
 }
