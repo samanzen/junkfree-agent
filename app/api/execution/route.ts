@@ -8,6 +8,7 @@ import { resolvePublishTarget, executionLogReachable } from "@/lib/execution/eng
 import { describeAdapters } from "@/lib/execution/registry";
 import { toSiteChange, type DraftLike } from "@/lib/execution/changes";
 import { supports } from "@/lib/execution/types";
+import { executionGrade, parseCapabilityMap } from "@/lib/execution/site-capabilities";
 
 export const maxDuration = 60;
 
@@ -41,18 +42,21 @@ const accessErr = requireBrandAccess(auth, brandId);
   if (limited) return limited;
 
   const [target, log] = await Promise.all([resolvePublishTarget(brandId), executionLogReachable()]);
+  const brand = await getBrandById(brandId);
 
   // Live credential check, but only when something is actually connected --
   // it makes a real network call to the customer's site.
   let connection: { ok: boolean; detail: string } | null = null;
-  if (target.ok) {
-    const brand = await getBrandById(brandId);
-    connection = brand
-      ? await target.adapter
-          .check({ brand, credentials: target.credentials, config: target.config })
-          .catch((e) => ({ ok: false, detail: `Adapter check threw: ${e instanceof Error ? e.message : String(e)}` }))
-      : { ok: false, detail: "Brand not found." };
+  if (target.ok && brand) {
+    connection = await target.adapter
+      .check({ brand, credentials: target.credentials, config: target.config })
+      .catch((e) => ({ ok: false, detail: `Adapter check threw: ${e instanceof Error ? e.message : String(e)}` }));
+  } else if (target.ok) {
+    connection = { ok: false, detail: "Brand not found." };
   }
+
+  const capabilities = parseCapabilityMap(brand?.site_capabilities);
+  const grade = executionGrade(capabilities, target.ok);
 
   return NextResponse.json({
     configured: target.ok,
@@ -61,6 +65,12 @@ const accessErr = requireBrandAccess(auth, brandId);
     reason: target.ok ? null : target.reason,
     reason_code: target.ok ? null : target.code,
     connection,
+    primary_writer: brand?.primary_writer ?? (target.ok ? target.platform : null),
+    execution_grade: grade,
+    site_capabilities: capabilities,
+    source_of_truth: brand?.source_of_truth ?? {},
+    // check() proves transport, not that a write lands on the public site.
+    check_is_transport_only: true,
     // Surfaced on purpose: an unapplied migration is the single most expensive
     // failure mode this codebase has had, and it should be visible from the
     // product rather than only discoverable by querying Postgres by hand.
@@ -130,6 +140,6 @@ const accessErr = requireBrandAccess(auth, brand_id);
     queued: true,
     platform: target.platform,
     change_type: translation.change.type,
-    target: translation.change.type === "upsert_page" ? translation.change.slug : translation.change.url,
+    target: translation.change.type === "upsert_page" ? translation.change.slug : translation.change.type === "update_meta" ? translation.change.url : translation.change.slug,
   });
 }

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { slugify, splitFrontMatter } from "@/lib/utils";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
+import { siblingDrafts } from "@/lib/recommendations/topic";
+import { recordOwnerTeaching } from "@/lib/playbook/owner";
+import { queueLivePublishIfConnected } from "@/lib/execution/queue-approved";
+import { contentPublishFields } from "@/lib/content-publish";
 
 // Human gate. Approving a blog/page/GEO draft publishes it into the `content`
 // table that the live site reads from. Meta/intent drafts are just marked approved.
@@ -18,8 +22,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const accessErr = requireBrandAccess(auth, draft.brand_id);
   if (accessErr) return accessErr;
 
+  const { data: openSiblings } = await db.from("drafts")
+    .select("id, task_type, target_keyword, target_url, title, status, body")
+    .eq("brand_id", draft.brand_id)
+    .in("status", ["pending_review", "approved"])
+    .neq("id", id);
+  const twinIds = siblingDrafts(draft, openSiblings || []).map((row) => row.id);
+  if (twinIds.length) {
+    await db.from("drafts").update({ status: "dismissed" }).in("id", twinIds);
+  }
+
   if (dismiss) {
     await db.from("drafts").update({ status: "dismissed" }).eq("id", id);
+    await recordOwnerTeaching(
+      draft.brand_id,
+      `Declined "${draft.title}"${draft.target_keyword ? ` (${draft.target_keyword})` : ""}. Do not propose this again unless the facts change.`
+    ).catch(() => undefined);
     return NextResponse.json({ ok: true, status: "dismissed" });
   }
 
@@ -45,22 +63,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : title;
 
     const { error: pubErr } = await db.from("content").upsert(
-      {
+      contentPublishFields({
         slug,
-        brand_id: draft.brand_id,
+        brandId: draft.brand_id,
         title: finalTitle,
         body,
-        published_at: new Date().toISOString(),
-      },
+        metaDescription: meta,
+      }),
       { onConflict: "brand_id,slug" }
     );
     if (pubErr) {
       return NextResponse.json({ ok: false, error: "Publish failed: " + pubErr.message }, { status: 500 });
     }
-    await db.from("drafts").update({ status: "published" }).eq("id", id);
-    return NextResponse.json({ ok: true, status: "published", slug, meta });
+    const live = await queueLivePublishIfConnected(
+      { id: draft.brand_id, name: brand?.name || "" },
+      {
+        id: draft.id,
+        task_type: draft.task_type,
+        title: draft.title,
+        body: draft.body,
+        target_url: draft.target_url,
+        target_keyword: draft.target_keyword,
+      }
+    );
+    // In-platform `content` is saved. The public site is only "published"
+    // after stepPublish verifies it. A queued live job leaves the draft approved.
+    const status = live.queued ? "approved" : "published";
+    await db.from("drafts").update({ status }).eq("id", id);
+    return NextResponse.json({ ok: true, status, slug, meta, live_queued: live.queued });
   }
 
   await db.from("drafts").update({ status: "approved" }).eq("id", id);
-  return NextResponse.json({ ok: true, status: "approved" });
+  const live = await queueLivePublishIfConnected(
+    { id: draft.brand_id, name: brand?.name || "" },
+    {
+      id: draft.id,
+      task_type: draft.task_type,
+      title: draft.title,
+      body: draft.body,
+      target_url: draft.target_url,
+      target_keyword: draft.target_keyword,
+    }
+  );
+  return NextResponse.json({ ok: true, status: "approved", live_queued: live.queued });
 }

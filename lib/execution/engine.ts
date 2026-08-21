@@ -9,15 +9,19 @@
 // would be decorative.
 
 import { db } from "../supabase";
-import type { Brand } from "../brands";
+import { getBrandById, type Brand } from "../brands";
 import {
   findConnectedIntegration,
   getDecryptedCredentials,
+  getIntegration,
   integrationsReachable,
+  type BrandIntegration,
   type IntegrationProvider,
 } from "../integrations";
-import { getAdapter, isSitePlatform, SITE_PLATFORMS } from "./registry";
+import { getAdapter, isSitePlatform, SITE_PLATFORMS, INTEGRATION_SITE_PLATFORMS } from "./registry";
+import { capabilityMapFor, parseCapabilityMap, persistBrandWriter } from "./site-capabilities";
 import { supports, type PublishAdapter, type SiteChange, type SitePlatform } from "./types";
+import { parseSourceOfTruth } from "./source-of-truth";
 
 /** Postgres/PostgREST codes meaning the execution-log migration is not applied. */
 const MIGRATION_MISSING = new Set(["PGRST205", "42P01"]);
@@ -32,25 +36,22 @@ export type ResolvedTarget =
  * is unreachable" -- those look identical from the outside and demand
  * completely different fixes.
  */
-export async function resolvePublishTarget(brandId: string): Promise<ResolvedTarget> {
-  const integration = await findConnectedIntegration(brandId, SITE_PLATFORMS as IntegrationProvider[]);
-
-  if (!integration) {
-    const reach = await integrationsReachable();
-    if (!reach.ok) {
-      return {
-        ok: false,
-        code: "unreadable",
-        reason: `The integration store could not be read (${reach.reason}). Publishing cannot be configured until that is fixed.`,
-      };
-    }
+async function notConfiguredOrUnreadable(detail: string): Promise<ResolvedTarget> {
+  const reach = await integrationsReachable();
+  if (!reach.ok) {
     return {
       ok: false,
-      code: "not_configured",
-      reason: `No publishing platform is connected for this brand. Connect one of: ${SITE_PLATFORMS.join(", ")}.`,
+      code: "unreadable",
+      reason: `The integration store could not be read (${reach.reason}). Publishing cannot be configured until that is fixed.`,
     };
   }
+  return { ok: false, code: "not_configured", reason: detail };
+}
 
+async function targetFromIntegration(
+  brandId: string,
+  integration: BrandIntegration
+): Promise<ResolvedTarget> {
   if (!isSitePlatform(integration.provider)) {
     return { ok: false, code: "unknown_platform", reason: `No adapter is registered for "${integration.provider}".` };
   }
@@ -68,7 +69,11 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
     };
   }
   if (!credentials) {
-    return { ok: false, code: "not_configured", reason: `${integration.provider} is marked connected but has no stored credentials.` };
+    return {
+      ok: false,
+      code: "not_configured",
+      reason: `${integration.provider} is marked connected but has no stored credentials.`,
+    };
   }
 
   return {
@@ -80,11 +85,97 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
   };
 }
 
-export type ExecutionOutcome =
-  | { status: "succeeded"; platform: SitePlatform; url: string | null; remoteId: string | null }
-  | { status: "failed"; platform: SitePlatform | null; error: string; retryable: boolean };
+async function targetFromProxyBrand(brand: Brand): Promise<ResolvedTarget> {
+  const token = (brand.proxy_site_token || "").trim();
+  const namespace = (brand.proxy_namespace || "").trim();
+  if (!token || !namespace) {
+    return {
+      ok: false,
+      code: "not_configured",
+      reason:
+        "Subdirectory publishing is selected but the token or path name is missing. Reconnect website publishing.",
+    };
+  }
+  return {
+    ok: true,
+    platform: "proxy",
+    adapter: getAdapter("proxy"),
+    credentials: { siteToken: token },
+    config: { namespace, siteUrl: brand.site_url },
+  };
+}
 
-type ExecutionMeta = { draftId?: string | null; jobId?: string | null };
+export async function resolvePublishTarget(brandId: string): Promise<ResolvedTarget> {
+  const brand = await getBrandById(brandId).catch(() => null);
+  const pinned =
+    brand?.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
+
+  // Proxy has no brand_integrations row — resolve from brands columns.
+  if (pinned === "proxy") {
+    if (!brand) {
+      return notConfiguredOrUnreadable("Brand not found for subdirectory publishing.");
+    }
+    return targetFromProxyBrand(brand);
+  }
+
+  if (pinned) {
+    const integration = await getIntegration(brandId, pinned);
+    if (!integration || integration.status !== "connected") {
+      return notConfiguredOrUnreadable(
+        `The chosen publishing connection (${pinned}) is not connected.`
+      );
+    }
+    return targetFromIntegration(brandId, integration);
+  }
+
+  // Integration-backed writers only (proxy is never discovered via this table).
+  // Pending proxy setup (token + SoT, primary_writer not pinned yet) wins here.
+  if (brand?.proxy_site_token && brand?.proxy_namespace) {
+    const sot = parseSourceOfTruth(brand.source_of_truth);
+    if (sot.confirmed === "platform_proxy") {
+      return targetFromProxyBrand(brand);
+    }
+  }
+
+  const integration = await findConnectedIntegration(
+    brandId,
+    INTEGRATION_SITE_PLATFORMS as IntegrationProvider[]
+  );
+
+  if (!integration) {
+    return notConfiguredOrUnreadable(
+      `No publishing platform is connected for this brand. Connect one of: ${SITE_PLATFORMS.join(", ")}.`
+    );
+  }
+
+  const target = await targetFromIntegration(brandId, integration);
+  // Legacy brands have a connected writer but no pin. Stick it so a later
+  // leftover row cannot silently take over. Do not overwrite an existing map.
+  if (target.ok) {
+    const existing = parseCapabilityMap(brand?.site_capabilities);
+    const map = Object.keys(existing).length ? existing : capabilityMapFor(target.adapter);
+    try {
+      await persistBrandWriter(brandId, target.platform, map);
+    } catch (e) {
+      console.warn(
+        `[execution] could not pin writer for brand ${brandId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    }
+  }
+  return target;
+}
+
+export type ExecutionOutcome =
+  | { status: "succeeded"; platform: SitePlatform; url: string | null; remoteId: string | null; executionId: string | null }
+  | { status: "failed"; platform: SitePlatform | null; error: string; retryable: boolean; executionId: string | null };
+
+type ExecutionMeta = {
+  draftId?: string | null;
+  jobId?: string | null;
+  canary?: { titleToken: string; bodyToken: string } | null;
+};
 
 /**
  * Apply one change to a brand's live site.
@@ -109,8 +200,9 @@ export async function executeChange(
       // Only an unreachable credential store is worth retrying unattended;
       // the rest need a human to connect or re-enter something.
       retryable: target.code === "unreadable",
+      executionId: null,
     };
-    await recordExecution(brand.id, null, change, outcome, null, meta);
+    outcome.executionId = await recordExecution(brand.id, null, change, outcome, null, meta);
     return outcome;
   }
 
@@ -122,13 +214,20 @@ export async function executeChange(
         `${target.adapter.label} cannot perform "${change.type}". ` +
         `It supports: ${target.adapter.capabilities.join(", ")}.`,
       retryable: false,
+      executionId: null,
     };
-    await recordExecution(brand.id, target.platform, change, outcome, null, meta);
+    outcome.executionId = await recordExecution(brand.id, target.platform, change, outcome, null, meta);
     return outcome;
   }
 
+  // Certification canaries must be publicly readable. A "save as draft"
+  // preference for approved work must not hide the prove-publishing page.
+  const config = meta.canary
+    ? { ...target.config, status: "publish" }
+    : target.config;
+
   const result = await target.adapter
-    .apply({ brand, credentials: target.credentials, config: target.config }, change)
+    .apply({ brand, credentials: target.credentials, config }, change)
     .catch((e) => ({
       // An adapter is contractually required not to throw; if one does, that is
       // a bug in the adapter and must not take the job down with it.
@@ -138,24 +237,37 @@ export async function executeChange(
     }));
 
   const outcome: ExecutionOutcome = result.ok
-    ? { status: "succeeded", platform: target.platform, url: result.url, remoteId: result.remoteId }
-    : { status: "failed", platform: target.platform, error: result.error, retryable: result.retryable };
+    ? { status: "succeeded", platform: target.platform, url: result.url, remoteId: result.remoteId, executionId: null }
+    : { status: "failed", platform: target.platform, error: result.error, retryable: result.retryable, executionId: null };
 
-  await recordExecution(
+  const recordedPrevious =
+    result.ok && meta.canary
+      ? {
+          ...(result.previous || {}),
+          canary: true,
+          titleToken: meta.canary.titleToken,
+          bodyToken: meta.canary.bodyToken,
+        }
+      : result.ok
+        ? result.previous
+        : null;
+
+  const executionId = await recordExecution(
     brand.id,
     target.platform,
     change,
     outcome,
-    result.ok ? result.previous : null,
+    recordedPrevious,
     meta
   );
 
-  return outcome;
+  return { ...outcome, executionId };
 }
 
 /** Slug or URL a change was aimed at — the useful identifier in a log. */
 function targetOf(change: SiteChange): string {
-  return change.type === "upsert_page" ? change.slug : change.url;
+  if (change.type === "update_meta") return change.url;
+  return change.slug;
 }
 
 /**
@@ -171,9 +283,22 @@ async function recordExecution(
   outcome: ExecutionOutcome,
   previous: Record<string, unknown> | null,
   meta: ExecutionMeta
-): Promise<void> {
+): Promise<string | null> {
   try {
-    const { error } = await db.from("publish_executions").insert({
+    const canRestoreMarkdown =
+      change.type === "upsert_page" &&
+      typeof previous?.title === "string" &&
+      typeof previous?.bodyMarkdown === "string";
+    const canDeleteCreate =
+      change.type === "upsert_page" &&
+      outcome.status === "succeeded" &&
+      (!previous || previous.canary === true);
+    const rollbackSupported =
+      outcome.status === "succeeded" &&
+      change.type !== "delete_page" &&
+      ((change.type === "update_meta" && !!previous) || canRestoreMarkdown || canDeleteCreate);
+
+    const row = {
       brand_id: brandId,
       draft_id: meta.draftId ?? null,
       job_id: meta.jobId ?? null,
@@ -186,12 +311,43 @@ async function recordExecution(
       error: outcome.status === "failed" ? outcome.error : null,
       previous,
       executed_at: new Date().toISOString(),
-    });
-    if (error && !MIGRATION_MISSING.has(error.code)) {
-      console.warn(`[execution] could not record execution for brand ${brandId}: ${error.message}`);
+      rollback_supported: rollbackSupported,
+      rollback_status: rollbackSupported
+        ? "available"
+        : outcome.status === "succeeded"
+          ? "unsupported"
+          : null,
+    };
+
+    const { data, error } = await db.from("publish_executions").insert(row).select("id").maybeSingle();
+    if (!error) return (data?.id as string | undefined) || null;
+    if (MIGRATION_MISSING.has(error.code)) return null;
+    // Older schema without rollback columns — retry minimal insert.
+    const { data: d2, error: e2 } = await db
+      .from("publish_executions")
+      .insert({
+        brand_id: brandId,
+        draft_id: meta.draftId ?? null,
+        job_id: meta.jobId ?? null,
+        provider: platform,
+        change_type: change.type,
+        target: targetOf(change),
+        status: outcome.status,
+        remote_id: outcome.status === "succeeded" ? outcome.remoteId : null,
+        result_url: outcome.status === "succeeded" ? outcome.url : null,
+        error: outcome.status === "failed" ? outcome.error : null,
+        previous,
+        executed_at: new Date().toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
+    if (e2 && !MIGRATION_MISSING.has(e2.code)) {
+      console.warn(`[execution] could not record execution for brand ${brandId}: ${e2.message}`);
     }
+    return (d2?.id as string | undefined) || null;
   } catch (e) {
     console.warn(`[execution] could not record execution for brand ${brandId}: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
   }
 }
 

@@ -4,6 +4,7 @@ import { reviseDraft } from "@/lib/agents";
 import type { Brand } from "@/lib/brands";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
+import { recordOwnerTeaching } from "@/lib/playbook/owner";
 
 export const maxDuration = 60;
 
@@ -39,6 +40,7 @@ const accessErr = requireBrandAccess(auth, draft.brand_id);
     thread.push({ feedback, at: new Date().toISOString() });
 
     await db.from("drafts").update({ body: revised, feedback: thread, status: "pending_review" }).eq("id", id);
+    await recordOwnerTeaching(draft.brand_id, feedback.trim()).catch(() => undefined);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });

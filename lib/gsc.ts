@@ -7,12 +7,16 @@
 
 import { JWT } from "google-auth-library";
 
-function auth() {
+function auth(scopes: string[]) {
   return new JWT({
     email: process.env.GSC_CLIENT_EMAIL,
     key: (process.env.GSC_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/webmasters.readonly"],
+    scopes,
   });
+}
+
+function authReadonly() {
+  return auth(["https://www.googleapis.com/auth/webmasters.readonly"]);
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
@@ -26,7 +30,7 @@ export type QueryRow = {
 };
 
 async function query(gscProperty: string, dimensions: string[], rowLimit = 250): Promise<QueryRow[]> {
-  const jwt = auth();
+  const jwt = authReadonly();
   const { access_token } = await jwt.authorize();
   const endpoint =
     "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
@@ -152,7 +156,7 @@ export async function keywordDailyHistory(
   startDate: string,
   endDate: string
 ): Promise<{ date: string; position: number; clicks: number; impressions: number; ctr: number }[]> {
-  const jwt = auth();
+  const jwt = authReadonly();
   const { access_token } = await jwt.authorize();
   const endpoint =
     "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
@@ -204,7 +208,7 @@ export async function keywordDailyHistory(
  * empty picker that looks like "you have no properties".
  */
 export async function listProperties(): Promise<{ siteUrl: string; permissionLevel: string }[]> {
-  const jwt = auth();
+  const jwt = authReadonly();
   const { access_token } = await jwt.authorize();
   const res = await fetch("https://searchconsole.googleapis.com/webmasters/v3/sites", {
     headers: { Authorization: `Bearer ${access_token}` },
@@ -230,4 +234,38 @@ export async function latestDataDate(gscProperty: string): Promise<string | null
   const rows = await query(gscProperty, ["date"], 100);
   if (!rows.length) return null;
   return rows.map((r) => r.keys[0]).sort().reverse()[0] || null;
+}
+
+/**
+ * Best-effort sitemap submit. Needs a write-capable webmasters scope; if the
+ * service account only has readonly, this returns skipped instead of throwing.
+ */
+export async function submitSitemap(
+  gscProperty: string,
+  sitemapUrl: string
+): Promise<{ ok: boolean; skipped?: string; error?: string }> {
+  if (!process.env.GSC_CLIENT_EMAIL || !process.env.GSC_PRIVATE_KEY) {
+    return { ok: false, skipped: "GSC service account not configured" };
+  }
+  try {
+    const jwt = auth(["https://www.googleapis.com/auth/webmasters"]);
+    const { access_token } = await jwt.authorize();
+    const endpoint =
+      "https://searchconsole.googleapis.com/webmasters/v3/sites/" +
+      encodeURIComponent(gscProperty) +
+      "/sitemaps/" +
+      encodeURIComponent(sitemapUrl);
+    const res = await fetch(endpoint, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${access_token}` },
+    });
+    if (res.ok || res.status === 204) return { ok: true };
+    const text = await res.text();
+    if (res.status === 403 || /insufficient|readonly/i.test(text)) {
+      return { ok: false, skipped: "Search Console write access not available" };
+    }
+    return { ok: false, error: `${res.status} ${text}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

@@ -6,6 +6,47 @@ import Field from "@/app/_components/Field";
 import { Panel, PanelHead } from "../_components/Panel";
 import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
+import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
+import ProxySetup from "./_ProxySetup";
+
+type PublishPlatform = "wordpress" | "shopify" | "webhook" | "proxy";
+
+type PublishForm = {
+  platform: PublishPlatform;
+  siteUrl: string;
+  username: string;
+  applicationPassword: string;
+  publishStatus: "publish" | "draft";
+  endpointUrl: string;
+  signingSecret: string;
+  shop: string;
+  accessToken: string;
+};
+
+function makeSigningSecret(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const emptyPublishForm = (): PublishForm => ({
+  platform: "wordpress",
+  siteUrl: "",
+  username: "",
+  applicationPassword: "",
+  publishStatus: "publish",
+  endpointUrl: "",
+  signingSecret: "",
+  shop: "",
+  accessToken: "",
+});
+
+function platformFromDetail(detail: string | null): PublishPlatform {
+  if (/path on your|\/[a-z0-9-]+\//i.test(detail || "")) return "proxy";
+  if (/shopify/i.test(detail || "")) return "shopify";
+  if (/own website|webhook|API/i.test(detail || "")) return "webhook";
+  return "wordpress";
+}
 
 // THE INTEGRATION CENTER.
 //
@@ -23,6 +64,7 @@ const BADGE: Record<PublicConnectionState["status"], { cls: string; label: strin
   not_connected: { cls: "", label: "Not connected" },
   expired: { cls: "amber", label: "Access expired" },
   error: { cls: "red", label: "Needs attention" },
+  limited: { cls: "amber", label: "Not proven yet" },
   unavailable: { cls: "", label: "Not available yet" },
 };
 
@@ -143,6 +185,248 @@ const RETURN_MESSAGE: Record<string, { kind: "success" | "info" | "error"; title
   failed: { kind: "error", title: "That didn't work", detail: "We couldn't complete the connection. Please try again." },
 };
 
+function PublishingSetup({
+  form,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit,
+  onCopy,
+}: {
+  form: PublishForm;
+  busy: boolean;
+  onChange: (patch: Partial<PublishForm>) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  onCopy: (text: string, label: string) => void;
+}) {
+  const pick = (platform: PublishPlatform) => {
+    if (platform === "webhook") {
+      onChange({ platform, signingSecret: form.signingSecret || makeSigningSecret() });
+      return;
+    }
+    onChange({ platform });
+  };
+
+  return (
+    <div className="p-conn-setup">
+      <div className="p-conn-setup-tabs" role="tablist" aria-label="Website type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "proxy"}
+          className={`p-btn ${form.platform === "proxy" ? "primary" : "ghost"}`}
+          onClick={() => pick("proxy")}
+          disabled={busy}
+        >
+          <span>Path on your site</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "wordpress"}
+          className={`p-btn ${form.platform === "wordpress" ? "primary" : "ghost"}`}
+          onClick={() => pick("wordpress")}
+          disabled={busy}
+        >
+          <span>WordPress</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "shopify"}
+          className={`p-btn ${form.platform === "shopify" ? "primary" : "ghost"}`}
+          onClick={() => pick("shopify")}
+          disabled={busy}
+        >
+          <span>Shopify</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={form.platform === "webhook"}
+          className={`p-btn ${form.platform === "webhook" ? "primary" : "ghost"}`}
+          onClick={() => pick("webhook")}
+          disabled={busy}
+        >
+          <span>Your own website</span>
+        </button>
+      </div>
+
+      {form.platform === "proxy" ? (
+        <p className="p-conn-setup-help">
+          Continue below — we&apos;ll check that the path is free, give you a rewrite for your host, then prove publishing.
+        </p>
+      ) : form.platform === "wordpress" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            Create an <strong>Application Password</strong> in WordPress under{" "}
+            <em>Users → Profile → Application Passwords</em>, then paste it here.
+            We check the connection before saving anything.
+          </p>
+          <Field
+            label="Website address"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://yoursite.com"
+            value={form.siteUrl}
+            onChange={(e) => onChange({ siteUrl: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="WordPress username"
+            autoComplete="username"
+            value={form.username}
+            onChange={(e) => onChange({ username: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            label="Application password"
+            type="password"
+            autoComplete="off"
+            value={form.applicationPassword}
+            onChange={(e) => onChange({ applicationPassword: e.target.value })}
+            disabled={busy}
+            required
+            helper="Spaces are fine — WordPress shows them that way."
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+            helper={
+              form.publishStatus === "draft"
+                ? "Approved pages stay drafts for your review. Prove publishing still posts a temporary live test page, then deletes it."
+                : undefined
+            }
+          >
+            <option value="publish">Publish live immediately after approval</option>
+            <option value="draft">Save as a WordPress draft for a final check</option>
+          </Field>
+        </div>
+      ) : form.platform === "shopify" ? (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            In Shopify admin, create a <strong>custom app</strong> with content
+            write permission, install it on the store, then paste the admin access
+            token here. We check before saving.
+          </p>
+          <Field
+            label="Store name"
+            placeholder="mystore.myshopify.com"
+            value={form.shop}
+            onChange={(e) => onChange({ shop: e.target.value })}
+            disabled={busy}
+            required
+            helper="Just the store name is fine — mystore or mystore.myshopify.com."
+          />
+          <Field
+            label="Admin access token"
+            type="password"
+            autoComplete="off"
+            value={form.accessToken}
+            onChange={(e) => onChange({ accessToken: e.target.value })}
+            disabled={busy}
+            required
+          />
+          <Field
+            as="select"
+            label="When we publish"
+            value={form.publishStatus}
+            onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
+            disabled={busy}
+            helper={
+              form.publishStatus === "draft"
+                ? "Approved pages stay unpublished for your review. Prove publishing still posts a temporary live test page, then deletes it."
+                : undefined
+            }
+          >
+            <option value="publish">Publish the page live after approval</option>
+            <option value="draft">Save as an unpublished Shopify page</option>
+          </Field>
+        </div>
+      ) : (
+        <div className="p-conn-setup-fields">
+          <p className="p-conn-setup-help">
+            Paste this code into your site once, put the secret below into it,
+            and deploy. The Persist / Delete comments must write to your real
+            content store — returning ok without saving will not prove
+            publishing. The README under Website publishing has a complete
+            receiver example you can copy. We ping the HTTPS address before
+            saving, so it has to be live.
+          </p>
+          <Field
+            as="textarea"
+            label="Code for your site"
+            readOnly
+            rows={14}
+            value={codedSiteSnippet(form.signingSecret)}
+            inputClassName="p-conn-snippet"
+          />
+          <div className="p-conn-actions" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              className="p-btn ghost"
+              onClick={() => onCopy(codedSiteSnippet(form.signingSecret), "Code")}
+              disabled={busy}
+            >
+              <span>Copy code</span>
+            </button>
+            <button
+              type="button"
+              className="p-btn ghost"
+              onClick={() => onChange({ signingSecret: makeSigningSecret() })}
+              disabled={busy}
+            >
+              <span>New secret</span>
+            </button>
+          </div>
+          <Field
+            label="Your secret"
+            value={form.signingSecret}
+            readOnly
+            helper="This has to match the secret in the code on your site."
+          />
+          <Field
+            label="Website address"
+            type="url"
+            inputMode="url"
+            placeholder="https://yoursite.com/api/seo-publish"
+            value={form.endpointUrl}
+            onChange={(e) => onChange({ endpointUrl: e.target.value })}
+            disabled={busy}
+            required
+            helper="The HTTPS address of the code you just added. Connect fails until that code is live on your site."
+          />
+        </div>
+      )}
+
+      {form.platform !== "proxy" && (
+      <div className="p-conn-actions">
+        <button className="p-btn primary" onClick={onSubmit} disabled={busy} data-busy={busy || undefined}>
+          <span>{busy ? "Checking connection…" : "Connect website"}</span>
+        </button>
+        <button className="p-btn ghost" onClick={onCancel} disabled={busy}>
+          <span>Cancel</span>
+        </button>
+      </div>
+      )}
+      {form.platform === "proxy" && (
+        <div className="p-conn-actions">
+          <button className="p-btn ghost" onClick={onCancel} disabled={busy}>
+            <span>Cancel</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -151,6 +435,10 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm());
+
+  const [sotChoice, setSotChoice] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -170,6 +458,15 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   }, [brandId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!rows) return;
+    const proving = rows.find((r) => r.key === "website_publishing")?.publishingProof;
+    if (proving?.confirmed) setSotChoice(proving.confirmed);
+    if (!proving?.certifying) return;
+    const t = window.setInterval(() => { void load(); }, 2500);
+    return () => window.clearInterval(t);
+  }, [rows, load]);
 
   /** Load what this Google connection can be pointed at. */
   const loadGoogleOptions = useCallback(async (key: string) => {
@@ -297,10 +594,158 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
   }
 
+  async function copyText(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied", `${label} is on your clipboard.`);
+    } catch {
+      toast.error("Couldn't copy", "Select the text and copy it yourself.");
+    }
+  }
+
+  async function saveSourceOfTruth(row: PublicConnectionState) {
+    const confirmed = sotChoice || row.publishingProof?.confirmed;
+    if (!confirmed) return;
+    setBusy("website_publishing:sot");
+    try {
+      const res = await authedFetch("/api/portal/source-of-truth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId, confirmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't save that", undefined);
+        return;
+      }
+      toast.success("Saved", data.message || undefined);
+      await load();
+    } catch {
+      toast.error("We couldn't save that", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function provePublishing() {
+    setBusy("website_publishing:prove");
+    try {
+      const res = await authedFetch("/api/portal/certify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't start that test", undefined);
+        return;
+      }
+      toast.success(data.queued ? "Testing publishing" : "Already testing", data.message || undefined);
+      await load();
+    } catch {
+      toast.error("We couldn't start that test", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function dismissProxyNavNudge(row: PublicConnectionState) {
+    const nudge = row.proxyNavNudge;
+    if (!nudge) return;
+    const ok = await confirm({
+      title: "Dismiss without adding a link?",
+      body: nudge.dismissWarning,
+      confirmLabel: "Dismiss anyway",
+    });
+    if (!ok) return;
+    setBusy("website_publishing:nav-nudge");
+    try {
+      const res = await authedFetch("/api/proxy/nav-nudge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't dismiss that");
+        return;
+      }
+      toast.success("Dismissed", "You can still add the link later.");
+      await load();
+    } catch {
+      toast.error("We couldn't dismiss that", "Try again in a moment.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function connectPublishing() {
+    setBusy("website_publishing:connect");
+    try {
+      const payload =
+        publishForm.platform === "wordpress"
+          ? {
+              brand_id: brandId,
+              action: "connect" as const,
+              platform: "wordpress" as const,
+              siteUrl: publishForm.siteUrl,
+              username: publishForm.username,
+              applicationPassword: publishForm.applicationPassword,
+              publishStatus: publishForm.publishStatus,
+            }
+          : publishForm.platform === "shopify"
+            ? {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "shopify" as const,
+                shop: publishForm.shop,
+                accessToken: publishForm.accessToken,
+                publishStatus: publishForm.publishStatus,
+              }
+            : {
+                brand_id: brandId,
+                action: "connect" as const,
+                platform: "webhook" as const,
+                endpointUrl: publishForm.endpointUrl,
+                signingSecret: publishForm.signingSecret,
+              };
+
+      const res = await authedFetch("/api/portal/publishing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't connect that website", data.detail || undefined);
+        return;
+      }
+      toast.success("Website reachable", data.message || undefined);
+      setPublishOpen(false);
+      setPublishForm(emptyPublishForm());
+      await load();
+    } catch {
+      toast.error("We couldn't connect that website", "Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function act(row: PublicConnectionState, action: ConnectionAction) {
     // Connecting or reconnecting a Google product means signing in at Google.
     if (GOOGLE_KEYS.has(row.key) && (action === "connect" || action === "reconnect")) {
       await startGoogle(row);
+      return;
+    }
+
+    if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
+      const platform = action === "connect" ? "proxy" : platformFromDetail(row.detail);
+      setPublishForm({
+        ...emptyPublishForm(),
+        platform,
+        signingSecret: platform === "webhook" ? makeSigningSecret() : "",
+      });
+      setPublishOpen(true);
       return;
     }
 
@@ -341,15 +786,11 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
           });
       const data = await res.json().catch(() => ({}));
 
-      if (data.redirect) {
-        toast.info(data.message || "Continue setup", "Taking you to the right page.");
-        window.location.href = data.redirect;
-        return;
-      }
       if (!res.ok) {
         toast.error(data.error || "That didn't work", data.detail || undefined);
         return;
       }
+      if (row.key === "website_publishing") setPublishOpen(false);
       toast.success(ACTION_LABEL[action], data.message || undefined);
       await load();
     } catch {
@@ -404,6 +845,88 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
 
                 {/* Why this status — always present, so no state is unexplained. */}
                 <div className="p-conn-why">{row.why}</div>
+
+                {row.operations?.map((op) => (
+                  <div className="p-conn-meta" key={op.label}>
+                    {op.label} — {op.stateLabel}
+                  </div>
+                ))}
+
+                {row.publishingProof && (
+                  <div className="p-conn-pick" style={{ marginTop: 8 }}>
+                    {row.publishingProof.confirmed !== "platform_proxy" && (
+                      <>
+                        <Field
+                          as="select"
+                          label={row.publishingProof.question}
+                          value={sotChoice || row.publishingProof.confirmed || ""}
+                          onChange={(e) => setSotChoice(e.target.value)}
+                        >
+                          <option value="">Select where pages are saved…</option>
+                          {row.publishingProof.options.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </Field>
+                        {row.publishingProof.guessLabel && !row.publishingProof.confirmed && (
+                          <div className="p-conn-meta">We think it might be {row.publishingProof.guessLabel} — confirm to continue.</div>
+                        )}
+                        <button
+                          className="p-btn ghost"
+                          style={{ marginTop: 8 }}
+                          onClick={() => void saveSourceOfTruth(row)}
+                          disabled={!!busy || !(sotChoice || row.publishingProof.confirmed)}
+                          data-busy={busy === "website_publishing:sot" || undefined}
+                        >
+                          <span>{busy === "website_publishing:sot" ? "Saving…" : "Save"}</span>
+                        </button>
+                      </>
+                    )}
+                    {row.publishingProof.unknownHint && (
+                      <div className="p-conn-note">
+                        <IconAlert size={13} />
+                        <span>{row.publishingProof.unknownHint}</span>
+                      </div>
+                    )}
+                    {row.publishingProof.lastFailReason && (
+                      <div className="p-conn-note error">
+                        <IconAlert size={13} />
+                        <span>{row.publishingProof.lastFailReason}</span>
+                      </div>
+                    )}
+                    {row.publishingProof.certifying && (
+                      <div className="p-conn-meta">Testing… this usually takes a minute.</div>
+                    )}
+                    {row.publishingProof.canProve && (
+                      <button
+                        className="p-btn primary"
+                        style={{ marginTop: 8 }}
+                        onClick={() => void provePublishing()}
+                        disabled={!!busy}
+                        data-busy={busy === "website_publishing:prove" || undefined}
+                      >
+                        <span>{busy === "website_publishing:prove" ? "Starting…" : row.publishingProof.proveLabel}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {row.proxyNavNudge && (
+                  <div className="p-conn-note" style={{ marginTop: 8 }}>
+                    <IconAlert size={13} />
+                    <span>
+                      {row.proxyNavNudge.message}{" "}
+                      <button
+                        type="button"
+                        className="p-inline-link"
+                        style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}
+                        onClick={() => void dismissProxyNavNudge(row)}
+                        disabled={busy === "website_publishing:nav-nudge"}
+                      >
+                        {busy === "website_publishing:nav-nudge" ? "Dismissing…" : "Dismiss"}
+                      </button>
+                    </span>
+                  </div>
+                )}
 
                 {row.detail && <div className="p-conn-account">{row.detail}</div>}
 
@@ -476,7 +999,36 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.actions.length > 0 && (
+                {row.key === "website_publishing" && publishOpen && publishForm.platform === "proxy" && (
+                  <ProxySetup
+                    brandId={brandId}
+                    busy={!!busy}
+                    onBusy={(v) => setBusy(v ? "website_publishing:proxy" : null)}
+                    onDone={() => void load()}
+                    onCancel={() => setPublishOpen(false)}
+                    onCopy={copyText}
+                    lastFailReason={row.publishingProof?.lastFailReason}
+                    onProve={() => {
+                      setPublishOpen(false);
+                      void provePublishing();
+                    }}
+                  />
+                )}
+
+                {row.key === "website_publishing" && publishOpen && publishForm.platform !== "proxy" && (
+                  <PublishingSetup
+                    form={publishForm}
+                    busy={busy === "website_publishing:connect"}
+                    onChange={(patch) => {
+                      setPublishForm((f) => ({ ...f, ...patch }));
+                    }}
+                    onCancel={() => setPublishOpen(false)}
+                    onSubmit={() => void connectPublishing()}
+                    onCopy={copyText}
+                  />
+                )}
+
+                {row.actions.length > 0 && !(row.key === "website_publishing" && publishOpen) && (
                   <div className="p-conn-actions">
                     {row.actions.map((a) => {
                       const key = `${row.key}:${a}`;

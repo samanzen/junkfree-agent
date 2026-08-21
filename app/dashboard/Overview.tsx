@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import CountUp from "./CountUp";
 import ResponsiveTable from "@/app/_components/ResponsiveTable";
+import { fillSnapshotGaps, kpiDelta, type KpiKey } from "@/lib/metrics/kpis";
 // Recharts is no longer imported here — the three chart blocks moved behind a
 // lazy boundary (./OverviewCharts), which is what keeps it out of this route's
 // initial bundle.
@@ -69,12 +70,11 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
     </div>
   );
 
-  const { current: c, previous: p, series, keywords, lowCtrPages, agent, gscConnected } = data;
+  const { current, series, keywords, lowCtrPages, agent, gscConnected } = data;
+  const newestFirst = [...series].reverse();
+  const c = fillSnapshotGaps(current, newestFirst);
 
-  const delta = (k: keyof Snap): number | null => {
-    if (!p || c[k] == null || p[k] == null) return null;
-    return (c[k] as number) - (p[k] as number);
-  };
+  const delta = (k: KpiKey): number | null => kpiDelta(newestFirst, k);
 
   const chartData = series.map((s) => ({
     d: new Date(s.captured_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
@@ -114,7 +114,7 @@ export default function Overview({ brandId, token }: { brandId: string; token?: 
         <KpiCard label="Striking distance" value={c.striking_distance} d={delta("striking_distance")}
           color="#E84393" hint="Keywords in pos 5–20" />
         <KpiCard label="AI visibility" value={c.ai_visibility} suffix="%"
-          color="#A29BFE" hint="Cited in ChatGPT / Gemini" />
+          color="#A29BFE" hint="Questions where assistants name you" />
         <KpiCard label="Site health" value={c.site_health} suffix="%"
           color="#FDCB6E" hint="Technical SEO score" />
       </div>

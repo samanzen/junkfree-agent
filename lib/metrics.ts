@@ -2,7 +2,8 @@ import { db } from "./supabase";
 import type { Brand } from "./brands";
 import { strikingDistance } from "./gsc";
 import { domainOverview, backlinksSummary, rankedKeywords, isConfigured, geoOf } from "./dataforseo";
-import { checkAiVisibility } from "./geo-agent";
+import { latestMentionRate } from "./ai-visibility/run";
+import { fillSnapshotGaps } from "./metrics/kpis";
 
 export type Snapshot = {
   organic_traffic: number | null;
@@ -14,6 +15,8 @@ export type Snapshot = {
   ai_visibility: number | null;
   site_health: number | null;
 };
+
+export { fillSnapshotGaps, kpiDelta, KPI_KEYS, type KpiKey } from "./metrics/kpis";
 
 export function domainOf(brand: Brand) {
   return brand.site_url.replace(/^https?:\/\//, "").replace(/\/$/, "").replace(/^www\./, "");
@@ -43,21 +46,31 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     site_health = typeof parsed?.score === "number" ? parsed.score : null;
   } catch { /* leave null */ }
 
-  // checkAiVisibility (lib/geo-agent.ts) has existed since Sprint 5 with zero
-  // callers, which is why ai_visibility has been null in every snapshot ever
-  // taken and why the portal's AI Visibility card reads "Coming soon".
+  // AI visibility is now the mention rate from the most recent completed
+  // AI-visibility sweep (lib/ai-visibility): the share of measured questions —
+  // across assistants, places and languages — in which this brand was named.
   //
-  // It asks a model, with web search, the discovery question a customer would
-  // ask ("best <service> in <city>") and reports whether this brand appears in
-  // the answer. That is a genuine yes/no, so it is stored as 100 or 0 rather
-  // than dressed up as a percentage — the card's wording says exactly what the
-  // number means.
+  // It previously came from a single call to checkAiVisibility(): ONE question,
+  // asked of ONE model, stored as 100 or 0. That made a percentage-suffixed KPI
+  // card out of a coin flip, and it spent a web-search-grounded model call on
+  // every snapshot to do it. Reading the sweep's rate instead is both honest and
+  // free — the number already exists, computed from many questions.
   //
-  // Best-effort: a failure leaves the column null, which is what every previous
-  // snapshot already contained, so nothing downstream changes.
-  const aiVisibility = await checkAiVisibility(brand)
-    .then((r) => (r.mentioned ? 100 : 0))
-    .catch(() => null);
+  // Null when the sweep has never run or supabase/018_ai_visibility.sql has not
+  // been applied, which is exactly what this column contained before, so nothing
+  // downstream has to change. If this run has no sweep yet, keep the last
+  // stored rate so the Overview card does not go blank.
+  let aiVisibility = await latestMentionRate(brand.id).catch(() => null);
+  if (aiVisibility == null) {
+    const prev = await db.from("metric_snapshots")
+      .select("ai_visibility")
+      .eq("brand_id", brand.id)
+      .not("ai_visibility", "is", null)
+      .order("captured_at", { ascending: false })
+      .limit(1);
+    const n = prev.data?.[0]?.ai_visibility;
+    if (n != null && Number.isFinite(Number(n))) aiVisibility = Number(n);
+  }
 
   let strikingCount = striking.length;
   let avgPos = striking.length
@@ -68,14 +81,15 @@ export async function snapshot(brand: Brand): Promise<Snapshot> {
     const positions = ranked.map((k) => k.position).filter((p) => p > 0);
     avgPos = positions.length ? positions.reduce((a, b) => a + b, 0) / positions.length : null;
   }
+  const measuredOnPage = striking.length > 0 || ranked.length > 0;
 
   const snap: Snapshot = {
     organic_traffic: overview?.organic_traffic ?? null,
     organic_keywords: overview?.organic_keywords ?? null,
     backlinks: backlinks?.backlinks ?? null,
     referring_domains: backlinks?.referring_domains ?? null,
-    striking_distance: strikingCount || null,
-    avg_position: avgPos ? Math.round(avgPos * 10) / 10 : null,
+    striking_distance: measuredOnPage ? strikingCount : null,
+    avg_position: avgPos == null ? null : Math.round(avgPos * 10) / 10,
     ai_visibility: aiVisibility,
     site_health,
   };
@@ -94,6 +108,8 @@ export async function series(brandId: string, limit = 30) {
 
 export async function latestWithDelta(brandId: string) {
   const { data } = await db.from("metric_snapshots").select("*")
-    .eq("brand_id", brandId).order("captured_at", { ascending: false }).limit(2);
-  return { current: data?.[0] || null, previous: data?.[1] || null };
+    .eq("brand_id", brandId).order("captured_at", { ascending: false }).limit(32);
+  const rows = data || [];
+  const current = rows[0] ? fillSnapshotGaps(rows[0], rows) : null;
+  return { current, previous: rows[1] || null, history: rows };
 }

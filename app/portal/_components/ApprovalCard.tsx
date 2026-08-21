@@ -5,9 +5,9 @@ import { fadeUp, EASE } from "./motion";
 import { IconCheck } from "../icons";
 import { useToast } from "@/app/_components/Notify";
 
-// Card for anything awaiting the customer's yes/no: a content draft, a Google
-// post, a drafted review reply. Body is rendered as plain text (never HTML)
-// so drafted content can't inject markup.
+// Card for anything awaiting the customer's yes/no. Review replies still dump
+// the drafted text here (it is short). Pages, posts and Google Posts use a
+// title + Preview overlay instead — see app/portal/content/page.tsx.
 export default function ApprovalCard({
   kind, title, meta, preface, body, bodyLabel, footer, onApprove, onDismiss,
   approveLabel = "Approve", dismissLabel = "Dismiss", collapsedHeight = 150,
@@ -106,7 +106,7 @@ export default function ApprovalCard({
           {onApprove && (
             <m.button className="p-btn primary" disabled={!!busy} onClick={() => run("approve")}
               whileTap={{ scale: 0.97 }}>
-              {busy === "approve" ? "Publishing…" : approveLabel}
+              {busy === "approve" ? "Approving…" : approveLabel}
             </m.button>
           )}
         </div>

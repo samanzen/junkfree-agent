@@ -24,10 +24,19 @@ export type JobKind =
   | "performance"
   | "rank_sync"
   | "rank_enrich"
+  // Asks AI assistants the questions a customer would ask and records whether
+  // the brand was recommended (lib/ai-visibility). Its own cadence and its own
+  // cron: the calls are web-search-grounded and therefore the most expensive
+  // per unit of output, and the answers are too non-deterministic to be worth
+  // reading daily. A single sweep is processed across as many of these jobs as
+  // it needs, each one enqueueing its own continuation.
+  | "ai_visibility"
   // Applies an approved draft to the brand's LIVE site via lib/execution.
   // Every other kind above produces a row for a human to read; this is the
   // only kind that changes something outside this platform.
-  | "publish";
+  | "publish"
+  // Slice 1: prove upsert_page (write → production → delete → gone). Same queue.
+  | "certify";
 
 export type Job = { id: string; brand_id: string; kind: JobKind; payload: Record<string, unknown> };
 

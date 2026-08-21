@@ -27,6 +27,7 @@ export type ReviewResponse = {
 
 export type PlatformData = {
   drafts: Draft[]; gbp: GbpPost[]; citations: Citation[]; reviews: ReviewResponse[];
+  keywordFacts?: Record<string, import("@/lib/recommendations/preview").KeywordFacts>;
 };
 
 // Single brand-scoped read of /api/platform. Reused by Dashboard, Content,
@@ -46,6 +47,7 @@ export function usePlatformData(brandId: string | undefined) {
         setData({
           drafts: d.drafts || [], gbp: d.gbp || [],
           citations: d.citations || [], reviews: d.reviews || [],
+          keywordFacts: d.keywordFacts || {},
         });
         setLoading(false);
       })

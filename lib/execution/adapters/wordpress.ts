@@ -135,6 +135,9 @@ export const wordpressAdapter: PublishAdapter = {
   },
 
   async apply(ctx, change: SiteChange): Promise<PublishResult> {
+    if (change.type === "delete_page") {
+      return deleteWpPage(ctx, change.slug, change.remoteId);
+    }
     if (change.type !== "upsert_page") {
       return { ok: false, error: `WordPress adapter cannot perform "${change.type}".`, retryable: false };
     }
@@ -194,3 +197,48 @@ export const wordpressAdapter: PublishAdapter = {
     };
   },
 };
+
+async function deleteWpPage(
+  ctx: AdapterContext,
+  slug: string,
+  remoteId: string | null
+): Promise<PublishResult> {
+  const { endpoint } = routeFor(slug);
+  let id = remoteId && /^\d+$/.test(remoteId) ? remoteId : null;
+  if (!id) {
+    const found = await wpFetch(
+      ctx,
+      `/${endpoint}?slug=${encodeURIComponent(routeFor(slug).slug)}&status=any&context=edit&per_page=1`
+    );
+    if (!found.ok) {
+      return { ok: false, error: wpError(found), retryable: found.status === 0 || found.status >= 500 };
+    }
+    const collection = parseWpCollection(found.body);
+    if (!collection) return { ok: false, error: NOT_WORDPRESS, retryable: false };
+    if (!collection[0]) {
+      // Already gone — rollback of a create is satisfied.
+      return { ok: true, remoteId: null, url: null, previous: null };
+    }
+    id = String(collection[0].id);
+  }
+
+  const del = await wpFetch(ctx, `/${endpoint}/${id}?force=true`, { method: "DELETE" });
+  if (del.ok || del.status === 404) {
+    const resource = del.ok ? parseWpResource(del.body) : null;
+    if (del.ok && del.body && !resource && !isWpDeletedPayload(del.body)) {
+      return { ok: false, error: NOT_WORDPRESS, retryable: false };
+    }
+    return { ok: true, remoteId: id, url: null, previous: null };
+  }
+  return {
+    ok: false,
+    error: wpError(del),
+    retryable: del.status === 0 || del.status >= 500 || del.status === 429,
+  };
+}
+
+function isWpDeletedPayload(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const d = body as { deleted?: unknown; previous?: unknown };
+  return d.deleted === true || typeof (d.previous as { id?: unknown } | undefined)?.id === "number";
+}

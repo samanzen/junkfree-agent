@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { usePortalAuth } from "@/lib/portalAuth";
 import {
@@ -15,6 +16,7 @@ import { Panel, PanelHead } from "./_components/Panel";
 import MissionHero, { type QuickAction } from "./_components/MissionHero";
 import AiBriefing, { type Signal } from "./_components/AiBriefing";
 import { Stagger, StaggerItem } from "./_components/motion";
+import ProxyNavNudgeCard from "./_components/ProxyNavNudgeCard";
 import {
   IconLock, IconExternal, IconTraffic, IconKey, IconTarget,
   IconLink, IconLeads, IconPhone, IconReviews, IconChevron,
@@ -73,6 +75,7 @@ export default function PortalDashboard() {
   const { brand } = usePortalAuth();
   const { summary, loading: sLoading } = usePortalSummary(brand?.id);
   const { data: platform, loading: pLoading } = usePlatformData(brand?.id);
+  const [navNudgeHidden, setNavNudgeHidden] = useState(false);
 
   if (!brand) return null;
   if (sLoading || pLoading || !summary) return <DashboardSkeleton />;
@@ -88,6 +91,13 @@ export default function PortalDashboard() {
   const priorities = buildPriorities(summary, platform);
   const reviewCount = platform?.reviews.length ?? null;
   const hasChart = (summary.chart?.length || 0) > 1;
+
+  const showProxyNavNudge =
+    !navNudgeHidden &&
+    brand.primary_writer === "proxy" &&
+    !!brand.proxy_namespace &&
+    !brand.proxy_nav_link_dismissed_at &&
+    brand.site_capabilities?.upsert_page?.state === "certified";
 
   // ── Presentation-only views of data already loaded above. Nothing here
   // fetches, computes a score, or invents a figure; each line is a count or a
@@ -145,6 +155,14 @@ export default function PortalDashboard() {
         summarySlot={<AiSummary brandId={brand.id} section="business overview" brandName={brand.name} data={m} />}
       />
 
+      {showProxyNavNudge && brand.proxy_namespace && (
+        <ProxyNavNudgeCard
+          brandId={brand.id}
+          namespace={brand.proxy_namespace}
+          onDismissed={() => setNavNudgeHidden(true)}
+        />
+      )}
+
       {/* Health scores */}
       <section>
         <SectionLabel title="Health scores" sub="Each score is built from the data we hold today." />
@@ -152,17 +170,20 @@ export default function PortalDashboard() {
           <ScoreCard label="SEO Score" value={seoScore} hint="Needs ranking data" />
           <ScoreCard label="Local SEO" value={localScore} hint="Needs citation data" />
           <ScoreCard label="Website Health" value={websiteHealth} hint="Runs with your next audit" />
-          {/* 100 or 0 is a yes/no, not a percentage — the hint says which, so
-              the number is never read as a score it isn't. */}
+          {/* Now a genuine percentage: the share of measured questions, across
+              assistants and locations, in which AI assistants named this
+              business (lib/ai-visibility). It replaced a single yes/no stored as
+              100 or 0, so the hint states what the number counts rather than
+              warning that it isn't a percentage. */}
           <ScoreCard
             label="AI Visibility"
             value={aiVisibility}
             hint={
               aiVisibility == null
-                ? "Checked on your next agent run"
-                : aiVisibility >= 100
-                ? "AI assistants recommend you for your main service search"
-                : "Not yet named when AI assistants are asked for your service"
+                ? "Measured on your next weekly AI check"
+                : aiVisibility === 0
+                ? "AI assistants recommend you for none of the questions we checked"
+                : `AI assistants recommend you in ${aiVisibility}% of the questions we checked`
             }
           />
           <ScoreCard label="Google Business Profile" value={gbpScore} hint="Connect your profile" />

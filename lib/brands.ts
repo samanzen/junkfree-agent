@@ -4,6 +4,7 @@
 
 import { db } from "./supabase";
 import type { RecommendationAutopilot } from "./recommendations/sections";
+import { ownerPlaybookBlock } from "./playbook/owner";
 
 // Vertical classification (Sprint 6.2). Free text at the DB layer (see
 // supabase/007_business_model.sql), same convention as IntegrationProvider
@@ -32,6 +33,35 @@ export type Brand = {
   auto_publish_meta: boolean;
   /** Per AI Recommendations tab autopilot. See lib/recommendations/sections.ts */
   recommendation_autopilot?: RecommendationAutopilot | null;
+  /** Feature 01 brand-wide mode. Optional until migration 013 is applied. */
+  execution_mode?: "approval" | "hybrid" | "autopilot" | null;
+  /** Feature 01 kill switch. False forces every auto path back to approval. */
+  autopilot_enabled?: boolean | null;
+  /** Owner standing orders for the Manager. Null = use the default playbook. */
+  owner_playbook?: string | null;
+  /**
+   * Chosen last-mile writer (wordpress | shopify | webhook | proxy).
+   * Optional until supabase/020 is applied. Do not import execution types here
+   * — that module already imports Brand.
+   */
+  primary_writer?: "wordpress" | "shopify" | "webhook" | "proxy" | null;
+  /** Per-operation execution state for the primary writer. See lib/execution/site-capabilities.ts. */
+  site_capabilities?: Record<string, unknown> | null;
+  /**
+   * Detected vs confirmed where new pages are saved. Slice 1.
+   * Optional until supabase/021 is applied. See lib/execution/source-of-truth.ts.
+   */
+  source_of_truth?: Record<string, unknown> | null;
+  /**
+   * Proxy subdirectory publishing (supabase/022). Token is the public-origin
+   * credential; no brand_integrations row. Null until proxy is connected.
+   */
+  proxy_site_token?: string | null;
+  proxy_namespace?: string | null;
+  proxy_claim_check?: Record<string, unknown> | null;
+  proxy_token_rotated_at?: string | null;
+  /** When the nav/footer link nudge was dismissed. Migration 024. */
+  proxy_nav_link_dismissed_at?: string | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;
@@ -77,6 +107,8 @@ export function brandBlock(b: Brand): string {
   }${
     b.intent_notes ? `\n- SEARCH-INTENT NOTE: ${b.intent_notes}` : ""
   }
+
+${ownerPlaybookBlock(b)}
 
 COMPETITOR RULE: A competitor is another business in the SAME industry competing for the same customers (e.g. other movers for a moving company). Social networks, directories, dealerships in unrelated verticals, and generic platforms are NOT competitors.`;
 }

@@ -6,16 +6,16 @@
 // site build hook, a bespoke CMS) can be served by a receiver the customer or
 // we write, without changing anything in this repository.
 //
-// It claims BOTH capabilities because the receiver is custom code by
-// definition -- unlike WordPress, there is no platform limitation to model
-// here. A receiver that cannot handle a change type should reject it, and its
-// error message is surfaced verbatim.
+// Claims upsert_page only. The paste snippet and junkfree example implement
+// pages + delete for certification; update_meta stays unsupported until a
+// receiver advertises and proves it.
 //
 // Credentials: { signingSecret }
 // Config:      { endpointUrl }
 
 import { createHmac, timingSafeEqual } from "crypto";
 import type { AdapterContext, PublishAdapter, PublishResult, SiteChange } from "../types";
+import { receiverFailureCopy } from "../receiver-failure";
 
 type ReceiverResponse = {
   ok?: boolean;
@@ -54,10 +54,15 @@ export function signPayload(body: string, secret: string): string {
   return createHmac("sha256", secret).update(body, "utf8").digest("hex");
 }
 
-/** Constant-time comparison, exported so a receiver implementation can reuse it. */
+/**
+ * Constant-time comparison, exported so a receiver can reuse it.
+ * Accepts the raw header value (`sha256=…`) or the hex digest alone.
+ */
 export function verifySignature(body: string, secret: string, signature: string): boolean {
+  const trimmed = (signature || "").trim();
+  const hex = trimmed.startsWith("sha256=") ? trimmed.slice("sha256=".length) : trimmed;
   const expected = Buffer.from(signPayload(body, secret), "utf8");
-  const given = Buffer.from(signature || "", "utf8");
+  const given = Buffer.from(hex, "utf8");
   if (expected.length !== given.length) return false;
   return timingSafeEqual(expected, given);
 }
@@ -98,7 +103,7 @@ async function post(
 export const webhookAdapter: PublishAdapter = {
   provider: "webhook",
   label: "Custom webhook",
-  capabilities: ["upsert_page", "update_meta"],
+  capabilities: ["upsert_page"],
 
   async check(ctx) {
     const resolved = endpointOf(ctx);
@@ -107,8 +112,8 @@ export const webhookAdapter: PublishAdapter = {
 
     const r = await post(ctx, { event: "check", brand: ctx.brand.slug, sentAt: new Date().toISOString() });
     if (r.ok) return { ok: true, detail: `Receiver at ${resolved.url.host} accepted the signed check request.` };
-    if (r.error) return { ok: false, detail: r.error };
-    return { ok: false, detail: `Receiver returned HTTP ${r.status}.` };
+    if (r.error) return { ok: false, detail: receiverFailureCopy(0, r.error) };
+    return { ok: false, detail: receiverFailureCopy(r.status, r.body) };
   },
 
   async apply(ctx, change: SiteChange): Promise<PublishResult> {
@@ -124,7 +129,7 @@ export const webhookAdapter: PublishAdapter = {
       const fromBody = typeof r.body === "object" && r.body?.error ? r.body.error : null;
       return {
         ok: false,
-        error: r.error || fromBody || `Receiver returned HTTP ${r.status}.`,
+        error: fromBody || receiverFailureCopy(r.error ? 0 : r.status, r.body ?? r.error),
         retryable: r.status === 0 || r.status >= 500 || r.status === 429,
       };
     }

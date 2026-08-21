@@ -9,8 +9,9 @@
 // Reporting a publish that did not occur is the worst failure this engine can
 // have, so the guard against it is tested directly.
 
-import { test, expect } from "vitest";
-import { parseWpResource, parseWpCollection } from "./wordpress";
+import { test, expect, vi, afterEach } from "vitest";
+import { parseWpResource, parseWpCollection, wordpressAdapter } from "./wordpress";
+import type { AdapterContext } from "../types";
 
 test("a real WP resource is accepted", () => {
   expect(parseWpResource({ id: 42, slug: "x", link: "https://s.ca/x" })).toMatchObject({ id: 42 });
@@ -45,4 +46,27 @@ test("an array containing a non-resource is rejected wholesale", () => {
 
 test("a bare object is not a collection", () => {
   expect(parseWpCollection({ id: 1 })).toBeNull();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+test("delete_page force-deletes the WordPress resource", async () => {
+  const ctx = {
+    brand: { id: "b1", slug: "x", name: "X", site_url: "https://wp.test" },
+    credentials: { username: "u", applicationPassword: "p" },
+    config: { siteUrl: "https://wp.test" },
+  } as unknown as AdapterContext;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    expect(String(url)).toMatch(/\/wp-json\/wp\/v2\/pages\/9\?force=true/);
+    expect(init?.method).toBe("DELETE");
+    return new Response(JSON.stringify({ deleted: true, previous: { id: 9 } }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const r = await wordpressAdapter.apply(ctx, { type: "delete_page", slug: "seo-cert-ab", remoteId: "9" });
+  expect(r.ok).toBe(true);
 });

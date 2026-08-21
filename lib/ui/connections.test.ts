@@ -35,17 +35,30 @@ test("the route dispatches work through the existing queue", () => {
   expect(src).not.toMatch(/callClaude|auditSite|fullKeywordSync/);
 });
 
-test("website publishing sends the user to the existing setup page", () => {
-  // Re-entering credentials here would be a second publishing config UI.
-  expect(read("app/api/portal/connections/route.ts")).toMatch(/redirect: "\/portal\/website"/);
+test("website publishing connects through the dedicated publishing API", () => {
+  // The old path redirected to /portal/website, which had no credential form.
+  // Connect/reconnect now open an in-panel form that posts to /api/portal/publishing.
+  const connections = read("app/api/portal/connections/route.ts");
+  expect(connections).not.toMatch(/redirect: "\/portal\/website"/);
+  expect(connections).toMatch(/use_publishing_form/);
+
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(panel).toMatch(/\/api\/portal\/publishing/);
+  expect(panel).toMatch(/function PublishingSetup/);
+
+  const publish = read("app/api/portal/publishing/route.ts");
+  expect(publish).toMatch(/upsertIntegrationCredentials/);
+  expect(publish).toMatch(/adapter[\s\S]{0,80}\.check\(/);
+  expect(publish).toMatch(/requireBrandAccess/);
 });
 
 // ── the full workflow exists ────────────────────────────────────────────────
 test("every required action is implemented", () => {
   const src = read("app/api/portal/connections/route.ts");
-  for (const a of ["sync_now", "disconnect", "reconnect", "connect"]) {
+  for (const a of ["sync_now", "disconnect", "connect"]) {
     expect(src).toContain(a);
   }
+  expect(read("app/portal/settings/_ConnectionsPanel.tsx")).toMatch(/action === "reconnect"/);
 });
 
 test("connecting verifies access instead of trusting the client", () => {
@@ -133,6 +146,22 @@ test("freshness is described as data age, not as sync time", () => {
 });
 
 // ── the model itself ────────────────────────────────────────────────────────
+test("website publishing is not shown as fully connected from credentials alone", () => {
+  const src = read("lib/connections.ts");
+  expect(src).toMatch(/"limited" as const/);
+  expect(src).toMatch(/\| "limited"/);
+  expect(src).toMatch(/publishing is not proven yet/);
+  expect(src).toMatch(/Needs proof/);
+  expect(src).toMatch(/Prove publishing/);
+  expect(src).toMatch(/Testing…/);
+  expect(src).not.toMatch(/Connected — approved changes can be published to your site/);
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(panel).toMatch(/limited: \{ cls: "amber", label: "Not proven yet" \}/);
+  expect(panel).toMatch(/row\.operations/);
+  expect(panel).toMatch(/publishingProof/);
+  expect(panel).toMatch(/\/api\/portal\/certify/);
+});
+
 test("only genuinely actionable services are listed as such", () => {
   expect(ACTIONABLE_KEYS).toContain("search_console");
   expect(ACTIONABLE_KEYS).not.toContain("google_business_profile");

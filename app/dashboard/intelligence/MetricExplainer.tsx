@@ -13,6 +13,7 @@ const EXPLANATIONS: Record<string, { label: string; explain: string }> = {
   ctr:             { label: "CTR",              explain: "Click-through rate: of all people who saw your site in Google, what percentage clicked. Under 2% usually means the title or description needs updating." },
   search_intent:   { label: "Search Intent",    explain: "What searchers are trying to do. Commercial intent (comparing options, looking to hire) is most valuable for service businesses. Informational intent (just researching) brings visitors who may not be ready to buy." },
   revenue_impact:  { label: "Revenue Opportunity",explain: "Estimated monthly revenue if this keyword reached position 1, calculated from your average job value and conversion rates. Only shown when those rates are configured in Settings." },
+  ai_visibility:   { label: "AI visibility",      explain: "Share of questions where an assistant named you, out of the questions where it named anyone. Errors and unanswered 'no results' replies are excluded so a vendor outage is not a ranking drop. Answers change from one ask to the next, so this is a rate across many questions, not a single reading." },
 };
 
 type Props = { metric: keyof typeof EXPLANATIONS };

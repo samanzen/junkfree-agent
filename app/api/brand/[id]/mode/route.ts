@@ -7,6 +7,7 @@ import {
   readAutopilotMap,
   type RecommendationSection,
 } from "@/lib/recommendations/sections";
+import { isExecutionMode, legacyFromMode } from "@/lib/agents/contracts";
 
 export const maxDuration = 30;
 
@@ -35,6 +36,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const body = await req.json().catch(() => ({}));
   const brand = await getBrandById(id);
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
+
+  if ("execution_mode" in body || "autopilot_enabled" in body) {
+    const patch: Record<string, unknown> = {};
+    if (isExecutionMode(body.execution_mode)) {
+      patch.execution_mode = body.execution_mode;
+      patch.auto_publish_meta = legacyFromMode(body.execution_mode);
+    }
+    if (typeof body.autopilot_enabled === "boolean") {
+      patch.autopilot_enabled = body.autopilot_enabled;
+    }
+    if (!Object.keys(patch).length) {
+      return NextResponse.json({ error: "invalid mode payload" }, { status: 400 });
+    }
+    await db.from("brands").update(patch).eq("id", id);
+    return NextResponse.json({ ok: true, ...patch });
+  }
 
   // Legacy global meta toggle
   if (typeof body.auto_publish_meta === "boolean" && body.section == null) {
