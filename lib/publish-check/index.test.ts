@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { absolutePageUrl, evaluateLivePage, expectedSnippet, evaluateCertificationTokens } from "./index";
 
 test("relative paths resolve against the site origin", () => {
@@ -221,4 +221,71 @@ test("a fetch error is not treated as a successful rollback", () => {
     }
   );
   expect(result.ok).toBe(false);
+});
+
+test("certification rejects a final URL on another hostname", () => {
+  const expected = {
+    url: "https://junkfree.ca/seo-cert-ab",
+    siteUrl: "https://junkfree.ca",
+    titleToken: "CT-unique12ab",
+    bodyToken: "CB-unique24ab",
+    mode: "present" as const,
+  };
+  const redirected = evaluateCertificationTokens(
+    {
+      ok: true,
+      status: 200,
+      url: "https://evil.example/seo-cert-ab",
+      title: "Publishing test CT-unique12ab",
+      text: "Temporary publishing test CB-unique24ab please ignore",
+      canonical: "",
+    },
+    expected
+  );
+  expect(redirected.ok).toBe(false);
+  expect(redirected.reason).toMatch(/redirected off this website/i);
+
+  const www = evaluateCertificationTokens(
+    {
+      ok: true,
+      status: 200,
+      url: "https://www.junkfree.ca/seo-cert-ab",
+      title: "Publishing test CT-unique12ab",
+      text: "Temporary publishing test CB-unique24ab please ignore",
+      canonical: "",
+    },
+    expected
+  );
+  expect(www.ok).toBe(true);
+});
+
+test("tokens only in script or comments do not certify a write", async () => {
+  const { fetchCertificationSnapshot } = await import("./index");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      const html = `<html><head><title>Home</title></head><body>
+        <script>const x = "CT-unique12ab CB-unique24ab";</script>
+        <!-- CT-unique12ab CB-unique24ab -->
+        <p>Welcome</p>
+      </body></html>`;
+      return {
+        status: 200,
+        url: "https://junkfree.ca/seo-cert-ab",
+        text: async () => html,
+      };
+    })
+  );
+  const live = await fetchCertificationSnapshot("https://junkfree.ca/seo-cert-ab");
+  expect(live.ok).toBe(true);
+  if (!live.ok) return;
+  const result = evaluateCertificationTokens(live, {
+    url: "https://junkfree.ca/seo-cert-ab",
+    siteUrl: "https://junkfree.ca",
+    titleToken: "CT-unique12ab",
+    bodyToken: "CB-unique24ab",
+    mode: "present",
+  });
+  expect(result.ok).toBe(false);
+  vi.unstubAllGlobals();
 });

@@ -5,6 +5,7 @@
 
 import { randomBytes } from "crypto";
 import { enqueue } from "../queue";
+import { db } from "../supabase";
 import type { Brand } from "../brands";
 import { getBrandById } from "../brands";
 import { executeChange, resolvePublishTarget } from "./engine";
@@ -40,6 +41,79 @@ export type CertifyPayload = {
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_DELAY_MS = 3000;
 const MAX_PHASE_JOBS = 3;
+
+export function isCanarySlug(slug: string | null | undefined): boolean {
+  return typeof slug === "string" && /^seo-cert-[a-f0-9]{8}$/i.test(slug);
+}
+
+export type OrphanCanary = { executionId: string; slug: string; remoteId: string | null };
+
+/** Pure filter so leftover canaries can be reclaimed without a new table. */
+export function orphanCanariesFromRows(
+  rows: Array<{
+    id?: unknown;
+    target?: unknown;
+    remote_id?: unknown;
+    previous?: unknown;
+    rollback_status?: unknown;
+  }> | null | undefined
+): OrphanCanary[] {
+  if (!rows?.length) return [];
+  const out: OrphanCanary[] = [];
+  for (const row of rows) {
+    if (row.rollback_status !== "available") continue;
+    const prev = row.previous && typeof row.previous === "object" && !Array.isArray(row.previous)
+      ? (row.previous as Record<string, unknown>)
+      : null;
+    if (!prev || prev.canary !== true) continue;
+    const slug = typeof row.target === "string" ? row.target : "";
+    if (!isCanarySlug(slug)) continue;
+    if (typeof row.id !== "string" || !row.id) continue;
+    out.push({
+      executionId: row.id,
+      slug,
+      remoteId: typeof row.remote_id === "string" && row.remote_id ? row.remote_id : null,
+    });
+  }
+  return out;
+}
+
+async function reclaimOrphanCanaries(brand: Brand, jobId?: string | null): Promise<void> {
+  try {
+    const { data, error } = await db
+      .from("publish_executions")
+      .select("id, target, remote_id, previous, rollback_status")
+      .eq("brand_id", brand.id)
+      .eq("change_type", "upsert_page")
+      .eq("status", "succeeded")
+      .eq("rollback_status", "available")
+      .order("executed_at", { ascending: false })
+      .limit(20);
+    if (error || !data) return;
+    for (const orphan of orphanCanariesFromRows(data)) {
+      const outcome = await executeChange(
+        brand,
+        { type: "delete_page", slug: orphan.slug, remoteId: orphan.remoteId },
+        { jobId: jobId || null }
+      );
+      if (outcome.status !== "succeeded") continue;
+      await db
+        .from("publish_executions")
+        .update({
+          rollback_status: "rolled_back",
+          rolled_back_at: new Date().toISOString(),
+        })
+        .eq("id", orphan.executionId)
+        .eq("brand_id", brand.id);
+    }
+  } catch (e) {
+    console.warn(
+      `[certify] could not reclaim leftover test pages for brand ${brand.id}: ${
+        e instanceof Error ? e.message : String(e)
+      }`
+    );
+  }
+}
 
 export function newCanary(): {
   slug: string;
@@ -134,138 +208,157 @@ async function bestEffortDelete(
 }
 
 export async function stepCertify(brand: Brand, payload: CertifyPayload): Promise<void> {
-  const writer = brand.primary_writer;
-  if (writer !== "wordpress" && writer !== "shopify" && writer !== "webhook") {
-    throw new Error("stepCertify: no publishing connection is pinned.");
-  }
-
-  const ready = await preconditions(brand);
-  if (!ready.ok) {
-    await recordCertFailure(brand, writer, ready.error);
-    throw new Error(`stepCertify: ${ready.error}`);
-  }
-
-  // Re-read after preconditions so we patch the latest map.
-  const fresh = (await getBrandById(brand.id)) || brand;
-  const slug = payload.slug;
-  const title = payload.title;
-  const titleToken = payload.titleToken;
-  const bodyToken = payload.bodyToken;
-  const bodyMarkdown = payload.bodyMarkdown;
-  if (!slug || !title || !titleToken || !bodyToken || !bodyMarkdown) {
-    throw new Error("stepCertify: canary payload is incomplete.");
-  }
-
-  let phase: CertifyPhase = payload.phase || "write";
-  let executionId = payload.executionId || null;
-  let remoteId = payload.remoteId || null;
-  let publicUrl = payload.publicUrl || null;
+  const incomingPhase: CertifyPhase = payload.phase || "write";
   const jobId = payload.jobId || null;
-  const phaseAttempts = payload.phaseAttempts || 0;
+  let remoteId = payload.remoteId || null;
+  // Continuation and crash-recovery jobs may already have created the page.
+  let needsCleanup = incomingPhase !== "write" && isCanarySlug(payload.slug);
 
-  const continuePhase = async (next: CertifyPhase, extra: Partial<CertifyPayload> = {}) => {
-    await enqueue(brand.id, "certify", {
-      operation: "upsert_page",
-      phase: next,
-      slug,
-      title,
-      titleToken,
-      bodyToken,
-      bodyMarkdown,
-      executionId,
-      remoteId,
-      publicUrl,
-      phaseAttempts: next === phase ? phaseAttempts + 1 : 0,
-      ...extra,
-    });
+  const cleanup = async () => {
+    if (!needsCleanup || !payload.slug) return;
+    needsCleanup = false;
+    await bestEffortDelete(brand, payload.slug, remoteId, jobId || undefined);
   };
 
-  if (phase === "write") {
-    const outcome = await executeChange(
-      fresh,
-      {
-        type: "upsert_page",
+  try {
+    const writer = brand.primary_writer;
+    if (writer !== "wordpress" && writer !== "shopify" && writer !== "webhook") {
+      throw new Error("stepCertify: no publishing connection is pinned.");
+    }
+
+    const ready = await preconditions(brand);
+    if (!ready.ok) {
+      await recordCertFailure(brand, writer, ready.error);
+      throw new Error(`stepCertify: ${ready.error}`);
+    }
+
+    // Re-read after preconditions so we patch the latest map.
+    const fresh = (await getBrandById(brand.id)) || brand;
+    const slug = payload.slug;
+    const title = payload.title;
+    const titleToken = payload.titleToken;
+    const bodyToken = payload.bodyToken;
+    const bodyMarkdown = payload.bodyMarkdown;
+    if (!slug || !title || !titleToken || !bodyToken || !bodyMarkdown) {
+      throw new Error("stepCertify: canary payload is incomplete.");
+    }
+
+    let phase: CertifyPhase = incomingPhase;
+    let executionId = payload.executionId || null;
+    let publicUrl = payload.publicUrl || null;
+    const phaseAttempts = payload.phaseAttempts || 0;
+
+    const continuePhase = async (next: CertifyPhase, extra: Partial<CertifyPayload> = {}) => {
+      await enqueue(brand.id, "certify", {
+        operation: "upsert_page",
+        phase: next,
         slug,
         title,
-        metaDescription: "Temporary publishing test — please ignore.",
+        titleToken,
+        bodyToken,
         bodyMarkdown,
-      },
-      { jobId, canary: { titleToken, bodyToken } }
-    );
-    if (outcome.status === "failed") {
-      await recordCertFailure(fresh, writer, outcome.error);
-      throw new Error(`stepCertify: ${outcome.error}`);
-    }
-    executionId = outcome.executionId;
-    remoteId = outcome.remoteId;
-    publicUrl = publicCanaryUrl(fresh, writer, slug, outcome.url);
-    if (!publicUrl) {
-      await bestEffortDelete(fresh, slug, remoteId, jobId || undefined);
-      await recordCertFailure(fresh, writer, "The test page had no live address to check.", {
-        last_execution_id: executionId,
+        executionId,
+        remoteId,
+        publicUrl,
+        phaseAttempts: next === phase ? phaseAttempts + 1 : 0,
+        ...extra,
       });
-      throw new Error("stepCertify: write succeeded but no live address was returned.");
-    }
-    phase = "verify_write";
-  }
+      needsCleanup = false;
+    };
 
-  if (phase === "verify_write") {
-    if (!publicUrl) publicUrl = publicCanaryUrl(fresh, writer, slug, null);
-    if (!publicUrl) throw new Error("stepCertify: missing public URL.");
-    const verified = await checkCertificationPage(
-      fresh,
-      { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "present" },
-      { attempts: VERIFY_ATTEMPTS, delayMs: VERIFY_DELAY_MS }
-    );
-    if (!verified.ok) {
-      if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
-        await continuePhase("verify_write");
-        return;
+    if (phase === "write") {
+      await reclaimOrphanCanaries(fresh, jobId);
+      const outcome = await executeChange(
+        fresh,
+        {
+          type: "upsert_page",
+          slug,
+          title,
+          metaDescription: "Temporary publishing test — please ignore.",
+          bodyMarkdown,
+        },
+        { jobId, canary: { titleToken, bodyToken } }
+      );
+      if (outcome.status === "failed") {
+        await recordCertFailure(fresh, writer, outcome.error);
+        throw new Error(`stepCertify: ${outcome.error}`);
       }
-      await bestEffortDelete(fresh, slug, remoteId, jobId || undefined);
-      await recordCertFailure(fresh, writer, FAILED_APPEAR_REASON, { last_execution_id: executionId });
-      throw new Error(`stepCertify: ${verified.reason}`);
-    }
-    phase = "rollback";
-  }
-
-  if (phase === "rollback") {
-    const outcome = await executeChange(
-      fresh,
-      { type: "delete_page", slug, remoteId },
-      { jobId }
-    );
-    if (outcome.status === "failed") {
-      await recordCertFailure(fresh, writer, FAILED_REMOVE_REASON, { last_execution_id: executionId });
-      throw new Error(`stepCertify: ${outcome.error}`);
-    }
-    phase = "verify_rollback";
-  }
-
-  if (phase === "verify_rollback") {
-    if (!publicUrl) publicUrl = publicCanaryUrl(fresh, writer, slug, null);
-    if (!publicUrl) throw new Error("stepCertify: missing public URL.");
-    const gone = await checkCertificationPage(
-      fresh,
-      { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "absent" },
-      { attempts: VERIFY_ATTEMPTS, delayMs: VERIFY_DELAY_MS }
-    );
-    if (!gone.ok) {
-      if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
-        await continuePhase("verify_rollback");
-        return;
+      executionId = outcome.executionId;
+      remoteId = outcome.remoteId;
+      needsCleanup = true;
+      publicUrl = publicCanaryUrl(fresh, writer, slug, outcome.url);
+      if (!publicUrl) {
+        await recordCertFailure(fresh, writer, "The test page had no live address to check.", {
+          last_execution_id: executionId,
+        });
+        throw new Error("stepCertify: write succeeded but no live address was returned.");
       }
-      await recordCertFailure(fresh, writer, FAILED_REMOVE_REASON, { last_execution_id: executionId });
-      throw new Error(`stepCertify: ${gone.reason}`);
+      phase = "verify_write";
     }
-  }
 
-  await patchOperationCapability(fresh.id, "upsert_page", {
-    state: "certified",
-    writer,
-    reason: CERTIFIED_REASON,
-    certified_at: new Date().toISOString(),
-    last_execution_id: executionId,
-    fail_count: 0,
-  });
+    if (phase === "verify_write") {
+      if (!publicUrl) publicUrl = publicCanaryUrl(fresh, writer, slug, null);
+      if (!publicUrl) throw new Error("stepCertify: missing public URL.");
+      const verified = await checkCertificationPage(
+        fresh,
+        { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "present" },
+        { attempts: VERIFY_ATTEMPTS, delayMs: VERIFY_DELAY_MS }
+      );
+      if (!verified.ok) {
+        if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
+          await continuePhase("verify_write");
+          return;
+        }
+        await recordCertFailure(fresh, writer, FAILED_APPEAR_REASON, { last_execution_id: executionId });
+        throw new Error(`stepCertify: ${verified.reason}`);
+      }
+      phase = "rollback";
+    }
+
+    if (phase === "rollback") {
+      const outcome = await executeChange(
+        fresh,
+        { type: "delete_page", slug, remoteId },
+        { jobId }
+      );
+      if (outcome.status === "failed") {
+        await recordCertFailure(fresh, writer, FAILED_REMOVE_REASON, { last_execution_id: executionId });
+        throw new Error(`stepCertify: ${outcome.error}`);
+      }
+      // Delete already ran; do not delete again on the success path.
+      needsCleanup = false;
+      phase = "verify_rollback";
+    }
+
+    if (phase === "verify_rollback") {
+      if (!publicUrl) publicUrl = publicCanaryUrl(fresh, writer, slug, null);
+      if (!publicUrl) throw new Error("stepCertify: missing public URL.");
+      const gone = await checkCertificationPage(
+        fresh,
+        { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "absent" },
+        { attempts: VERIFY_ATTEMPTS, delayMs: VERIFY_DELAY_MS }
+      );
+      if (!gone.ok) {
+        if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
+          await continuePhase("verify_rollback");
+          return;
+        }
+        needsCleanup = true;
+        await recordCertFailure(fresh, writer, FAILED_REMOVE_REASON, { last_execution_id: executionId });
+        throw new Error(`stepCertify: ${gone.reason}`);
+      }
+    }
+
+    needsCleanup = false;
+    await patchOperationCapability(fresh.id, "upsert_page", {
+      state: "certified",
+      writer,
+      reason: CERTIFIED_REASON,
+      certified_at: new Date().toISOString(),
+      last_execution_id: executionId,
+      fail_count: 0,
+    });
+  } finally {
+    await cleanup();
+  }
 }

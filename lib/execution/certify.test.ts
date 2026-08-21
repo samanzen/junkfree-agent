@@ -33,7 +33,7 @@ vi.mock("./site-capabilities", async () => {
   };
 });
 
-const { stepCertify, newCanary, publicCanaryUrl } = await import("./certify");
+const { stepCertify, newCanary, publicCanaryUrl, orphanCanariesFromRows, isCanarySlug } = await import("./certify");
 
 afterEach(() => {
   executeChange.mockReset();
@@ -208,4 +208,66 @@ test("missing Source of Truth confirmation refuses certification", async () => {
   await expect(
     stepCertify({ ...brand, source_of_truth: {} } as never, canary())
   ).rejects.toThrow(/Confirm where new pages/);
+});
+
+test("only seo-cert canary slugs are reclaimed", () => {
+  expect(isCanarySlug("seo-cert-deadbeef")).toBe(true);
+  expect(isCanarySlug("about-us")).toBe(false);
+  const rows = orphanCanariesFromRows([
+    {
+      id: "e1",
+      target: "seo-cert-deadbeef",
+      remote_id: "gid://shopify/Page/1",
+      previous: { canary: true, titleToken: "CT-x" },
+      rollback_status: "available",
+    },
+    {
+      id: "e2",
+      target: "about-us",
+      remote_id: "99",
+      previous: { canary: true },
+      rollback_status: "available",
+    },
+    {
+      id: "e3",
+      target: "seo-cert-aaaaaaaa",
+      previous: { title: "real page" },
+      rollback_status: "available",
+    },
+  ]);
+  expect(rows).toEqual([{ executionId: "e1", slug: "seo-cert-deadbeef", remoteId: "gid://shopify/Page/1" }]);
+});
+
+test("a Source-of-Truth change mid-certification deletes the leftover canary", async () => {
+  getBrandById.mockResolvedValue({ ...brand, source_of_truth: {} });
+  executeChange.mockResolvedValue({
+    status: "succeeded",
+    platform: "webhook",
+    url: null,
+    remoteId: "seo-cert-deadbeef",
+    executionId: "ex-del",
+  });
+
+  await expect(
+    stepCertify(
+      { ...brand, source_of_truth: {} } as never,
+      { ...canary(), phase: "verify_write", remoteId: "seo-cert-deadbeef", executionId: "ex1" }
+    )
+  ).rejects.toThrow(/Confirm where new pages/);
+
+  expect(executeChange).toHaveBeenCalledWith(
+    expect.anything(),
+    { type: "delete_page", slug: "seo-cert-deadbeef", remoteId: "seo-cert-deadbeef" },
+    expect.anything()
+  );
+  expect(patchOperationCapability.mock.calls.some((c: unknown[]) => (c[2] as { state?: string }).state === "certified")).toBe(
+    false
+  );
+});
+
+test("a write-phase job does not delete before the canary exists", async () => {
+  await expect(
+    stepCertify({ ...brand, source_of_truth: {} } as never, canary())
+  ).rejects.toThrow(/Confirm where new pages/);
+  expect(executeChange).not.toHaveBeenCalled();
 });
