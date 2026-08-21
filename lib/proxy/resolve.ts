@@ -57,6 +57,24 @@ export async function resolveProxyToken(token: string): Promise<ProxyBrand | nul
 }
 
 /**
+ * Customer host for canonicals / absolute URLs.
+ *
+ * Prefer a forwarded host that matches the brand's site_url (www-insensitive).
+ * Vercel *external* rewrites replace Host with the destination (e.g. pub.volohub.com),
+ * so a strict match would 404 every proxied page even when the rewrite is correct.
+ * The site token is the credential; fall back to the registered site_url host.
+ */
+export function resolvePublicHost(headers: Headers, brand: ProxyBrand): string {
+  const matched = verifyHost(headers, brand);
+  if (matched) return matched;
+  try {
+    return new URL(brand.site_url).host;
+  } catch {
+    return "localhost";
+  }
+}
+
+/**
  * Forwarded host must match the brand's registered site host.
  * Returns the customer host to use in canonicals, or null on mismatch.
  */
