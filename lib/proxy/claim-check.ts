@@ -6,9 +6,16 @@ import { isProxyNamespace, normalizeProxyNamespace } from "../execution/proxy-to
 
 const FETCH_MS = 10_000;
 
-export type Probe = { path: string; status: number | null; note?: string; headers?: Record<string, string> };
+export type Probe = {
+  path: string;
+  status: number | null;
+  note?: string;
+  headers?: Record<string, string>;
+  /** Present only while resolving redirects inside probe(). */
+  location?: string;
+};
 
-async function probe(origin: string, path: string): Promise<Probe> {
+async function probeOnce(origin: string, path: string): Promise<Probe> {
   const url = `${origin.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
   try {
     const res = await fetch(url, {
@@ -20,11 +27,13 @@ async function probe(origin: string, path: string): Promise<Probe> {
     const headers: Record<string, string> = {};
     const fingerprint = res.headers.get("x-proxy-origin");
     if (fingerprint) headers["x-proxy-origin"] = fingerprint;
+    const location = res.headers.get("location") || undefined;
     return {
       path,
       status: res.status,
-      note: res.status >= 300 && res.status < 400 ? `redirect ${res.headers.get("location") || ""}`.trim() : undefined,
+      note: res.status >= 300 && res.status < 400 ? `redirect ${location || ""}`.trim() : undefined,
       headers,
+      location,
     };
   } catch (e) {
     return {
@@ -33,6 +42,51 @@ async function probe(origin: string, path: string): Promise<Probe> {
       note: e instanceof Error ? e.message : String(e),
     };
   }
+}
+
+/**
+ * Follow same-origin redirects (trailing-slash 308 → /guides → 404 is common on
+ * Next/Vercel). Off-site redirects keep the 3xx status so evaluate can refuse.
+ */
+async function probe(origin: string, path: string): Promise<Probe> {
+  const originHost = new URL(origin).origin;
+  let currentPath = path;
+  let last = await probeOnce(origin, currentPath);
+  const hops: string[] = [];
+
+  for (let i = 0; i < 5; i++) {
+    if (last.status === null || last.status < 300 || last.status >= 400) break;
+    const loc = last.location || "";
+    if (!loc) break;
+    let next: URL;
+    try {
+      next = new URL(loc, originHost);
+    } catch {
+      break;
+    }
+    if (next.origin !== originHost) {
+      return {
+        path,
+        status: last.status,
+        note: `redirect off-site ${loc}`,
+        headers: last.headers,
+      };
+    }
+    hops.push(`${last.status}→${next.pathname}`);
+    currentPath = `${next.pathname}${next.search}`;
+    last = await probeOnce(origin, currentPath);
+  }
+
+  if (!hops.length) {
+    const { location: _drop, ...rest } = last;
+    return rest;
+  }
+  return {
+    path,
+    status: last.status,
+    note: `followed ${hops.join(", ")}; final ${last.status}`,
+    headers: last.headers,
+  };
 }
 
 function originOf(siteUrl: string): string | null {

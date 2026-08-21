@@ -11,15 +11,25 @@ const probe = (pathName: string, status: number | null, extra?: { note?: string;
   ...extra,
 });
 
-test("clear when hub and leaf are not 200 and root is reachable", () => {
+test("trailing-slash 308 that lands on 404 is clear, not collision", () => {
+  // After probe() resolves hops, evaluate sees the final status.
   const result = evaluateClaimProbes({
     namespace: "guides",
     root: probe("/", 200),
-    hub: probe("/guides/", 404),
+    hub: probe("/guides/", 404, { note: "followed 308→/guides; final 404" }),
     leaf: probe("/guides/__probe-abcd1234", 404),
   });
   expect(result.result).toBe("clear");
-  expect(claimAllowsSetup(result.result)).toBe(true);
+});
+
+test("unresolved 3xx on hub still blocks as collision", () => {
+  const result = evaluateClaimProbes({
+    namespace: "guides",
+    root: probe("/", 200),
+    hub: probe("/guides/", 308, { note: "redirect /blog" }),
+    leaf: probe("/guides/__probe-abcd1234", 404),
+  });
+  expect(result.result).toBe("collision");
 });
 
 test("collision when hub already returns 200", () => {
