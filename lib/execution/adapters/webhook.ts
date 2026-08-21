@@ -6,10 +6,9 @@
 // site build hook, a bespoke CMS) can be served by a receiver the customer or
 // we write, without changing anything in this repository.
 //
-// It claims BOTH capabilities because the receiver is custom code by
-// definition -- unlike WordPress, there is no platform limitation to model
-// here. A receiver that cannot handle a change type should reject it, and its
-// error message is surfaced verbatim.
+// Claims upsert_page only. The paste snippet and junkfree example implement
+// pages + delete for certification; update_meta stays unsupported until a
+// receiver advertises and proves it.
 //
 // Credentials: { signingSecret }
 // Config:      { endpointUrl }
@@ -104,7 +103,7 @@ async function post(
 export const webhookAdapter: PublishAdapter = {
   provider: "webhook",
   label: "Custom webhook",
-  capabilities: ["upsert_page", "update_meta"],
+  capabilities: ["upsert_page"],
 
   async check(ctx) {
     const resolved = endpointOf(ctx);

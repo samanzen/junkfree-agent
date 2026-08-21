@@ -88,3 +88,28 @@ test("stepPublish fails the job unless the live page shows the change", () => {
   expect(verifyAt).toBeGreaterThan(-1);
   expect(publishedAt).toBeGreaterThan(verifyAt);
 });
+
+test("legacy Publish queues live publish and does not fake published when connected", () => {
+  const src = read("app/api/drafts/[id]/publish/route.ts");
+  expect(src).toMatch(/queueLivePublishIfConnected/);
+  expect(src).toMatch(/live_queued: true/);
+  expect(src).toMatch(/status: "approved"/);
+  const markPublished = src.indexOf('status: "published"');
+  const liveBranch = src.indexOf("if (live.queued)");
+  expect(liveBranch).toBeGreaterThan(-1);
+  expect(markPublished).toBeGreaterThan(liveBranch);
+});
+
+test("certification canaries force live publish status even when the brand prefers drafts", () => {
+  const src = read("lib/execution/engine.ts");
+  expect(src).toMatch(/meta\.canary/);
+  expect(src).toMatch(/status: "publish"/);
+});
+
+test("README lists honesty migrations and documents website publishing", () => {
+  const readme = read("README.md");
+  expect(readme).toMatch(/020_execution_honesty\.sql/);
+  expect(readme).toMatch(/021_source_of_truth\.sql/);
+  expect(readme).toMatch(/## Website publishing/);
+  expect(readme).toMatch(/Prove publishing/);
+});

@@ -27,10 +27,11 @@ test("Shopify matches WordPress on claimed operations", () => {
   expect(isOperationCertified(map, "upsert_page")).toBe(false);
 });
 
-test("a custom website claims both operations unverified", () => {
+test("a custom website claims pages unverified and titles unsupported", () => {
   const map = capabilityMapFor(webhookAdapter);
   expect(map.upsert_page?.state).toBe("supported_unverified");
-  expect(map.update_meta?.state).toBe("supported_unverified");
+  expect(map.update_meta?.state).toBe("unsupported");
+  expect(map.update_meta?.reason).toMatch(/new pages/i);
   expect(isOperationCertified(map, "update_meta")).toBe(false);
 });
 

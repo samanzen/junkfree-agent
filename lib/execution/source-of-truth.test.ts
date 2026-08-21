@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import fs from "fs";
 import {
   scoreSourceSignals,
   parseSourceOfTruth,
@@ -6,6 +7,8 @@ import {
   sourceOfTruthMatchesWriter,
   isOperationAutopilotReady,
 } from "./source-of-truth";
+
+const read = (p: string) => fs.readFileSync(p, "utf8");
 
 test("framework fingerprints never become high-confidence WordPress", () => {
   const r = scoreSourceSignals({
@@ -87,4 +90,11 @@ test("stale certification is not Autopilot-ready", () => {
       "upsert_page"
     )
   ).toBe(false);
+});
+
+test("reconnect of the same writer keeps confirmed SoT in detectAndStoreSourceOfTruth source", () => {
+  // Pin the contract in source: confirmed is preserved when writer matches.
+  const src = read("lib/execution/source-of-truth.ts");
+  expect(src).toMatch(/sameWriter \? current\.confirmed : null/);
+  expect(src).toMatch(/markCertifiedOperationsStale/);
 });

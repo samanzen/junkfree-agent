@@ -34,6 +34,7 @@ test("the junkfree-site receiver example lives in this repo so it can be opened"
   const src = fs.readFileSync("examples/junkfree-site/app/api/seo-publish/route.ts", "utf8");
   expect(src).toMatch(/x-signature-256/);
   expect(src).toMatch(/SEO_PUBLISH_SECRET/);
+  expect(src).toMatch(/SEO_PUBLISH_BRAND_SLUG/);
   expect(src).toMatch(/from\("content"\)\.upsert/);
   expect(src).toMatch(/from\("content"\)\.delete/);
   expect(src).toMatch(/delete_page/);

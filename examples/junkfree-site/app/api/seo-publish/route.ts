@@ -5,9 +5,11 @@
 // verifies that signature and writes approved pages into the `content` table
 // the Next.js site already reads.
 //
-// Vercel env on junkfree-site: SEO_PUBLISH_SECRET = the secret shown in
-// Connections (must match). junkfree.ca must serve that Next app, not the
-// old Vite site, or Connect will keep seeing the public homepage.
+// Vercel env on junkfree-site:
+//   SEO_PUBLISH_SECRET = the secret shown in Connections (must match)
+//   SEO_PUBLISH_BRAND_SLUG = brand slug in brands.slug (default: junkfree)
+// junkfree.ca must serve that Next app, not the old Vite site, or Connect
+// will keep seeing the public homepage.
 
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -85,6 +87,21 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: false, error: "unknown event" }, { status: 400 });
 }
 
+async function brandIdOf(
+  db: { from: (table: string) => any }
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const slug = (process.env.SEO_PUBLISH_BRAND_SLUG || "junkfree").trim() || "junkfree";
+  const { data: brand, error: brandErr } = await db
+    .from("brands")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (brandErr || !brand?.id) {
+    return { ok: false, error: `brand not found for slug "${slug}"` };
+  }
+  return { ok: true, id: brand.id };
+}
+
 async function writePage(
   slug: string,
   title: string,
@@ -98,14 +115,8 @@ async function writePage(
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
-    const { data: brand, error: brandErr } = await db
-      .from("brands")
-      .select("id")
-      .eq("slug", "junkfree")
-      .maybeSingle();
-    if (brandErr || !brand?.id) {
-      return { ok: false, error: "brand not found" };
-    }
+    const brand = await brandIdOf(db);
+    if (!brand.ok) return brand;
     const { error } = await db.from("content").upsert(
       {
         slug,
@@ -132,14 +143,8 @@ async function deletePage(slug: string): Promise<{ ok: true } | { ok: false; err
     const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
-    const { data: brand, error: brandErr } = await db
-      .from("brands")
-      .select("id")
-      .eq("slug", "junkfree")
-      .maybeSingle();
-    if (brandErr || !brand?.id) {
-      return { ok: false, error: "brand not found" };
-    }
+    const brand = await brandIdOf(db);
+    if (!brand.ok) return brand;
     const { error } = await db.from("content").delete().eq("brand_id", brand.id).eq("slug", slug);
     if (error) return { ok: false, error: error.message };
     return { ok: true };

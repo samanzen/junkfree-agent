@@ -20,7 +20,7 @@ Auto-publishing unreviewed AI pages at volume is a real ranking risk (Google's s
 ## Setup
 
 1. `npm install`
-2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`, `007_business_model.sql`, `008_content_tenant_isolation.sql`, `009_brand_locks_service_role_grant.sql`, `010_page_audits.sql`, `011_publish_executions.sql`, `012_rate_limits.sql`, `013_agentic_seo_team.sql`, `014_feature01_hardening.sql`, `016_agent_health_reset.sql`, `017_recommendation_autopilot.sql`, `018_ai_visibility.sql`, `019_owner_company.sql`. All are additive/idempotent, so re-running an already-applied file is safe. `platform.sql` seeds the two bootstrap brands (Junk Free, POMO BUILD) — this is the only brand-seeding done via SQL; see "Adding a new brand" below for every brand after those two.
+2. Create a Supabase project, then run every file in `supabase/` in its SQL editor, in this order: `schema.sql`, `platform.sql`, `leads.sql`, `sprint4_migration.sql`, `004_reconcile_prod_schema.sql`, `005_execution_engine.sql`, `006_brand_integrations.sql`, `007_business_model.sql`, `008_content_tenant_isolation.sql`, `009_brand_locks_service_role_grant.sql`, `010_page_audits.sql`, `011_publish_executions.sql`, `012_rate_limits.sql`, `013_agentic_seo_team.sql`, `014_feature01_hardening.sql`, `016_agent_health_reset.sql`, `017_recommendation_autopilot.sql`, `018_ai_visibility.sql`, `019_owner_company.sql`, `020_execution_honesty.sql`, `021_source_of_truth.sql`. All are additive/idempotent, so re-running an already-applied file is safe. `platform.sql` seeds the two bootstrap brands (Junk Free, POMO BUILD) — this is the only brand-seeding done via SQL; see "Adding a new brand" below for every brand after those two.
 3. Create a Google Cloud service account, enable the Search Console API, and add the service-account email as a user on the `junkfree.ca` property. Put its email + private key in the env.
 4. Copy `.env.example` → `.env.local` and fill it in.
 5. `npm run dev`, open `/dashboard`, click **Run agents now** to watch a full cycle.
@@ -98,6 +98,29 @@ a one-brand sweep from that page (`POST /api/cron/ai-visibility`); customers
 wait for the weekly cron. The report covers assistants, questions, places,
 languages, competitors, cited pages and the questions nobody named you for.
 
+## Website publishing (last mile)
+
+Connections → **Website publishing** lets a customer attach WordPress, Shopify,
+or a coded-site receiver so Approve can push pages to the live site.
+
+1. Run migrations `020_execution_honesty.sql` and `021_source_of_truth.sql`.
+2. Set `INTEGRATION_ENCRYPTION_KEY` (see `.env.example`).
+3. In Portal → Settings → Connections, connect the site. We live-check before
+   credentials are stored.
+4. Confirm **where new pages are saved** (Source of Truth).
+5. Click **Prove publishing** — we write a temporary page, verify it on the
+   public site, then delete it. Autopilot stays off until that succeeds.
+6. Approve a draft — a `publish` job sends the change through the connected
+   writer and only marks the draft published after the live page shows it.
+
+Coded sites: paste the snippet from Connections, or copy
+`examples/junkfree-site/app/api/seo-publish/route.ts` into the customer Next
+app. Env: `SEO_PUBLISH_SECRET` (must match Connections) and optional
+`SEO_PUBLISH_BRAND_SLUG` (defaults to `junkfree`).
+
+Title/meta-only updates (`fix_meta`) are not live-writable on WordPress or
+Shopify yet — those stay in-platform until an SEO-plugin adapter ships.
+
 ## Env
 
 See `.env.example`. Key switches:
@@ -117,4 +140,5 @@ Every `/api/*` route (except the `CRON_SECRET`-gated cron endpoints) now require
 
 - **Google Ads API** — the console's Ads Advisor plans campaigns; pushing live bids needs OAuth into the Ads API and stays behind your approval by design.
 - **Keyword volume data** — GSC gives your own performance; add DataForSEO or Ahrefs for market-wide volume/difficulty on brand-new keywords.
-- **The rebuilt site** — this agent writes into a `content` table. The public Next.js site that renders those routes (preserving your 257 existing URLs) is the companion build. Paste the sitemap and it gets scaffolded next.
+- **Title/meta live publish on WP/Shopify** — page upserts are certified; Yoast/RankMath (or Shopify SEO fields) for `update_meta` is still open.
+- **The rebuilt public site companion** — coded-site brands still need their own Next app (or the Junk Free receiver example) deployed so `/api/seo-publish` is live.

@@ -95,10 +95,22 @@ export default function ExecutionPanel({
       }
 
       if (res.ok) {
-        setItemState((s) => ({
-          ...s,
-          [item.id]: op === "dismiss" ? "dismissed" : op === "publish" ? "published" : "approved",
-        }));
+        const data = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          live_queued?: boolean;
+        };
+        const next: ItemState =
+          op === "dismiss"
+            ? "dismissed"
+            : data.live_queued || data.status === "approved"
+              ? "approved"
+              : op === "publish"
+                ? "published"
+                : "approved";
+        setItemState((s) => ({ ...s, [item.id]: next }));
+        if (data.live_queued) {
+          toast.success("Queued for your live site", "We’ll mark it published once the page is verified.");
+        }
       } else {
         const e = await res.json().catch(() => ({}));
         toast.error("That didn't go through", e.error || "Please try again in a moment.");

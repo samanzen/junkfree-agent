@@ -283,6 +283,11 @@ function PublishingSetup({
             value={form.publishStatus}
             onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
             disabled={busy}
+            helper={
+              form.publishStatus === "draft"
+                ? "Approved pages stay drafts for your review. Prove publishing still posts a temporary live test page, then deletes it."
+                : undefined
+            }
           >
             <option value="publish">Publish live immediately after approval</option>
             <option value="draft">Save as a WordPress draft for a final check</option>
@@ -319,6 +324,11 @@ function PublishingSetup({
             value={form.publishStatus}
             onChange={(e) => onChange({ publishStatus: e.target.value as "publish" | "draft" })}
             disabled={busy}
+            helper={
+              form.publishStatus === "draft"
+                ? "Approved pages stay unpublished for your review. Prove publishing still posts a temporary live test page, then deletes it."
+                : undefined
+            }
           >
             <option value="publish">Publish the page live after approval</option>
             <option value="draft">Save as an unpublished Shopify page</option>
@@ -328,8 +338,11 @@ function PublishingSetup({
         <div className="p-conn-setup-fields">
           <p className="p-conn-setup-help">
             Paste this code into your site once, put the secret below into it,
-            and deploy. Then tell us the HTTPS address to send approved pages to.
-            We ping that address before saving, so it has to be live.
+            and deploy. The Persist / Delete comments must write to your real
+            content store — returning ok without saving will not prove
+            publishing. The README under Website publishing has a complete
+            receiver example you can copy. We ping the HTTPS address before
+            saving, so it has to be live.
           </p>
           <Field
             as="textarea"

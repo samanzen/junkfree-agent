@@ -1,11 +1,11 @@
 // Per-brand website execution state.
 //
 // This is NOT lib/capabilities.ts (plan/tier gating) and NOT agent_tasks.capability
-// (specialist type). It is the Slice 0 map stored on brands.site_capabilities:
-// what the primary writer can try, and whether that try has been proven live.
+// (specialist type). It is the map stored on brands.site_capabilities: what the
+// primary writer can try, and whether that try has been proven live.
 //
-// Slice 0 never writes state "certified". isOperationCertified() exists so
-// Autopilot can fail closed until Slice 1 certification exists.
+// Connect writes supported_unverified | unsupported. Prove publishing
+// (lib/execution/certify.ts) is what writes state "certified".
 
 import { db } from "../supabase";
 import type { PublishAdapter, SitePlatform, AdapterCapability } from "./types";
@@ -54,7 +54,7 @@ const UNSUPPORTED_REASON: Record<SitePlatform, Record<AdapterCapability, string>
   webhook: {
     upsert_page: "Your website can receive new pages. Publishing is not proven yet.",
     update_meta:
-      "Your website can receive title and description updates. Publishing is not proven yet.",
+      "Your website receiver only handles new pages today. Title and description updates are not supported yet.",
   },
 };
 
@@ -169,7 +169,11 @@ export function emptyCapabilityMap(): SiteCapabilityMap {
   return {};
 }
 
-/** Persist the chosen writer and Slice 0 capability map. Best-effort: missing columns must not fail connect. */
+/**
+ * Persist the chosen writer and capability map.
+ * Fails hard when migration 020 is missing — a "connected" badge without a pin
+ * would lie about publishing being set up.
+ */
 export async function persistBrandWriter(
   brandId: string,
   writer: SitePlatform | null,
@@ -183,7 +187,9 @@ export async function persistBrandWriter(
     })
     .eq("id", brandId);
   if (error) {
-    console.warn(`[execution] could not persist writer for brand ${brandId}: ${error.message}`);
+    throw new Error(
+      `Could not save the publishing connection (${error.message}). Apply supabase/020_execution_honesty.sql in Supabase, then try again.`
+    );
   }
 }
 

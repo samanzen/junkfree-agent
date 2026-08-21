@@ -113,7 +113,15 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
   if (target.ok) {
     const existing = parseCapabilityMap(brand?.site_capabilities);
     const map = Object.keys(existing).length ? existing : capabilityMapFor(target.adapter);
-    await persistBrandWriter(brandId, target.platform, map);
+    try {
+      await persistBrandWriter(brandId, target.platform, map);
+    } catch (e) {
+      console.warn(
+        `[execution] could not pin writer for brand ${brandId}: ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    }
   }
   return target;
 }
@@ -171,8 +179,14 @@ export async function executeChange(
     return outcome;
   }
 
+  // Certification canaries must be publicly readable. A "save as draft"
+  // preference for approved work must not hide the prove-publishing page.
+  const config = meta.canary
+    ? { ...target.config, status: "publish" }
+    : target.config;
+
   const result = await target.adapter
-    .apply({ brand, credentials: target.credentials, config: target.config }, change)
+    .apply({ brand, credentials: target.credentials, config }, change)
     .catch((e) => ({
       // An adapter is contractually required not to throw; if one does, that is
       // a bug in the adapter and must not take the job down with it.

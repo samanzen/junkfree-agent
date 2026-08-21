@@ -186,8 +186,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await persistBrandWriter(brandId, platform, capabilityMapFor(adapter));
-  await detectAndStoreSourceOfTruth(brandId, brand.site_url, platform);
+  try {
+    await persistBrandWriter(brandId, platform, capabilityMapFor(adapter));
+    await detectAndStoreSourceOfTruth(brandId, brand.site_url, platform);
+  } catch (e) {
+    // Roll back the credential row so Connections does not show Connected
+    // when the honesty columns are missing.
+    await disconnectIntegration(brandId, platform);
+    return NextResponse.json(
+      {
+        error: e instanceof Error ? e.message : "Could not save the publishing connection.",
+      },
+      { status: 500 }
+    );
+  }
 
   const messages: Record<SitePlatform, string> = {
     wordpress:

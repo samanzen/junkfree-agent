@@ -161,7 +161,9 @@ export async function persistSourceOfTruth(
     .update({ source_of_truth: next })
     .eq("id", brandId);
   if (error) {
-    console.warn(`[execution] could not persist source of truth for brand ${brandId}: ${error.message}`);
+    throw new Error(
+      `Could not save where pages are stored (${error.message}). Apply supabase/021_source_of_truth.sql in Supabase, then try again.`
+    );
   }
 }
 
@@ -357,14 +359,26 @@ export async function detectAndStoreSourceOfTruth(
   connectedWriter?: SitePlatform | null
 ): Promise<SourceOfTruth> {
   const probe = await probeSourceOfTruth(siteUrl, connectedWriter);
+  const brand = await getBrandById(brandId).catch(() => null);
+  const current = parseSourceOfTruth(brand?.source_of_truth);
+  const sameWriter =
+    !!current.confirmed &&
+    current.confirmed !== "unknown" &&
+    writerForConfirmed(current.confirmed) === (connectedWriter || null);
+
+  // Reconnect of the same platform keeps the human confirmation. Switching
+  // writers clears it so Prove cannot run against the wrong Source of Truth.
   const stored: SourceOfTruth = {
     detected: probe.detected,
     confidence: probe.confidence,
     signals: probe.signals,
     detected_at: new Date().toISOString(),
-    confirmed: null,
-    confirmed_at: null,
+    confirmed: sameWriter ? current.confirmed : null,
+    confirmed_at: sameWriter ? current.confirmed_at : null,
   };
   await persistSourceOfTruth(brandId, stored);
+  // Credentials may have changed even on the same writer — require Prove again.
+  if (sameWriter) await markCertifiedOperationsStale(brandId);
+  else if (current.confirmed) await markCertifiedOperationsStale(brandId);
   return stored;
 }

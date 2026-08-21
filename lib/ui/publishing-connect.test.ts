@@ -56,6 +56,13 @@ test("connect pins the writer and stores an unverified capability map", () => {
   expect(src).toMatch(/Automatic publishing stays off until publishing is proven/);
 });
 
+test("connect fails closed when honesty columns cannot be saved", () => {
+  const src = read("app/api/portal/publishing/route.ts");
+  expect(src).toMatch(/Could not save the publishing connection/);
+  expect(src).toMatch(/await disconnectIntegration\(brandId, platform\)/);
+  expect(src).toMatch(/status: 500/);
+});
+
 test("connected publishing no longer offers a meaningless sync_now", () => {
   // sync_now without a draftId can only fail. Reconnect re-opens setup.
   const src = read("lib/connections.ts");
