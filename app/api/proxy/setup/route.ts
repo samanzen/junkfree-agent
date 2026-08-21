@@ -13,7 +13,7 @@ import {
   isProxySiteToken,
 } from "@/lib/execution/proxy-token";
 import { claimAllowsSetup } from "@/lib/proxy/claim-check";
-import { capabilityMapFor } from "@/lib/execution/site-capabilities";
+import { capabilityMapFor, isOperationCertified } from "@/lib/execution/site-capabilities";
 import { proxyAdapter } from "@/lib/execution/adapters/proxy";
 import { persistSourceOfTruth } from "@/lib/execution/source-of-truth";
 import { invalidateProxyToken } from "@/lib/proxy/resolve";
@@ -68,16 +68,22 @@ export async function POST(req: NextRequest) {
     await disconnectIntegration(brandId, provider as IntegrationProvider);
   }
 
+  const alreadyCertified = isOperationCertified(brand.site_capabilities, "upsert_page");
   const map = capabilityMapFor(proxyAdapter);
+  // Preserve certified map when re-opening snippets after a successful Prove.
+  const capabilities = alreadyCertified
+    ? brand.site_capabilities || map
+    : map;
+
   const { error } = await db
     .from("brands")
     .update({
       proxy_site_token: token,
       proxy_namespace: namespace,
       proxy_token_rotated_at: rotate ? now : brand.proxy_token_rotated_at || now,
-      // Pending until Prove — do not pin primary_writer yet.
-      primary_writer: brand.primary_writer === "proxy" ? "proxy" : null,
-      site_capabilities: map,
+      // Pin only after Prove — never keep a premature pin from a failed certify.
+      primary_writer: alreadyCertified ? "proxy" : null,
+      site_capabilities: capabilities,
     })
     .eq("id", brandId);
 

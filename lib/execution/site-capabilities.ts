@@ -248,8 +248,11 @@ export async function patchOperationCapability(
       patch.last_execution_id === undefined ? prev?.last_execution_id ?? null : patch.last_execution_id,
     fail_count: patch.fail_count === undefined ? prev?.fail_count ?? 0 : patch.fail_count,
   };
+  // Keep an existing pin. Do NOT invent one from patch.writer — that wrongly
+  // pinned primary_writer=proxy on the first failed Prove for subdirectory setup
+  // (pin must wait until certify succeeds and calls persistBrandWriter explicitly).
   const writer =
-    data?.primary_writer && isSitePlatform(data.primary_writer) ? data.primary_writer : patch.writer;
+    data?.primary_writer && isSitePlatform(data.primary_writer) ? data.primary_writer : null;
   await persistBrandWriter(brandId, writer, map);
   return map;
 }

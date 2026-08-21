@@ -403,7 +403,10 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       stateLabel: operationStateLabel(map[op]?.state || "unsupported", op === "upsert_page" && certifying),
     }));
     const failReason =
-      pageState === "temporarily_failed" || pageState === "stale" || pageState === "revoked"
+      (map.upsert_page?.fail_count || 0) > 0 ||
+      pageState === "temporarily_failed" ||
+      pageState === "stale" ||
+      pageState === "revoked"
         ? map.upsert_page?.reason || null
         : null;
     const showNavNudge =
