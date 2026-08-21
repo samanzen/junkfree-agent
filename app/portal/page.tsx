@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { usePortalAuth } from "@/lib/portalAuth";
 import {
@@ -15,6 +16,7 @@ import { Panel, PanelHead } from "./_components/Panel";
 import MissionHero, { type QuickAction } from "./_components/MissionHero";
 import AiBriefing, { type Signal } from "./_components/AiBriefing";
 import { Stagger, StaggerItem } from "./_components/motion";
+import ProxyNavNudgeCard from "./_components/ProxyNavNudgeCard";
 import {
   IconLock, IconExternal, IconTraffic, IconKey, IconTarget,
   IconLink, IconLeads, IconPhone, IconReviews, IconChevron,
@@ -73,6 +75,7 @@ export default function PortalDashboard() {
   const { brand } = usePortalAuth();
   const { summary, loading: sLoading } = usePortalSummary(brand?.id);
   const { data: platform, loading: pLoading } = usePlatformData(brand?.id);
+  const [navNudgeHidden, setNavNudgeHidden] = useState(false);
 
   if (!brand) return null;
   if (sLoading || pLoading || !summary) return <DashboardSkeleton />;
@@ -88,6 +91,13 @@ export default function PortalDashboard() {
   const priorities = buildPriorities(summary, platform);
   const reviewCount = platform?.reviews.length ?? null;
   const hasChart = (summary.chart?.length || 0) > 1;
+
+  const showProxyNavNudge =
+    !navNudgeHidden &&
+    brand.primary_writer === "proxy" &&
+    !!brand.proxy_namespace &&
+    !brand.proxy_nav_link_dismissed_at &&
+    brand.site_capabilities?.upsert_page?.state === "certified";
 
   // ── Presentation-only views of data already loaded above. Nothing here
   // fetches, computes a score, or invents a figure; each line is a count or a
@@ -144,6 +154,14 @@ export default function PortalDashboard() {
         topOpportunity={topOpportunity}
         summarySlot={<AiSummary brandId={brand.id} section="business overview" brandName={brand.name} data={m} />}
       />
+
+      {showProxyNavNudge && brand.proxy_namespace && (
+        <ProxyNavNudgeCard
+          brandId={brand.id}
+          namespace={brand.proxy_namespace}
+          onDismissed={() => setNavNudgeHidden(true)}
+        />
+      )}
 
       {/* Health scores */}
       <section>

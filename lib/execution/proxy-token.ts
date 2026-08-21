@@ -23,6 +23,8 @@ const RESERVED_NAMESPACES = new Set([
   "s",
 ]);
 
+export const SUGGESTED_NAMESPACES = ["guides", "resources", "areas", "services"] as const;
+
 const TOKEN_RE = /^site_[0-9a-f]{32}$/;
 const NAMESPACE_RE = /^[a-z0-9][a-z0-9-]{1,30}$/;
 
@@ -50,6 +52,19 @@ export function isProxyNamespace(value: unknown): value is string {
     NAMESPACE_RE.test(value) &&
     !RESERVED_NAMESPACES.has(value)
   );
+}
+
+/** Customer-facing validation for the Connect UI (same rules as migration 022). */
+export function namespaceValidationError(raw: string): string | null {
+  const ns = normalizeProxyNamespace(raw);
+  if (!ns) return "Choose a path name for new pages.";
+  if (!NAMESPACE_RE.test(ns)) {
+    return "Use lowercase letters, numbers, and hyphens (2–31 characters).";
+  }
+  if (RESERVED_NAMESPACES.has(ns)) {
+    return `"${ns}" is reserved. Pick another path name.`;
+  }
+  return null;
 }
 
 export function normalizeProxyNamespace(raw: string): string {

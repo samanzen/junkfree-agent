@@ -116,6 +116,18 @@ export type ConnectionState = {
     certifying: boolean;
     proveLabel: string;
     options: { value: string; label: string }[];
+    /** Last Prove failure, in the customer's language (proxy diagnostics). */
+    lastFailReason?: string | null;
+  } | null;
+  /**
+   * Post-certify checklist: add a nav/footer link to /{namespace}/.
+   * Null when not applicable or already dismissed.
+   */
+  proxyNavNudge?: {
+    namespace: string;
+    path: string;
+    message: string;
+    dismissWarning: string;
   } | null;
 };
 
@@ -305,6 +317,7 @@ function publishingLabel(provider: string): string {
   if (provider === "wordpress") return "WordPress";
   if (provider === "shopify") return "Shopify";
   if (provider === "webhook") return "Your own website";
+  if (provider === "proxy") return "Path on your website";
   return provider;
 }
 
@@ -356,7 +369,84 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const rows = await listIntegrations(brand.id).catch(() => []);
   const publishable = new Set<string>(describeAdapters().map((a) => a.provider));
   const pinnedWriter = brand.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
-  const pinned = pinnedWriter ? rows.find((r) => r.provider === pinnedWriter) : undefined;
+
+  // Proxy has no brand_integrations row — synthesize state from brands columns.
+  const proxyPending =
+    !!brand.proxy_site_token &&
+    !!brand.proxy_namespace &&
+    parseSourceOfTruth(brand.source_of_truth).confirmed === "platform_proxy";
+  const proxyPinned = pinnedWriter === "proxy" && proxyPending;
+
+  if (proxyPinned || (proxyPending && !pinnedWriter)) {
+    const writer = "proxy" as const;
+    const stored = parseCapabilityMap(brand.site_capabilities);
+    const map = Object.keys(stored).length ? stored : capabilityMapForWriter(writer);
+    const grade = executionGrade(map, true);
+    const certifying = (await pendingCount(brand.id, ["certify"])) > 0;
+    const sot = parseSourceOfTruth(brand.source_of_truth);
+    const matches = sourceOfTruthMatchesWriter(sot, writer) || sot.confirmed === "platform_proxy";
+    const pageState = map.upsert_page?.state || "unsupported";
+    const canProve =
+      matches &&
+      !certifying &&
+      pageState !== "unsupported" &&
+      pageState !== "certified";
+    const name = publishingLabel(writer);
+    const ns = brand.proxy_namespace || "guides";
+    const status = grade === "full" ? ("connected" as const) : ("limited" as const);
+    const why =
+      grade === "full"
+        ? `Pages under /${ns}/ are published through this platform and proven on your live site.`
+        : `Path /${ns}/ is reserved for new pages. Add the rewrite on your host, then prove publishing.`;
+    const operations = (["upsert_page", "update_meta"] as AdapterCapability[]).map((op) => ({
+      label: operationLabel(op),
+      stateLabel: operationStateLabel(map[op]?.state || "unsupported", op === "upsert_page" && certifying),
+    }));
+    const failReason =
+      pageState === "temporarily_failed" || pageState === "stale" || pageState === "revoked"
+        ? map.upsert_page?.reason || null
+        : null;
+    const showNavNudge =
+      grade === "full" &&
+      proxyPinned &&
+      !brand.proxy_nav_link_dismissed_at;
+    return {
+      ...base,
+      status,
+      detail: `${name} (/${ns}/)`,
+      why,
+      lastSyncAt: brand.proxy_token_rotated_at || null,
+      lastSyncLabel: grade === "full" ? "Publishing proven" : "Waiting for prove publishing",
+      lastError: null,
+      actions: ["reconnect", "disconnect"],
+      operations,
+      publishingProof: {
+        question: "Where do new pages or blog posts actually get saved?",
+        confirmed: sot.confirmed,
+        guessLabel: null,
+        unknownHint: null,
+        canProve,
+        certifying,
+        proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove publishing",
+        options: CONFIRMED_OPTIONS.filter((o) => o.value === "platform_proxy").map((o) => ({
+          value: o.value,
+          label: o.label,
+        })),
+        lastFailReason: failReason,
+      },
+      proxyNavNudge: showNavNudge
+        ? {
+            namespace: ns,
+            path: `/${ns}/`,
+            message: `Add one link to /${ns}/ from your site navigation or footer. Without it, new pages stay hard for visitors and search engines to find.`,
+            dismissWarning:
+              "Pages under this path can stay orphaned without a nav or footer link. Dismiss only if you've already added one.",
+          }
+        : null,
+    };
+  }
+
+  const pinned = pinnedWriter && pinnedWriter !== "proxy" ? rows.find((r) => r.provider === pinnedWriter) : undefined;
   const active =
     pinned?.status === "connected"
       ? pinned
@@ -375,7 +465,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     }
     return {
       ...base, status: "not_connected", detail: null,
-      why: "No website connected yet, so approved work has to be published by hand. Connect WordPress, Shopify, or your own website.",
+      why: "No website connected yet, so approved work has to be published by hand. Connect a path on your site, WordPress, or Shopify.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
       actions: ["connect"],
     };

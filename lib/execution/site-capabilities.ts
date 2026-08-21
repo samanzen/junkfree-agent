@@ -218,6 +218,7 @@ export async function clearBrandWriter(brandId: string): Promise<void> {
       proxy_namespace: null,
       proxy_claim_check: {},
       proxy_token_rotated_at: null,
+      proxy_nav_link_dismissed_at: null,
     })
     .eq("id", brandId);
   if (error) {

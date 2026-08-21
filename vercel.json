@@ -3,6 +3,7 @@
     { "path": "/api/cron/orchestrate", "schedule": "0 9 * * *" },
     { "path": "/api/cron/rank-sync",   "schedule": "0 6 * * *" },
     { "path": "/api/cron/rank-enrich", "schedule": "0 7 * * 1" },
-    { "path": "/api/cron/ai-visibility", "schedule": "0 8 * * 2" }
+    { "path": "/api/cron/ai-visibility", "schedule": "0 8 * * 2" },
+    { "path": "/api/cron/proxy-claim-health", "schedule": "0 10 * * *" }
   ]
 }

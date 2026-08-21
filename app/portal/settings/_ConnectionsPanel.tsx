@@ -7,8 +7,9 @@ import { Panel, PanelHead } from "../_components/Panel";
 import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../icons";
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
 import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
+import ProxySetup from "./_ProxySetup";
 
-type PublishPlatform = "wordpress" | "shopify" | "webhook";
+type PublishPlatform = "wordpress" | "shopify" | "webhook" | "proxy";
 
 type PublishForm = {
   platform: PublishPlatform;
@@ -41,8 +42,9 @@ const emptyPublishForm = (): PublishForm => ({
 });
 
 function platformFromDetail(detail: string | null): PublishPlatform {
+  if (/path on your|\/[a-z0-9-]+\//i.test(detail || "")) return "proxy";
   if (/shopify/i.test(detail || "")) return "shopify";
-  if (/own website|webhook/i.test(detail || "")) return "webhook";
+  if (/own website|webhook|API/i.test(detail || "")) return "webhook";
   return "wordpress";
 }
 
@@ -212,6 +214,16 @@ function PublishingSetup({
         <button
           type="button"
           role="tab"
+          aria-selected={form.platform === "proxy"}
+          className={`p-btn ${form.platform === "proxy" ? "primary" : "ghost"}`}
+          onClick={() => pick("proxy")}
+          disabled={busy}
+        >
+          <span>Path on your site</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={form.platform === "wordpress"}
           className={`p-btn ${form.platform === "wordpress" ? "primary" : "ghost"}`}
           onClick={() => pick("wordpress")}
@@ -241,7 +253,11 @@ function PublishingSetup({
         </button>
       </div>
 
-      {form.platform === "wordpress" ? (
+      {form.platform === "proxy" ? (
+        <p className="p-conn-setup-help">
+          Continue below — we&apos;ll check that the path is free, give you a rewrite for your host, then prove publishing.
+        </p>
+      ) : form.platform === "wordpress" ? (
         <div className="p-conn-setup-fields">
           <p className="p-conn-setup-help">
             Create an <strong>Application Password</strong> in WordPress under{" "}
@@ -390,6 +406,7 @@ function PublishingSetup({
         </div>
       )}
 
+      {form.platform !== "proxy" && (
       <div className="p-conn-actions">
         <button className="p-btn primary" onClick={onSubmit} disabled={busy} data-busy={busy || undefined}>
           <span>{busy ? "Checking connection…" : "Connect website"}</span>
@@ -398,6 +415,14 @@ function PublishingSetup({
           <span>Cancel</span>
         </button>
       </div>
+      )}
+      {form.platform === "proxy" && (
+        <div className="p-conn-actions">
+          <button className="p-btn ghost" onClick={onCancel} disabled={busy}>
+            <span>Cancel</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -624,6 +649,36 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
   }
 
+  async function dismissProxyNavNudge(row: PublicConnectionState) {
+    const nudge = row.proxyNavNudge;
+    if (!nudge) return;
+    const ok = await confirm({
+      title: "Dismiss without adding a link?",
+      body: nudge.dismissWarning,
+      confirmLabel: "Dismiss anyway",
+    });
+    if (!ok) return;
+    setBusy("website_publishing:nav-nudge");
+    try {
+      const res = await authedFetch("/api/proxy/nav-nudge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "We couldn't dismiss that");
+        return;
+      }
+      toast.success("Dismissed", "You can still add the link later.");
+      await load();
+    } catch {
+      toast.error("We couldn't dismiss that", "Try again in a moment.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function connectPublishing() {
     setBusy("website_publishing:connect");
     try {
@@ -684,7 +739,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
 
     if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
-      const platform = platformFromDetail(row.detail);
+      const platform = action === "connect" ? "proxy" : platformFromDetail(row.detail);
       setPublishForm({
         ...emptyPublishForm(),
         platform,
@@ -799,33 +854,43 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
 
                 {row.publishingProof && (
                   <div className="p-conn-pick" style={{ marginTop: 8 }}>
-                    <Field
-                      as="select"
-                      label={row.publishingProof.question}
-                      value={sotChoice || row.publishingProof.confirmed || ""}
-                      onChange={(e) => setSotChoice(e.target.value)}
-                    >
-                      <option value="">Select where pages are saved…</option>
-                      {row.publishingProof.options.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </Field>
-                    {row.publishingProof.guessLabel && !row.publishingProof.confirmed && (
-                      <div className="p-conn-meta">We think it might be {row.publishingProof.guessLabel} — confirm to continue.</div>
+                    {row.publishingProof.confirmed !== "platform_proxy" && (
+                      <>
+                        <Field
+                          as="select"
+                          label={row.publishingProof.question}
+                          value={sotChoice || row.publishingProof.confirmed || ""}
+                          onChange={(e) => setSotChoice(e.target.value)}
+                        >
+                          <option value="">Select where pages are saved…</option>
+                          {row.publishingProof.options.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </Field>
+                        {row.publishingProof.guessLabel && !row.publishingProof.confirmed && (
+                          <div className="p-conn-meta">We think it might be {row.publishingProof.guessLabel} — confirm to continue.</div>
+                        )}
+                        <button
+                          className="p-btn ghost"
+                          style={{ marginTop: 8 }}
+                          onClick={() => void saveSourceOfTruth(row)}
+                          disabled={!!busy || !(sotChoice || row.publishingProof.confirmed)}
+                          data-busy={busy === "website_publishing:sot" || undefined}
+                        >
+                          <span>{busy === "website_publishing:sot" ? "Saving…" : "Save"}</span>
+                        </button>
+                      </>
                     )}
-                    <button
-                      className="p-btn ghost"
-                      style={{ marginTop: 8 }}
-                      onClick={() => void saveSourceOfTruth(row)}
-                      disabled={!!busy || !(sotChoice || row.publishingProof.confirmed)}
-                      data-busy={busy === "website_publishing:sot" || undefined}
-                    >
-                      <span>{busy === "website_publishing:sot" ? "Saving…" : "Save"}</span>
-                    </button>
                     {row.publishingProof.unknownHint && (
                       <div className="p-conn-note">
                         <IconAlert size={13} />
                         <span>{row.publishingProof.unknownHint}</span>
+                      </div>
+                    )}
+                    {row.publishingProof.lastFailReason && (
+                      <div className="p-conn-note error">
+                        <IconAlert size={13} />
+                        <span>{row.publishingProof.lastFailReason}</span>
                       </div>
                     )}
                     {row.publishingProof.certifying && (
@@ -842,6 +907,24 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                         <span>{busy === "website_publishing:prove" ? "Starting…" : row.publishingProof.proveLabel}</span>
                       </button>
                     )}
+                  </div>
+                )}
+
+                {row.proxyNavNudge && (
+                  <div className="p-conn-note" style={{ marginTop: 8 }}>
+                    <IconAlert size={13} />
+                    <span>
+                      {row.proxyNavNudge.message}{" "}
+                      <button
+                        type="button"
+                        className="p-inline-link"
+                        style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}
+                        onClick={() => void dismissProxyNavNudge(row)}
+                        disabled={busy === "website_publishing:nav-nudge"}
+                      >
+                        {busy === "website_publishing:nav-nudge" ? "Dismissing…" : "Dismiss"}
+                      </button>
+                    </span>
                   </div>
                 )}
 
@@ -916,11 +999,29 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.key === "website_publishing" && publishOpen && (
+                {row.key === "website_publishing" && publishOpen && publishForm.platform === "proxy" && (
+                  <ProxySetup
+                    brandId={brandId}
+                    busy={!!busy}
+                    onBusy={(v) => setBusy(v ? "website_publishing:proxy" : null)}
+                    onDone={() => void load()}
+                    onCancel={() => setPublishOpen(false)}
+                    onCopy={copyText}
+                    lastFailReason={row.publishingProof?.lastFailReason}
+                    onProve={() => {
+                      setPublishOpen(false);
+                      void provePublishing();
+                    }}
+                  />
+                )}
+
+                {row.key === "website_publishing" && publishOpen && publishForm.platform !== "proxy" && (
                   <PublishingSetup
                     form={publishForm}
                     busy={busy === "website_publishing:connect"}
-                    onChange={(patch) => setPublishForm((f) => ({ ...f, ...patch }))}
+                    onChange={(patch) => {
+                      setPublishForm((f) => ({ ...f, ...patch }));
+                    }}
                     onCancel={() => setPublishOpen(false)}
                     onSubmit={() => void connectPublishing()}
                     onCopy={copyText}

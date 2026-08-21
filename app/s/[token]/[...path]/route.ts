@@ -14,6 +14,7 @@ const notFound = (body: string) =>
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       "x-robots-tag": "noindex",
+      "x-proxy-origin": "1",
     },
   });
 
@@ -69,6 +70,7 @@ export async function GET(
         ? "no-store"
         : "public, s-maxage=300, stale-while-revalidate=86400",
       ...(isCanary ? { "x-robots-tag": "noindex, nofollow" } : {}),
+      "x-proxy-origin": "1",
     },
   });
 }
@@ -99,6 +101,7 @@ async function sitemap(brandId: string, base: string) {
       headers: {
         "content-type": "application/xml; charset=utf-8",
         "cache-control": "public, s-maxage=600",
+        "x-proxy-origin": "1",
       },
     }
   );

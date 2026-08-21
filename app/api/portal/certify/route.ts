@@ -3,9 +3,8 @@ import { getBrandById } from "@/lib/brands";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { enforceRate } from "@/lib/rateLimit";
 import { enqueue, pendingCount } from "@/lib/queue";
-import { newCanary } from "@/lib/execution/certify";
+import { newCanary, resolveCertWriter } from "@/lib/execution/certify";
 import { parseSourceOfTruth, sourceOfTruthMatchesWriter } from "@/lib/execution/source-of-truth";
-import { isSitePlatform } from "@/lib/execution/registry";
 import { parseCapabilityMap } from "@/lib/execution/site-capabilities";
 
 export const maxDuration = 60;
@@ -25,11 +24,24 @@ export async function POST(req: NextRequest) {
   if (!brand) return NextResponse.json({ error: "brand not found" }, { status: 404 });
 
   const sot = parseSourceOfTruth(brand.source_of_truth);
-  const writer = brand.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
+  const writer = resolveCertWriter(brand);
   if (!sot.confirmed || sot.confirmed === "unknown") {
     return NextResponse.json({ error: "Confirm where new pages are saved first." }, { status: 400 });
   }
-  if (!writer || !sourceOfTruthMatchesWriter(sot, writer)) {
+  if (!writer) {
+    return NextResponse.json({ error: "Connect a website before proving publishing." }, { status: 400 });
+  }
+  if (writer === "proxy") {
+    if (sot.confirmed !== "platform_proxy") {
+      return NextResponse.json(
+        { error: "Confirm that new pages are hosted on a path on your domain." },
+        { status: 400 }
+      );
+    }
+    if (!brand.proxy_site_token || !brand.proxy_namespace) {
+      return NextResponse.json({ error: "Finish subdirectory setup before proving publishing." }, { status: 400 });
+    }
+  } else if (!sourceOfTruthMatchesWriter(sot, brand.primary_writer || null)) {
     return NextResponse.json(
       { error: "The connected website does not match where pages are saved." },
       { status: 400 }

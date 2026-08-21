@@ -16,6 +16,10 @@ export type PortalBrand = {
   gbp_location_id?: string | null;
   owner_email?: string | null;
   auto_publish_meta?: boolean;
+  primary_writer?: string | null;
+  proxy_namespace?: string | null;
+  proxy_nav_link_dismissed_at?: string | null;
+  site_capabilities?: Record<string, { state?: string } | undefined> | null;
 };
 
 type PortalAuthState = {

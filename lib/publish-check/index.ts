@@ -240,13 +240,28 @@ export type CertSnapshot =
   | { ok: true; status: number; url: string; title: string; text: string; canonical: string }
   | { ok: false; error: string };
 
-export async function fetchCertificationSnapshot(url: string): Promise<CertSnapshot> {
+export async function fetchCertificationSnapshot(
+  url: string,
+  opts: { redirect?: "follow" | "manual" } = {}
+): Promise<CertSnapshot> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "SEO-Platform-Auditor" },
       signal: AbortSignal.timeout(FETCH_MS),
-      redirect: "follow",
+      redirect: opts.redirect || "follow",
     });
+    // Manual redirect: don't parse a Location body as if it were the page.
+    if (opts.redirect === "manual" && res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location") || "";
+      return {
+        ok: true,
+        status: res.status,
+        url: location || res.url || url,
+        title: "",
+        text: "",
+        canonical: "",
+      };
+    }
     const html = await res.text();
     const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() || "";
     const canonical =
@@ -272,9 +287,48 @@ export async function fetchCertificationSnapshot(url: string): Promise<CertSnaps
   }
 }
 
-export function evaluateCertificationTokens(
+/** Customer-facing Prove failure lines for subdirectory proxy. */
+export function diagnoseProxyCertFailure(
   live: CertSnapshot,
   expected: CertificationExpectation
+): string {
+  if (!live.ok) {
+    const err = live.error || "";
+    if (/timeout|aborted|AbortError|TIMEDOUT|ETIMEDOUT/i.test(err)) {
+      return "Timed out reaching your site. Check the rewrite destination and that nothing is firewalled.";
+    }
+    return "We couldn't reach the test page. Check the rewrite destination and try again.";
+  }
+  if (live.status >= 300 && live.status < 400) {
+    return "Your host redirected instead of proxying. Use a 200 rewrite (not a 301/302) in _redirects or your host config.";
+  }
+  if (live.status === 404 || live.status === 410) {
+    return "We got your site's 404 page — the rewrite for this path isn't deployed yet (or the path name doesn't match).";
+  }
+  if (live.status === 200) {
+    const title = normalizeCert(live.title);
+    const text = normalizeCert(live.text);
+    const hasMarkers =
+      (!!expected.titleToken && title.includes(expected.titleToken)) ||
+      (!!expected.bodyToken && text.includes(expected.bodyToken));
+    if (!hasMarkers) {
+      return "The path responds, but with the wrong content. Check that the destination keeps the same path name in both source and destination (a common typo).";
+    }
+    if (
+      live.canonical &&
+      /^https?:\/\//i.test(live.canonical) &&
+      !hostMatchesSite(live.canonical, expected.siteUrl)
+    ) {
+      return "The test page loaded, but its canonical points at a different host. The rewrite must keep your domain as the public URL.";
+    }
+  }
+  return "The test page is not live yet. Confirm the rewrite is deployed, then try again.";
+}
+
+export function evaluateCertificationTokens(
+  live: CertSnapshot,
+  expected: CertificationExpectation,
+  opts: { proxyDiagnostics?: boolean } = {}
 ): PublishCheckResult {
   const fail = (reason: string, url = expected.url, title: string | null = null, words = 0): PublishCheckResult => ({
     ok: false,
@@ -285,6 +339,9 @@ export function evaluateCertificationTokens(
   });
 
   if (!live.ok) {
+    if (opts.proxyDiagnostics) {
+      return fail(diagnoseProxyCertFailure(live, expected));
+    }
     return fail("Live URL could not be fetched after publish.");
   }
 
@@ -297,22 +354,67 @@ export function evaluateCertificationTokens(
   if (!hostMatchesSite(expected.url, expected.siteUrl)) {
     return fail("The test page address is not on this website.", live.url, live.title, words);
   }
+  if (live.status >= 300 && live.status < 400) {
+    return fail(
+      opts.proxyDiagnostics
+        ? diagnoseProxyCertFailure(live, expected)
+        : "The live page redirected instead of staying on this website.",
+      live.url,
+      live.title,
+      words
+    );
+  }
   if (!hostMatchesSite(live.url, expected.siteUrl)) {
-    return fail("The live page redirected off this website.", live.url, live.title, words);
+    return fail(
+      opts.proxyDiagnostics
+        ? "Your host redirected instead of proxying. Use a 200 rewrite (not a 301/302) in _redirects or your host config."
+        : "The live page redirected off this website.",
+      live.url,
+      live.title,
+      words
+    );
   }
   if (live.canonical && /^https?:\/\//i.test(live.canonical) && !hostMatchesSite(live.canonical, expected.siteUrl)) {
-    return fail("The live page points at a different website.", live.url, live.title, words);
+    return fail(
+      opts.proxyDiagnostics
+        ? diagnoseProxyCertFailure(live, expected)
+        : "The live page points at a different website.",
+      live.url,
+      live.title,
+      words
+    );
   }
 
   if (expected.mode === "present") {
     if (live.status !== 200) {
-      return fail("The test page is not live yet.", live.url, live.title, words);
+      return fail(
+        opts.proxyDiagnostics
+          ? diagnoseProxyCertFailure(live, expected)
+          : "The test page is not live yet.",
+        live.url,
+        live.title,
+        words
+      );
     }
     if (!titleToken || !title.includes(titleToken)) {
-      return fail("Live title does not contain the unique test marker.", live.url, live.title, words);
+      return fail(
+        opts.proxyDiagnostics
+          ? diagnoseProxyCertFailure(live, expected)
+          : "Live title does not contain the unique test marker.",
+        live.url,
+        live.title,
+        words
+      );
     }
     if (!bodyToken || !text.includes(bodyToken)) {
-      return fail("Live page does not contain the unique test marker.", live.url, live.title, words);
+      return fail(
+        opts.proxyDiagnostics
+          ? diagnoseProxyCertFailure(live, expected)
+          : "Live page does not contain the unique test marker.",
+        live.url,
+        live.title,
+        words
+      );
     }
     return {
       ok: true,
@@ -348,15 +450,18 @@ export function evaluateCertificationTokens(
 export async function checkCertificationPage(
   brand: Brand,
   expected: CertificationExpectation,
-  opts: { attempts?: number; delayMs?: number } = {}
+  opts: { attempts?: number; delayMs?: number; proxyDiagnostics?: boolean } = {}
 ): Promise<PublishCheckResult> {
   const attempts = Math.max(1, opts.attempts ?? 1);
   const delayMs = opts.delayMs ?? 3000;
+  const proxyDiagnostics = opts.proxyDiagnostics === true;
   let result: PublishCheckResult | null = null;
 
   for (let i = 0; i < attempts; i++) {
-    const live = await fetchCertificationSnapshot(expected.url);
-    result = evaluateCertificationTokens(live, expected);
+    const live = await fetchCertificationSnapshot(expected.url, {
+      redirect: proxyDiagnostics && expected.mode === "present" ? "manual" : "follow",
+    });
+    result = evaluateCertificationTokens(live, expected, { proxyDiagnostics });
     if (result.ok) break;
     if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
   }

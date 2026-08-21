@@ -21,6 +21,7 @@ import {
 import { getAdapter, isSitePlatform, SITE_PLATFORMS, INTEGRATION_SITE_PLATFORMS } from "./registry";
 import { capabilityMapFor, parseCapabilityMap, persistBrandWriter } from "./site-capabilities";
 import { supports, type PublishAdapter, type SiteChange, type SitePlatform } from "./types";
+import { parseSourceOfTruth } from "./source-of-truth";
 
 /** Postgres/PostgREST codes meaning the execution-log migration is not applied. */
 const MIGRATION_MISSING = new Set(["PGRST205", "42P01"]);
@@ -128,16 +129,20 @@ export async function resolvePublishTarget(brandId: string): Promise<ResolvedTar
   }
 
   // Integration-backed writers only (proxy is never discovered via this table).
+  // Pending proxy setup (token + SoT, primary_writer not pinned yet) wins here.
+  if (brand?.proxy_site_token && brand?.proxy_namespace) {
+    const sot = parseSourceOfTruth(brand.source_of_truth);
+    if (sot.confirmed === "platform_proxy") {
+      return targetFromProxyBrand(brand);
+    }
+  }
+
   const integration = await findConnectedIntegration(
     brandId,
     INTEGRATION_SITE_PLATFORMS as IntegrationProvider[]
   );
 
   if (!integration) {
-    // Legacy: brand may already be pinned only via columns after a partial write.
-    if (brand?.proxy_site_token && brand?.proxy_namespace) {
-      return targetFromProxyBrand(brand);
-    }
     return notConfiguredOrUnreadable(
       `No publishing platform is connected for this brand. Connect one of: ${SITE_PLATFORMS.join(", ")}.`
     );

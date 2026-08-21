@@ -17,9 +17,13 @@ import {
   failedCertificationState,
   parseCapabilityMap,
   patchOperationCapability,
+  persistBrandWriter,
+  capabilityMapForWriter,
 } from "./site-capabilities";
-import { parseSourceOfTruth, sourceOfTruthMatchesWriter } from "./source-of-truth";
-import type { SiteChange } from "./types";
+import { parseSourceOfTruth, sourceOfTruthMatchesWriter, persistSourceOfTruth } from "./source-of-truth";
+import type { SiteChange, SitePlatform } from "./types";
+import { isSitePlatform } from "./registry";
+import { submitSitemap } from "../gsc";
 
 export type CertifyPhase = "write" | "verify_write" | "rollback" | "verify_rollback";
 
@@ -163,16 +167,39 @@ export function publicCanaryUrl(brand: Brand, writer: string, slug: string, adap
   return absolutePageUrl(brand.site_url, slug);
 }
 
-async function preconditions(brand: Brand): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Writer used for Prove — includes pending proxy (token set, primary_writer not yet pinned). */
+export function resolveCertWriter(brand: Brand): SitePlatform | null {
+  if (brand.primary_writer && isSitePlatform(brand.primary_writer)) {
+    return brand.primary_writer;
+  }
+  if (brand.proxy_site_token && brand.proxy_namespace) {
+    const sot = parseSourceOfTruth(brand.source_of_truth);
+    if (sot.confirmed === "platform_proxy") return "proxy";
+  }
+  return null;
+}
+
+async function preconditions(brand: Brand): Promise<{ ok: true; writer: SitePlatform } | { ok: false; error: string }> {
   const sot = parseSourceOfTruth(brand.source_of_truth);
   if (!sot.confirmed || sot.confirmed === "unknown") {
     return { ok: false, error: "Confirm where new pages are saved first." };
   }
-  if (!sourceOfTruthMatchesWriter(sot, brand.primary_writer || null)) {
+  const writer = resolveCertWriter(brand);
+  if (!writer) {
+    return { ok: false, error: "Connect a website before proving publishing." };
+  }
+  if (writer === "proxy") {
+    if (sot.confirmed !== "platform_proxy") {
+      return { ok: false, error: "Confirm that new pages are hosted on a path on your domain." };
+    }
+  } else if (!sourceOfTruthMatchesWriter(sot, brand.primary_writer || null)) {
     return { ok: false, error: "The connected website does not match where pages are saved." };
   }
   const target = await resolvePublishTarget(brand.id);
   if (!target.ok) return { ok: false, error: target.reason };
+  if (target.platform !== writer) {
+    return { ok: false, error: "The connected website does not match where pages are saved." };
+  }
   if (!target.adapter.capabilities.includes("upsert_page")) {
     return { ok: false, error: "This connection cannot publish pages." };
   }
@@ -180,7 +207,7 @@ async function preconditions(brand: Brand): Promise<{ ok: true } | { ok: false; 
     .check({ brand, credentials: target.credentials, config: target.config })
     .catch((e) => ({ ok: false as const, detail: e instanceof Error ? e.message : String(e) }));
   if (!check.ok) return { ok: false, error: check.detail || "We couldn't reach that website." };
-  return { ok: true };
+  return { ok: true, writer };
 }
 
 async function recordCertFailure(
@@ -226,16 +253,13 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
   };
 
   try {
-    const writer = brand.primary_writer;
-    if (writer !== "wordpress" && writer !== "shopify" && writer !== "webhook" && writer !== "proxy") {
-      throw new Error("stepCertify: no publishing connection is pinned.");
-    }
-
     const ready = await preconditions(brand);
     if (!ready.ok) {
-      await recordCertFailure(brand, writer, ready.error);
+      const fallbackWriter = resolveCertWriter(brand) || "proxy";
+      await recordCertFailure(brand, fallbackWriter, ready.error);
       throw new Error(`stepCertify: ${ready.error}`);
     }
+    const writer = ready.writer;
 
     // Re-read after preconditions so we patch the latest map.
     const fresh = (await getBrandById(brand.id)) || brand;
@@ -307,14 +331,22 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
       const verified = await checkCertificationPage(
         fresh,
         { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "present" },
-        { attempts: VERIFY_ATTEMPTS, delayMs: VERIFY_DELAY_MS }
+        {
+          attempts: VERIFY_ATTEMPTS,
+          delayMs: VERIFY_DELAY_MS,
+          proxyDiagnostics: writer === "proxy",
+        }
       );
       if (!verified.ok) {
         if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
           await continuePhase("verify_write");
           return;
         }
-        await recordCertFailure(fresh, writer, FAILED_APPEAR_REASON, { last_execution_id: executionId });
+        const appearReason =
+          writer === "proxy" && verified.reason
+            ? verified.reason
+            : FAILED_APPEAR_REASON;
+        await recordCertFailure(fresh, writer, appearReason, { last_execution_id: executionId });
         throw new Error(`stepCertify: ${verified.reason}`);
       }
       phase = "rollback";
@@ -363,6 +395,32 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
       last_execution_id: executionId,
       fail_count: 0,
     });
+
+    if (writer === "proxy") {
+      const map = capabilityMapForWriter("proxy");
+      map.upsert_page = {
+        state: "certified",
+        writer: "proxy",
+        reason: CERTIFIED_REASON,
+        certified_at: new Date().toISOString(),
+        last_execution_id: executionId,
+        fail_count: 0,
+      };
+      await persistBrandWriter(fresh.id, "proxy", map);
+      await persistSourceOfTruth(fresh.id, {
+        confirmed: "platform_proxy",
+        confirmed_at: new Date().toISOString(),
+      });
+      if (fresh.gsc_property && fresh.proxy_namespace) {
+        const sitemapUrl = absolutePageUrl(fresh.site_url, `${fresh.proxy_namespace}/sitemap.xml`);
+        if (sitemapUrl) {
+          const submitted = await submitSitemap(fresh.gsc_property, sitemapUrl);
+          if (!submitted.ok && !submitted.skipped) {
+            console.warn(`[certify] sitemap submit failed for ${fresh.id}: ${submitted.error}`);
+          }
+        }
+      }
+    }
   } finally {
     await cleanup();
   }

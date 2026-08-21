@@ -60,6 +60,8 @@ export type Brand = {
   proxy_namespace?: string | null;
   proxy_claim_check?: Record<string, unknown> | null;
   proxy_token_rotated_at?: string | null;
+  /** When the nav/footer link nudge was dismissed. Migration 024. */
+  proxy_nav_link_dismissed_at?: string | null;
   active: boolean;
   owner_email: string | null;
   business_model: BusinessModel;
