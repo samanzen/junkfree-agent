@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { m } from "framer-motion";
 import { EASE } from "./motion";
+import { usePortalAuth, withPortalBrand } from "@/lib/portalAuth";
 import { IconDashboard, IconTarget, IconIntelligence, IconAssistant, IconMenu } from "../icons";
 
 // Mobile bottom navigation. Appears below the `md` breakpoint, where the
@@ -27,15 +28,17 @@ const ITEMS = [
 
 export default function BottomNav({ onMore, moreOpen }: { onMore: () => void; moreOpen: boolean }) {
   const pathname = usePathname();
+  const { brand } = usePortalAuth();
 
   return (
     <nav className="p-bnav" aria-label="Primary">
       {ITEMS.map((item) => {
+        const href = withPortalBrand(item.href, brand?.id);
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={href}
             className={`p-bnav-item ${active ? "on" : ""}`}
             aria-current={active ? "page" : undefined}
           >

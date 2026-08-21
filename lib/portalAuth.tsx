@@ -1,8 +1,15 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "./supabaseBrowser";
 import { authedFetch } from "./authedFetch";
+import {
+  clearStoredPreviewBrandId,
+  isBrandId,
+  readStoredPreviewBrandId,
+  syncBrandQueryParam,
+  writeStoredPreviewBrandId,
+} from "./portalBrand";
 
 export type PortalBrand = {
   id: string;
@@ -32,19 +39,27 @@ type PortalAuthState = {
 
 const PortalAuthContext = createContext<PortalAuthState | null>(null);
 
+export {
+  PORTAL_PREVIEW_BRAND_KEY,
+  withPortalBrand,
+  syncBrandQueryParam,
+} from "./portalBrand";
+
 // Resolves once per /portal session: who's signed in, whether they're an
 // admin previewing the customer view, and which single brand this instance
-// of the portal is scoped to. Same resolution rules the old single-page
-// /portal used — customers are always locked to their own brand_id; admins
-// take an explicit ?brand= (set by the dashboard's "Customer view" link) or
-// fall back to the first active brand.
+// of the portal is scoped to. Customers are always locked to their own
+// brand_id. Admins take ?brand=, then sessionStorage, then the first active
+// brand — and keep ?brand= in the URL so refresh does not jump tenants.
 export function PortalAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<Omit<PortalAuthState, "signOut">>({
     loading: true, error: "", isAdmin: false, brand: null,
   });
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
       const { data } = await supabaseBrowser().auth.getSession();
       const token = data.session?.access_token;
@@ -54,39 +69,67 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
       const isAdmin = me.role === "admin";
 
       if (!me.brand_id && !isAdmin) {
-        setState({ loading: false, error: "No brand linked to your account. Please contact support.", isAdmin, brand: null });
+        if (!cancelled) {
+          setState({ loading: false, error: "No brand linked to your account. Please contact support.", isAdmin, brand: null });
+        }
         return;
       }
 
-      let brandId: string | null = me.brand_id || null;
-      if (!brandId) {
-        brandId = new URLSearchParams(window.location.search).get("brand");
+      let brandId: string | null = null;
+
+      if (me.brand_id) {
+        // Customers (and admins who happen to own a brand) stay locked to that row.
+        // URL ?brand= cannot switch a customer onto another tenant.
+        brandId = me.brand_id;
+      } else if (isAdmin) {
+        const urlBrand = new URLSearchParams(window.location.search).get("brand");
+        brandId = isBrandId(urlBrand) ? urlBrand : readStoredPreviewBrandId();
         if (!brandId) {
           const platform = await (await authedFetch("/api/platform")).json();
           brandId = platform.brands?.[0]?.id ?? null;
         }
       }
+
       if (!brandId) {
-        setState({ loading: false, error: "No active brands found.", isAdmin, brand: null });
+        if (!cancelled) {
+          setState({ loading: false, error: "No active brands found.", isAdmin, brand: null });
+        }
         return;
       }
 
+      if (isAdmin && !me.brand_id) {
+        writeStoredPreviewBrandId(brandId);
+        syncBrandQueryParam(brandId);
+      }
+
       const platform = await (await authedFetch(`/api/platform?brand=${brandId}`)).json();
+      if (cancelled) return;
       const brand = platform.brands?.[0] || null;
       if (!brand) {
         setState({ loading: false, error: "Brand not found.", isAdmin, brand: null });
         return;
       }
-
       setState({ loading: false, error: "", isAdmin, brand });
-    })();
-    /* eslint-disable-next-line */
+    })().catch((e) => {
+      if (!cancelled) setState({ loading: false, error: String(e), isAdmin: false, brand: null });
+    });
+
+    return () => { cancelled = true; };
+  // Intentionally once on mount — brand is sticky for the session.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signOut() {
-    await supabaseBrowser().auth.signOut();
-    router.push("/login");
-  }
+  // Keep ?brand= when the pathname changes without a full remount (client nav).
+  useEffect(() => {
+    if (!state.isAdmin || !state.brand?.id) return;
+    syncBrandQueryParam(state.brand.id);
+    writeStoredPreviewBrandId(state.brand.id);
+  }, [pathname, state.isAdmin, state.brand?.id]);
+
+  const signOut = () => {
+    clearStoredPreviewBrandId();
+    supabaseBrowser().auth.signOut().then(() => router.push("/login"));
+  };
 
   return (
     <PortalAuthContext.Provider value={{ ...state, signOut }}>
@@ -95,7 +138,7 @@ export function PortalAuthProvider({ children }: { children: React.ReactNode }) 
   );
 }
 
-export function usePortalAuth(): PortalAuthState {
+export function usePortalAuth() {
   const ctx = useContext(PortalAuthContext);
   if (!ctx) throw new Error("usePortalAuth must be used within PortalAuthProvider");
   return ctx;

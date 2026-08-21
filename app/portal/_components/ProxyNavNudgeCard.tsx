@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import { useToast, useConfirm } from "@/app/_components/Notify";
+import { withPortalBrand } from "@/lib/portalAuth";
 import { Panel, PanelHead } from "./Panel";
 import { IconAlert, IconLink } from "../icons";
 
@@ -66,7 +67,7 @@ export default function ProxyNavNudgeCard({
         </span>
       </div>
       <div className="p-conn-actions" style={{ padding: "0 16px 16px" }}>
-        <a className="p-btn ghost" href="/portal/settings">
+        <a className="p-btn ghost" href={withPortalBrand("/portal/settings", brandId)}>
           <IconLink size={13} />
           <span>Open Connections</span>
         </a>

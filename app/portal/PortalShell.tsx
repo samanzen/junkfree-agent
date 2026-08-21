@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LazyMotion, MotionConfig, domMax, m, AnimatePresence } from "framer-motion";
-import { usePortalAuth } from "@/lib/portalAuth";
+import { usePortalAuth, withPortalBrand } from "@/lib/portalAuth";
 import { useDialog } from "@/lib/ui/useDialog";
 import { pageTitle } from "@/lib/ui/tokens";
 import { PORTAL_CSS } from "./portalTheme";
@@ -112,11 +112,12 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           <div key={gi}>
             {g.label && <div className="p-nav-label">{g.label}</div>}
             {g.items.map((item) => {
+              const href = withPortalBrand(item.href, brand?.id);
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={href}
                   className={`p-nav-item ${active ? "on" : ""}`}
                   aria-current={active ? "page" : undefined}
                 >
