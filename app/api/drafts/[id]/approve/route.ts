@@ -5,6 +5,7 @@ import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { siblingDrafts } from "@/lib/recommendations/topic";
 import { recordOwnerTeaching } from "@/lib/playbook/owner";
 import { queueLivePublishIfConnected } from "@/lib/execution/queue-approved";
+import { contentPublishFields } from "@/lib/content-publish";
 
 // Human gate. Approving a blog/page/GEO draft publishes it into the `content`
 // table that the live site reads from. Meta/intent drafts are just marked approved.
@@ -62,13 +63,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : title;
 
     const { error: pubErr } = await db.from("content").upsert(
-      {
+      contentPublishFields({
         slug,
-        brand_id: draft.brand_id,
+        brandId: draft.brand_id,
         title: finalTitle,
         body,
-        published_at: new Date().toISOString(),
-      },
+        metaDescription: meta,
+      }),
       { onConflict: "brand_id,slug" }
     );
     if (pubErr) {

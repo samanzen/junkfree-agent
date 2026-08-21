@@ -10,6 +10,7 @@
 import { db } from "../supabase";
 import type { PublishAdapter, SitePlatform, AdapterCapability } from "./types";
 import { getAdapter, isSitePlatform } from "./registry";
+import { invalidateProxyToken } from "../proxy/resolve";
 
 export type OperationState =
   | "unsupported"
@@ -200,6 +201,13 @@ export async function persistBrandWriter(
 }
 
 export async function clearBrandWriter(brandId: string): Promise<void> {
+  const { data: prior } = await db
+    .from("brands")
+    .select("proxy_site_token")
+    .eq("id", brandId)
+    .maybeSingle();
+  invalidateProxyToken(prior?.proxy_site_token);
+
   const { error } = await db
     .from("brands")
     .update({

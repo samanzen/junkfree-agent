@@ -3,6 +3,7 @@ import { db } from "@/lib/supabase";
 import { slugify, splitFrontMatter } from "@/lib/utils";
 import { requireAuth, isAuthError, requireBrandAccess } from "@/lib/auth";
 import { queueLivePublishIfConnected } from "@/lib/execution/queue-approved";
+import { contentPublishFields } from "@/lib/content-publish";
 
 // Second Publish click (ExecutionPanel). Prefer the live last-mile path when
 // a website is connected — never mark "published" until stepPublish proves it.
@@ -51,19 +52,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         : draft.task_type === "new_page"
           ? base
           : `blog/${base}`;
-    const { title, body } = splitFrontMatter(draft.body, draft.title);
+    const { title, meta, body } = splitFrontMatter(draft.body, draft.title);
     const finalTitle =
       draft.task_type === "geo_answers"
         ? `Frequently Asked Questions — ${brand?.name || draft.title}`
         : title;
     await db.from("content").upsert(
-      {
+      contentPublishFields({
         slug,
-        brand_id: draft.brand_id,
+        brandId: draft.brand_id,
         title: finalTitle,
         body,
-        published_at: new Date().toISOString(),
-      },
+        metaDescription: meta,
+      }),
       { onConflict: "brand_id,slug" }
     );
   }

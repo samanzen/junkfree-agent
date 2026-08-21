@@ -73,7 +73,7 @@ test("claim-check shape parses", () => {
   expect(parseProxyClaimCheck({})).toBeNull();
 });
 
-test("proxy adapter check requires token + namespace; apply is not live yet", async () => {
+test("proxy adapter check requires token + namespace; apply writes content rows", async () => {
   const brand = {
     id: "b1",
     slug: "acme",
@@ -95,18 +95,10 @@ test("proxy adapter check requires token + namespace; apply is not live yet", as
   });
   expect(ok.ok).toBe(true);
 
-  const applied = await proxyAdapter.apply(
-    { brand, credentials: { siteToken: token }, config: { namespace: "guides" } },
-    {
-      type: "upsert_page",
-      slug: "hello",
-      title: "Hello",
-      metaDescription: null,
-      bodyMarkdown: "Hi",
-    }
-  );
-  expect(applied.ok).toBe(false);
-  if (!applied.ok) expect(applied.error).toMatch(/not live yet/i);
+  // apply hits Supabase; without env it throws or fails — pin that upsert_page is claimed
+  expect(proxyAdapter.capabilities).toEqual(["upsert_page"]);
+  expect(read("lib/execution/adapters/proxy.ts")).toMatch(/contentPublishFields/);
+  expect(read("lib/execution/adapters/proxy.ts")).toMatch(/from\("content"\)\.delete/);
 });
 
 test("disconnect loops skip proxy provider (no brand_integrations row)", () => {

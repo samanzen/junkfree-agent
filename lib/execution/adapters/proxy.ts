@@ -4,12 +4,18 @@
 //   credentials: { siteToken }
 //   config:      { namespace, siteUrl }
 //
-// Public origin (pub host /s/{token}/*) is the next slice. Until that ships,
-// check() accepts a complete pin; apply() refuses with a clear message so
-// Prove cannot falsely certify.
+// Pages are stored in `content` and served by app/s/[token]/[...path].
+// Public URLs are https://{customer-host}/{namespace}/{slug} via CDN rewrite.
 
+import { db } from "../../supabase";
+import { contentPublishFields } from "../../content-publish";
+import { absolutePageUrl } from "../../publish-check";
 import type { AdapterContext, PublishAdapter, PublishResult, SiteChange } from "../types";
 import { isProxySiteToken, isProxyNamespace } from "../proxy-token";
+
+function namespaceOf(ctx: AdapterContext): string {
+  return String(ctx.config.namespace || "").trim();
+}
 
 export const proxyAdapter: PublishAdapter = {
   provider: "proxy",
@@ -18,7 +24,7 @@ export const proxyAdapter: PublishAdapter = {
 
   async check(ctx) {
     const token = (ctx.credentials.siteToken || "").trim();
-    const namespace = String(ctx.config.namespace || "").trim();
+    const namespace = namespaceOf(ctx);
     if (!isProxySiteToken(token)) {
       return { ok: false, detail: "Publishing token is missing or invalid. Reconnect website publishing." };
     }
@@ -31,7 +37,7 @@ export const proxyAdapter: PublishAdapter = {
     };
   },
 
-  async apply(_ctx, change: SiteChange): Promise<PublishResult> {
+  async apply(ctx, change: SiteChange): Promise<PublishResult> {
     if (change.type === "update_meta") {
       return {
         ok: false,
@@ -39,11 +45,42 @@ export const proxyAdapter: PublishAdapter = {
         retryable: false,
       };
     }
-    // Public origin slice writes/deletes under /{namespace}/. Not live yet.
+
+    const namespace = namespaceOf(ctx);
+    if (!isProxyNamespace(namespace)) {
+      return { ok: false, error: "Path name for new pages is missing.", retryable: false };
+    }
+
+    if (change.type === "delete_page") {
+      const slug = change.slug || change.remoteId;
+      if (!slug) return { ok: false, error: "Missing slug to delete.", retryable: false };
+      const { error } = await db.from("content").delete().eq("brand_id", ctx.brand.id).eq("slug", slug);
+      if (error) return { ok: false, error: error.message, retryable: true };
+      return { ok: true, remoteId: slug, url: null, previous: null };
+    }
+
+    if (change.type !== "upsert_page") {
+      return { ok: false, error: `Proxy adapter cannot perform "${(change as { type: string }).type}".`, retryable: false };
+    }
+
+    const { error } = await db.from("content").upsert(
+      contentPublishFields({
+        slug: change.slug,
+        brandId: ctx.brand.id,
+        title: change.title,
+        body: change.bodyMarkdown,
+        metaDescription: change.metaDescription,
+      }),
+      { onConflict: "brand_id,slug" }
+    );
+    if (error) return { ok: false, error: error.message, retryable: true };
+
+    const url = absolutePageUrl(ctx.brand.site_url, `${namespace}/${change.slug}`);
     return {
-      ok: false,
-      error: "Subdirectory publishing is connected but the public page server is not live yet.",
-      retryable: false,
+      ok: true,
+      remoteId: change.slug,
+      url,
+      previous: { canaryCandidate: true },
     };
   },
 };

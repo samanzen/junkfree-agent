@@ -142,6 +142,11 @@ export function newCanary(): {
 }
 
 export function publicCanaryUrl(brand: Brand, writer: string, slug: string, adapterUrl: string | null): string | null {
+  if (writer === "proxy") {
+    const ns = typeof brand.proxy_namespace === "string" ? brand.proxy_namespace.trim() : "";
+    if (!ns) return null;
+    return absolutePageUrl(brand.site_url, `${ns}/${slug}`);
+  }
   if (writer === "shopify") {
     const handle = slug.replace(/^blog\//, "").replace(/^\/+|\/+$/g, "");
     return absolutePageUrl(brand.site_url, `pages/${handle}`);

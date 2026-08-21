@@ -15,6 +15,7 @@ import { auditSite, inspectPage, RENDER_THRESHOLD_WORDS, type AuditedPage } from
 import { canUse } from "./capabilities";
 import { enqueue, type JobKind } from "./queue";
 import { slugify, splitFrontMatter } from "./utils";
+import { contentPublishFields } from "./content-publish";
 import { executeChange, resolvePublishTarget } from "./execution/engine";
 import { toSiteChange, type DraftLike } from "./execution/changes";
 import { isDraftAutopilot, isSectionAutopilot } from "./recommendations/sections";
@@ -434,9 +435,15 @@ export async function stepContent(brand: Brand, p: Record<string, unknown>) {
     const raw = kw || title.replace(/^(Blog|Page):\s*/i, "");
     const base = slugify(raw);
     const slug = effectiveType === "new_page" ? base : `blog/${base}`;
-    const { title: cleanTitle, body: cleanBody } = splitFrontMatter(body, title);
+    const { title: cleanTitle, meta: cleanMeta, body: cleanBody } = splitFrontMatter(body, title);
     await db.from("content").upsert(
-      { slug, brand_id: brand.id, title: cleanTitle, body: cleanBody, published_at: new Date().toISOString() },
+      contentPublishFields({
+        slug,
+        brandId: brand.id,
+        title: cleanTitle,
+        body: cleanBody,
+        metaDescription: cleanMeta,
+      }),
       { onConflict: "brand_id,slug" }
     );
     // Live proof happens in stepPublish. Do not mark the draft published from
