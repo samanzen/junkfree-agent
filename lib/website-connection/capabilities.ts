@@ -42,7 +42,8 @@ export type WebsiteAdapterId =
   | "shopify"
   | "webhook"
   | "managed_pages"
-  | "github";
+  | "github"
+  | "sanity";
 
 export const CAPABILITY_LABELS: Record<WebsiteCapability, string> = {
   read_site: "Website reading",
@@ -71,10 +72,11 @@ export const CUSTOMER_CAPABILITY_ORDER: WebsiteCapability[] = [
 ];
 
 export function statusLabelFor(status: CapabilityAvailability): string {
-  if (status === "available") return "Available";
-  if (status === "needs_proof") return "Needs proof";
-  if (status === "not_configured") return "Not configured";
-  return "Unavailable";
+  // Customer-facing statuses — never bare "Unsupported" / "Unavailable".
+  if (status === "available") return "Auto-Manage";
+  if (status === "needs_proof") return "Approval Required";
+  if (status === "not_configured") return "Access Required";
+  return "Guided Implementation";
 }
 
 /** Default managed path — content architecture, not a connection choice. */

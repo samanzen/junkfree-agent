@@ -64,6 +64,14 @@ export async function POST(req: NextRequest) {
     signingSecret?: string;
     shop?: string;
     accessToken?: string;
+    token?: string;
+    owner?: string;
+    repo?: string;
+    baseBranch?: string;
+    contentPath?: string;
+    projectId?: string;
+    dataset?: string;
+    documentType?: string;
   };
 
   const brandId = body.brand_id;
@@ -81,7 +89,7 @@ export async function POST(req: NextRequest) {
   const platformRaw = body.platform || "wordpress";
   if (!isSitePlatform(platformRaw)) {
     return NextResponse.json(
-      { error: "Choose WordPress, Shopify, or your own website." },
+      { error: "Choose a supported website connection method." },
       { status: 400 }
     );
   }
@@ -149,7 +157,35 @@ export async function POST(req: NextRequest) {
       shop: shop.shop,
       status: body.publishStatus === "draft" ? "draft" : "publish",
     };
-  } else {
+  } else if (platform === "github") {
+    const owner = (body.owner || "").trim();
+    const repo = (body.repo || "").trim();
+    const ghToken = (body.token || body.accessToken || "").trim();
+    const baseBranch = (body.baseBranch || "main").trim() || "main";
+    const contentPath = (body.contentPath || "content").trim() || "content";
+    if (!owner || !repo) {
+      return NextResponse.json({ error: "GitHub owner and repository are required." }, { status: 400 });
+    }
+    if (!ghToken || ghToken.length < 20) {
+      return NextResponse.json(
+        { error: "A GitHub personal access token with repo access is required." },
+        { status: 400 }
+      );
+    }
+    credentials = { token: ghToken };
+    config = { owner, repo, baseBranch, contentPath };
+  } else if (platform === "sanity") {
+    const projectId = (body.projectId || "").trim();
+    const sanityToken = (body.token || "").trim();
+    const dataset = (body.dataset || "production").trim() || "production";
+    const documentType = (body.documentType || "page").trim() || "page";
+    if (!projectId) return NextResponse.json({ error: "Sanity project ID is required." }, { status: 400 });
+    if (!sanityToken || sanityToken.length < 10) {
+      return NextResponse.json({ error: "A Sanity write token is required." }, { status: 400 });
+    }
+    credentials = { token: sanityToken };
+    config = { projectId, dataset, documentType };
+  } else if (platform === "webhook") {
     const receiver = httpsUrl(body.endpointUrl || "", "Website address");
     if (!receiver.ok) return NextResponse.json({ error: receiver.error }, { status: 400 });
     const signingSecret = (body.signingSecret || "").trim();
@@ -161,6 +197,8 @@ export async function POST(req: NextRequest) {
     }
     credentials = { signingSecret };
     config = { endpointUrl: receiver.url };
+  } else {
+    return NextResponse.json({ error: "Choose a supported connection method." }, { status: 400 });
   }
 
   const check = await adapter.check({ brand, credentials, config }).catch((e) => ({
@@ -199,6 +237,11 @@ export async function POST(req: NextRequest) {
   try {
     await persistBrandWriter(brandId, platform, capabilityMapFor(adapter));
     await detectAndStoreSourceOfTruth(brandId, brand.site_url, platform);
+    // GitHub / Sanity are their own systems of record — confirm SoT so Prove can run.
+    if (platform === "github" || platform === "sanity") {
+      const { confirmSourceOfTruth } = await import("@/lib/execution/source-of-truth");
+      await confirmSourceOfTruth(brandId, platform);
+    }
   } catch (e) {
     // Roll back the credential row so Connections does not show Connected
     // when the honesty columns are missing.
@@ -213,11 +256,15 @@ export async function POST(req: NextRequest) {
 
   const messages: Record<Exclude<SitePlatform, "proxy">, string> = {
     wordpress:
-      "WordPress is reachable. We can send approved pages. Automatic publishing stays off until publishing is proven.",
+      "WordPress is reachable. We can send approved pages and posts. Automatic publishing stays off until the connection is proven.",
     shopify:
-      "Shopify is reachable. We can send approved pages. Automatic publishing stays off until publishing is proven.",
+      "Shopify is reachable. We can send approved pages. Automatic publishing stays off until the connection is proven.",
     webhook:
-      "We can reach your website. Approved work can still be sent. Automatic publishing stays off until publishing is proven.",
+      "We can reach your website. Approved work can still be sent. Automatic publishing stays off until the connection is proven.",
+    github:
+      "GitHub is reachable. Changes will open as pull requests — never silent production edits. Prove the connection next.",
+    sanity:
+      "Sanity is reachable. We can create and update documents. Automatic publishing stays off until the connection is proven.",
   };
 
   return NextResponse.json({

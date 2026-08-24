@@ -9,12 +9,16 @@ import { wordpressAdapter } from "./adapters/wordpress";
 import { shopifyAdapter } from "./adapters/shopify";
 import { webhookAdapter } from "./adapters/webhook";
 import { proxyAdapter } from "./adapters/proxy";
+import { githubAdapter } from "./adapters/github";
+import { sanityAdapter } from "./adapters/sanity";
 
 const ADAPTERS: Record<SitePlatform, PublishAdapter> = {
   wordpress: wordpressAdapter,
   shopify: shopifyAdapter,
   webhook: webhookAdapter,
   proxy: proxyAdapter,
+  github: githubAdapter,
+  sanity: sanityAdapter,
 };
 
 /** Every platform the engine can publish to today. */

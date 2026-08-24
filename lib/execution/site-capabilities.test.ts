@@ -10,12 +10,12 @@ import {
   parseCapabilityMap,
 } from "./site-capabilities";
 
-test("WordPress claims pages unverified and titles unsupported", () => {
+test("WordPress claims pages and meta unverified until proven", () => {
   const map = capabilityMapFor(wordpressAdapter);
   expect(map.upsert_page?.state).toBe("supported_unverified");
   expect(map.upsert_page?.writer).toBe("wordpress");
-  expect(map.update_meta?.state).toBe("unsupported");
-  expect(map.update_meta?.reason).toMatch(/titles and descriptions/i);
+  expect(map.update_meta?.state).toBe("supported_unverified");
+  expect(map.update_meta?.reason).toMatch(/titles and meta|Yoast|not proven/i);
   expect(isOperationCertified(map, "upsert_page")).toBe(false);
   expect(isOperationCertified(map, "update_meta")).toBe(false);
 });

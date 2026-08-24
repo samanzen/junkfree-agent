@@ -55,7 +55,7 @@ test("connect pins the writer and stores an unverified capability map", () => {
   expect(src).toMatch(/clearBrandWriter\(brandId\)/);
   expect(src).toMatch(/detectAndStoreSourceOfTruth/);
   expect(src).not.toMatch(/Approved pages can go live/);
-  expect(src).toMatch(/Automatic publishing stays off until publishing is proven/);
+  expect(src).toMatch(/Automatic publishing stays off until (publishing|the connection) is proven/);
 });
 
 test("connect fails closed when honesty columns cannot be saved", () => {

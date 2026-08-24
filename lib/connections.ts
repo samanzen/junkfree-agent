@@ -45,6 +45,7 @@ import {
   describeWebsiteConnection,
   type CapabilityView,
 } from "./website-connection";
+import type { CapabilityReportItem } from "./website-connection/capability-report";
 
 export type ConnectionStatus =
   | "connected"
@@ -110,6 +111,8 @@ export type ConnectionState = {
   operations?: { label: string; stateLabel: string }[] | null;
   /** Customer-facing Website Connection capabilities (no adapter jargon). */
   websiteCapabilities?: CapabilityView[] | null;
+  /** Full capability report with statuses and limitation details. */
+  capabilityReport?: CapabilityReportItem[] | null;
   /** Advanced diagnostics for Website Connection (hidden by default in UI). */
   websiteAdvanced?: {
     adapter: string | null;
@@ -331,6 +334,8 @@ function publishingLabel(provider: string): string {
   if (provider === "shopify") return "Shopify";
   if (provider === "webhook") return "Custom-coded site";
   if (provider === "proxy") return "Volo Managed Pages";
+  if (provider === "github") return "GitHub";
+  if (provider === "sanity") return "Sanity";
   return provider;
 }
 
@@ -420,6 +425,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
         stateLabel: c.statusLabel,
       })),
       websiteCapabilities: view.capabilities,
+      capabilityReport: view.capabilityReport,
       websiteAdvanced: {
         adapter: view.advanced.adapter,
         publishingMethod: view.advanced.publishingMethod,
@@ -474,10 +480,11 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     const empty = describeWebsiteConnection(brand);
     return {
       ...base, status: "not_connected", detail: empty.siteHost,
-      why: "No website connected yet. Connect your site so approved work can publish automatically where it fits.",
+      why: "No website connected yet. Enter your URL to analyze the site and connect the best option.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
       actions: ["connect"],
       websiteCapabilities: empty.capabilities,
+      capabilityReport: empty.capabilityReport,
       websiteAdvanced: null,
     };
   }
@@ -545,6 +552,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       stateLabel: c.statusLabel,
     })),
     websiteCapabilities: view.capabilities,
+    capabilityReport: view.capabilityReport,
     websiteAdvanced: {
       adapter: view.advanced.adapter,
       publishingMethod: view.advanced.publishingMethod,

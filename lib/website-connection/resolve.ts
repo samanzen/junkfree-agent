@@ -25,6 +25,10 @@ import {
   type WebsiteAdapterId,
   type WebsiteCapability,
 } from "./capabilities";
+import {
+  buildCapabilityReport,
+  type CapabilityReportItem,
+} from "./capability-report";
 
 export type WebsiteConnectionView = {
   /** Customer-facing connection title. */
@@ -41,6 +45,8 @@ export type WebsiteConnectionView = {
   adapterLabel: string | null;
   managedNamespace: string | null;
   capabilities: CapabilityView[];
+  /** Full customer capability report (Auto-Manage / Guided / …). */
+  capabilityReport: CapabilityReportItem[];
   /** Technical diagnostics for Advanced. */
   advanced: {
     adapter: string | null;
@@ -87,7 +93,7 @@ function adapterFromWriter(writer: string | null): {
     };
   }
   if (writer === "wordpress") {
-    return { id: "wordpress", label: "WordPress", method: "Native WordPress pages" };
+    return { id: "wordpress", label: "WordPress", method: "Native WordPress pages and posts" };
   }
   if (writer === "shopify") {
     return { id: "shopify", label: "Shopify", method: "Native Shopify pages" };
@@ -98,6 +104,16 @@ function adapterFromWriter(writer: string | null): {
       label: "Custom-coded site",
       method: "Signed publish receiver on your site",
     };
+  }
+  if (writer === "github") {
+    return {
+      id: "github",
+      label: "GitHub",
+      method: "Pull requests to your repository (never silent production edits)",
+    };
+  }
+  if (writer === "sanity") {
+    return { id: "sanity", label: "Sanity", method: "Sanity Content Lake documents" };
   }
   return null;
 }
@@ -137,12 +153,19 @@ export function capabilitiesForConnection(opts: {
             ? "needs_proof"
             : "not_configured",
     create_blog_post:
-      adapterId === "wordpress"
+      adapterId === "wordpress" || adapterId === "github"
         ? page
         : "not_configured",
     update_blog_post:
-      adapterId === "wordpress" ? page : "not_configured",
-    update_meta: meta === "unavailable" ? (adapterId ? "unavailable" : "not_configured") : meta,
+      adapterId === "wordpress" || adapterId === "github" ? page : "not_configured",
+    update_meta:
+      meta === "unavailable"
+        ? adapterId === "shopify" || adapterId === "managed_pages" || adapterId === "webhook"
+          ? "unavailable"
+          : adapterId
+            ? "not_configured"
+            : "not_configured"
+        : meta,
     update_schema: "not_configured",
     manage_internal_links: "not_configured",
     manage_redirects: "not_configured",
@@ -186,6 +209,12 @@ export function describeWebsiteConnection(
   let writer = pinned;
   if (proxyActive) writer = "proxy";
   if (!writer && !opts?.hasPublisher) {
+    const emptyCaps = capabilitiesForConnection({
+      adapterId: null,
+      map: {},
+      certifying: false,
+      connected: false,
+    });
     return {
       name: "Website connection",
       purpose: "Connect your website so Volo can read it and publish approved work where it fits.",
@@ -196,11 +225,11 @@ export function describeWebsiteConnection(
       adapterId: null,
       adapterLabel: null,
       managedNamespace: null,
-      capabilities: capabilitiesForConnection({
+      capabilities: emptyCaps,
+      capabilityReport: buildCapabilityReport({
         adapterId: null,
         map: {},
-        certifying: false,
-        connected: false,
+        executionMode: brand.execution_mode || "approval",
       }),
       advanced: {
         adapter: null,
@@ -251,6 +280,11 @@ export function describeWebsiteConnection(
       map,
       certifying,
       connected,
+    }),
+    capabilityReport: buildCapabilityReport({
+      adapterId: adapter?.id || null,
+      map,
+      executionMode: brand.execution_mode || "approval",
     }),
     advanced: {
       adapter: adapter?.id || null,
