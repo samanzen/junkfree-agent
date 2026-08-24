@@ -25,12 +25,10 @@ import { listProperties, latestDataDate } from "./gsc";
 import { isConfigured as dataForSeoConfigured } from "./dataforseo";
 import { listIntegrations, integrationsReachable } from "./integrations";
 import { describeAdapters, isSitePlatform } from "./execution/registry";
-import type { AdapterCapability } from "./execution/types";
 import {
   capabilityMapForWriter,
   executionGrade,
   parseCapabilityMap,
-  type OperationState,
 } from "./execution/site-capabilities";
 import {
   CONFIRMED_OPTIONS,
@@ -43,6 +41,10 @@ import { googleConfigured } from "./google/oauth";
 import { readGoogle, type GoogleMetadata } from "./google/store";
 import { accessTokenFor } from "./google/tokens";
 import { GOOGLE_PRODUCTS, type GoogleProductKey } from "./google/registry";
+import {
+  describeWebsiteConnection,
+  type CapabilityView,
+} from "./website-connection";
 
 export type ConnectionStatus =
   | "connected"
@@ -106,6 +108,17 @@ export type ConnectionState = {
   requirement: string | null;
   /** Per-operation execution honesty for website publishing. */
   operations?: { label: string; stateLabel: string }[] | null;
+  /** Customer-facing Website Connection capabilities (no adapter jargon). */
+  websiteCapabilities?: CapabilityView[] | null;
+  /** Advanced diagnostics for Website Connection (hidden by default in UI). */
+  websiteAdvanced?: {
+    adapter: string | null;
+    publishingMethod: string | null;
+    verification: string;
+    managedPath: string | null;
+    primaryWriter: string | null;
+    siteUrl: string | null;
+  } | null;
   /** Slice 1: where pages are saved + prove publishing. Website publishing only. */
   publishingProof?: {
     question: string;
@@ -316,42 +329,26 @@ async function lastSuccessfulSync(brandId: string, kinds: string[]): Promise<str
 function publishingLabel(provider: string): string {
   if (provider === "wordpress") return "WordPress";
   if (provider === "shopify") return "Shopify";
-  if (provider === "webhook") return "Your own website";
-  if (provider === "proxy") return "Path on your website";
+  if (provider === "webhook") return "Custom-coded site";
+  if (provider === "proxy") return "Volo Managed Pages";
   return provider;
 }
 
-function operationLabel(op: AdapterCapability): string {
-  if (op === "upsert_page") return "Publish pages";
-  return "Titles and descriptions";
-}
-
-function operationStateLabel(state: OperationState, certifying: boolean): string {
-  if (certifying && (state === "supported_unverified" || state === "stale" || state === "temporarily_failed" || state === "certified")) {
-    return "Testing…";
-  }
-  if (state === "unsupported") return "Not supported";
-  if (state === "certified") return "Working";
-  if (state === "revoked") return "Needs reconnect";
-  if (state === "temporarily_failed") return "Needs attention";
-  return "Needs proof";
-}
-
 /**
- * Website publishing (WordPress / Shopify / coded-site receiver).
+ * Website connection (WordPress / Shopify / custom receiver / Volo Managed Pages).
  *
- * Credentials live in brand_integrations and the adapters already exist in
- * lib/execution. This reports their state; live credential checks stay in
- * /api/portal/publishing (connect) and /api/execution (status).
+ * Credentials live in brand_integrations (or brands.proxy_* for Managed Pages).
+ * Adapters live in lib/execution; the Website Connection view lives in
+ * lib/website-connection. This reports connection + capability state.
  *
- * Slice 0: a passing check() is transport, not a proven publisher. The badge
- * is "Not proven yet" until an operation is certified (Slice 1).
+ * A passing check() is transport, not a proven publisher. The badge is
+ * "Not proven yet" until an operation is certified.
  */
 async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const base = {
     key: "website_publishing" as const,
-    name: "Website publishing",
-    purpose: "Lets approved content and meta fixes be published straight to your site.",
+    name: "Website connection",
+    purpose: "Volo’s ability to work with your website — reading it and publishing approved work.",
     accounts: null,
     requirement: null,
   };
@@ -370,7 +367,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
   const publishable = new Set<string>(describeAdapters().map((a) => a.provider));
   const pinnedWriter = brand.primary_writer && isSitePlatform(brand.primary_writer) ? brand.primary_writer : null;
 
-  // Proxy has no brand_integrations row — synthesize state from brands columns.
+  // Proxy / Managed Pages has no brand_integrations row — synthesize from brands columns.
   const proxyPending =
     !!brand.proxy_site_token &&
     !!brand.proxy_namespace &&
@@ -391,17 +388,12 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       !certifying &&
       pageState !== "unsupported" &&
       pageState !== "certified";
-    const name = publishingLabel(writer);
-    const ns = brand.proxy_namespace || "guides";
+    const view = describeWebsiteConnection(brand, { certifying });
     const status = grade === "full" ? ("connected" as const) : ("limited" as const);
     const why =
       grade === "full"
-        ? `Pages under /${ns}/ are published through this platform and proven on your live site.`
-        : `Path /${ns}/ is reserved for new pages. Add the rewrite on your host, then prove publishing.`;
-    const operations = (["upsert_page", "update_meta"] as AdapterCapability[]).map((op) => ({
-      label: operationLabel(op),
-      stateLabel: operationStateLabel(map[op]?.state || "unsupported", op === "upsert_page" && certifying),
-    }));
+        ? "Website connected. Volo Managed Pages are proven on your live site."
+        : "Website reachable. Finish setup and prove the connection so Managed Pages can go live.";
     const failReason =
       (map.upsert_page?.fail_count || 0) > 0 ||
       pageState === "temporarily_failed" ||
@@ -413,16 +405,29 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       grade === "full" &&
       proxyPinned &&
       !brand.proxy_nav_link_dismissed_at;
+    const ns = brand.proxy_namespace || "guides";
     return {
       ...base,
       status,
-      detail: `${name} (/${ns}/)`,
+      detail: view.siteHost || brand.site_url || "Volo Managed Pages",
       why,
       lastSyncAt: brand.proxy_token_rotated_at || null,
-      lastSyncLabel: grade === "full" ? "Publishing proven" : "Waiting for prove publishing",
+      lastSyncLabel: grade === "full" ? "Connection proven" : "Waiting for proof",
       lastError: null,
       actions: ["reconnect", "disconnect"],
-      operations,
+      operations: view.capabilities.map((c) => ({
+        label: c.label,
+        stateLabel: c.statusLabel,
+      })),
+      websiteCapabilities: view.capabilities,
+      websiteAdvanced: {
+        adapter: view.advanced.adapter,
+        publishingMethod: view.advanced.publishingMethod,
+        verification: view.advanced.verification,
+        managedPath: view.advanced.managedPath,
+        primaryWriter: view.advanced.primaryWriter,
+        siteUrl: view.siteUrl,
+      },
       publishingProof: {
         question: "Where do new pages or blog posts actually get saved?",
         confirmed: sot.confirmed,
@@ -430,7 +435,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
         unknownHint: null,
         canProve,
         certifying,
-        proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove publishing",
+        proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove connection",
         options: CONFIRMED_OPTIONS.filter((o) => o.value === "platform_proxy").map((o) => ({
           value: o.value,
           label: o.label,
@@ -466,18 +471,21 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
         actions: ["reconnect", "disconnect"],
       };
     }
+    const empty = describeWebsiteConnection(brand);
     return {
-      ...base, status: "not_connected", detail: null,
-      why: "No website connected yet, so approved work has to be published by hand. Connect a path on your site, WordPress, or Shopify.",
+      ...base, status: "not_connected", detail: empty.siteHost,
+      why: "No website connected yet. Connect your site so approved work can publish automatically where it fits.",
       lastSyncAt: null, lastSyncLabel: null, lastError: null,
       actions: ["connect"],
+      websiteCapabilities: empty.capabilities,
+      websiteAdvanced: null,
     };
   }
 
   if (!isSitePlatform(active.provider)) {
     return {
       ...base, status: "error", detail: publishingLabel(active.provider),
-      why: "This website connection isn't recognised. Reconnect WordPress, Shopify, or your own website.",
+      why: "This website connection isn't recognised. Reconnect WordPress, Shopify, or your custom site.",
       lastSyncAt: null, lastSyncLabel: null, lastError: `unknown provider ${active.provider}`,
       actions: ["reconnect", "disconnect"],
     };
@@ -500,39 +508,51 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
     || (sot.detected === "git" || sot.detected === "sanity"
       ? "a system we cannot publish to automatically yet"
       : null);
-  const operations = (["upsert_page", "update_meta"] as AdapterCapability[]).map((op) => ({
-    label: operationLabel(op),
-    stateLabel: operationStateLabel(map[op]?.state || "unsupported", op === "upsert_page" && certifying),
-  }));
+  const view = describeWebsiteConnection(
+    { ...brand, primary_writer: writer },
+    { certifying, hasPublisher: true }
+  );
 
   const lastPublish = await lastSuccessfulSync(brand.id, ["publish"]);
   const name = publishingLabel(writer);
-  const transportWhy = `We can reach ${name}, but publishing is not proven yet. Approved work can still be sent. Automatic publishing stays off.`;
+  const transportWhy = `We can reach your website, but the connection is not proven yet. Approved work can still be sent. Automatic publishing stays off.`;
   const status = grade === "full" ? "connected" as const : "limited" as const;
   const why =
     grade === "full"
-      ? `${name} can make the changes listed below, and those changes have been proven on the live site.`
+      ? `Website connected via ${name}. Proven capabilities are listed below.`
       : grade === "partial"
-        ? `Some publishing is proven on ${name}; the rest still needs proof. Automatic publishing stays off for anything that isn't proven.`
+        ? `Website connected via ${name}. Some capabilities still need proof before automatic publishing.`
         : transportWhy;
 
   const unknownHint =
     sot.confirmed === "unknown"
-      ? "Send this to whoever looks after your website: we can reach it, but we need to know where new pages are saved before we can prove publishing."
+      ? "Send this to whoever looks after your website: we can reach it, but we need to know where new pages are saved before we can prove the connection."
       : sot.confirmed && !matches
-        ? "Connect the website that actually stores new pages before proving publishing."
+        ? "Connect the website that actually stores new pages before proving the connection."
         : null;
 
   return {
     ...base,
     status,
-    detail: name,
+    detail: view.siteHost || name,
     why,
     lastSyncAt: lastPublish || active.last_connected_at,
     lastSyncLabel: lastPublish ? `Last publish ${fmtDate(lastPublish.slice(0, 10))}` : "Nothing published yet",
     lastError: null,
     actions: ["reconnect", "disconnect"],
-    operations,
+    operations: view.capabilities.map((c) => ({
+      label: c.label,
+      stateLabel: c.statusLabel,
+    })),
+    websiteCapabilities: view.capabilities,
+    websiteAdvanced: {
+      adapter: view.advanced.adapter,
+      publishingMethod: view.advanced.publishingMethod,
+      verification: view.advanced.verification,
+      managedPath: view.advanced.managedPath,
+      primaryWriter: view.advanced.primaryWriter,
+      siteUrl: view.siteUrl,
+    },
     publishingProof: {
       question: "Where do new pages or blog posts actually get saved?",
       confirmed: sot.confirmed,
@@ -540,7 +560,7 @@ async function websitePublishing(brand: Brand): Promise<ConnectionState> {
       unknownHint,
       canProve,
       certifying,
-      proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove publishing",
+      proveLabel: pageState === "temporarily_failed" ? "Try again" : "Prove connection",
       options: CONFIRMED_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
     },
   };
@@ -617,8 +637,8 @@ export async function describeConnections(brand: Brand): Promise<ConnectionState
       actions: ["reconnect"], accounts: null, requirement: null,
     })),
     websitePublishing(brand).catch((e): ConnectionState => ({
-      key: "website_publishing", name: "Website publishing",
-      purpose: "Lets approved content and meta fixes be published straight to your site.",
+      key: "website_publishing", name: "Website connection",
+      purpose: "Volo’s ability to work with your website — reading it and publishing approved work.",
       status: "error", why: "We couldn't check this connection just now.",
       detail: null, lastSyncAt: null, lastSyncLabel: null,
       lastError: e instanceof Error ? e.message : String(e),

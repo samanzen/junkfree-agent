@@ -146,20 +146,20 @@ test("freshness is described as data age, not as sync time", () => {
 });
 
 // ── the model itself ────────────────────────────────────────────────────────
-test("website publishing is not shown as fully connected from credentials alone", () => {
+test("website connection is not shown as fully connected from credentials alone", () => {
   const src = read("lib/connections.ts");
   expect(src).toMatch(/"limited" as const/);
   expect(src).toMatch(/\| "limited"/);
-  expect(src).toMatch(/publishing is not proven yet/);
-  expect(src).toMatch(/Needs proof/);
-  expect(src).toMatch(/Prove publishing/);
-  expect(src).toMatch(/Testing…/);
+  expect(src).toMatch(/not proven yet/);
+  expect(src).toMatch(/Prove connection/);
+  expect(src).toMatch(/describeWebsiteConnection/);
   expect(src).not.toMatch(/Connected — approved changes can be published to your site/);
   const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
-  expect(panel).toMatch(/limited: \{ cls: "amber", label: "Not proven yet" \}/);
-  expect(panel).toMatch(/row\.operations/);
+  expect(panel).toMatch(/limited: \{ cls: "amber", label: "Needs proof" \}/);
+  expect(panel).toMatch(/websiteCapabilities|row\.operations/);
   expect(panel).toMatch(/publishingProof/);
   expect(panel).toMatch(/\/api\/portal\/certify/);
+  expect(panel).toMatch(/Testing…/);
 });
 
 test("only genuinely actionable services are listed as such", () => {

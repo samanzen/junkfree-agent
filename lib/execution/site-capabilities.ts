@@ -59,7 +59,7 @@ const UNSUPPORTED_REASON: Record<SitePlatform, Record<AdapterCapability, string>
   },
   proxy: {
     upsert_page:
-      "New pages under your chosen path are served by this platform. Publishing is not proven yet.",
+      "Volo Managed Pages can publish new pages on your domain. The connection is not proven yet.",
     update_meta:
       "Editing existing pages needs a CMS connection (WordPress or Shopify).",
   },

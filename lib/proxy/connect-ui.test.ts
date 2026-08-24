@@ -141,18 +141,21 @@ test("proxy prove diagnostics distinguish 404, redirect, wrong content, timeout"
   ).toMatch(/wrong content|path name/i);
 });
 
-test("Connect UI ships four-step ProxySetup and claim-check API", () => {
+test("Connect UI ships Managed Pages ProxySetup and claim-check API", () => {
   const root = process.cwd();
   const setup = fs.readFileSync(path.join(root, "app/portal/settings/_ProxySetup.tsx"), "utf8");
-  expect(setup).toMatch(/Step \{step\} of 4/);
+  expect(setup).toMatch(/Step \{step\} of 3/);
   expect(setup).toMatch(/\/api\/proxy\/claim-check/);
   expect(setup).toMatch(/\/api\/proxy\/setup/);
   expect(setup).toMatch(/Email these instructions/);
-  expect(setup).toMatch(/I&apos;ve added the rewrite/);
+  expect(setup).toMatch(/I&apos;ve added the setting/);
+  expect(setup).toMatch(/Advanced settings/);
+  expect(setup).toMatch(/DEFAULT_MANAGED_NAMESPACE/);
   const panel = fs.readFileSync(path.join(root, "app/portal/settings/_ConnectionsPanel.tsx"), "utf8");
   expect(panel).toMatch(/ProxySetup/);
   expect(panel).toMatch(/proxyNavNudge/);
-  expect(panel).toMatch(/Path on your site/);
+  expect(panel).toMatch(/Volo Managed Pages/);
+  expect(panel).toMatch(/websiteCapabilities/);
   const nudge = fs.readFileSync(path.join(root, "app/portal/_components/ProxyNavNudgeCard.tsx"), "utf8");
   expect(nudge).toMatch(/Add one link/);
   expect(fs.existsSync(path.join(root, "app/api/proxy/claim-check/route.ts"))).toBe(true);

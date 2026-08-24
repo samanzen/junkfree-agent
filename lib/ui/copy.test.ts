@@ -102,7 +102,7 @@ for (const file of CUSTOMER_FACING) {
 test("raw errors are stripped before the customer sees them", () => {
   const states = [
     {
-      key: "website_publishing", name: "Website publishing", purpose: "p",
+      key: "website_publishing", name: "Website connection", purpose: "p",
       status: "error", why: "We can't check this right now.",
       detail: null, lastSyncAt: null, lastSyncLabel: null,
       lastError: "42501: permission denied for table brand_integrations",

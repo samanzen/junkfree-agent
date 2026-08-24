@@ -47,7 +47,7 @@ export const CONFIRMED_OPTIONS: { value: ConfirmedSourceOfTruth; label: string }
   { value: "wordpress", label: "WordPress" },
   { value: "shopify", label: "Shopify" },
   { value: "application_database", label: "In our own website or database" },
-  { value: "platform_proxy", label: "On a path we host for you on your domain" },
+  { value: "platform_proxy", label: "Volo Managed Pages on our domain" },
   { value: "unknown", label: "I don't know" },
 ];
 

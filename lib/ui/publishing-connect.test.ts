@@ -80,7 +80,7 @@ test("panel never redirects away to set up publishing", () => {
   expect(src).not.toMatch(/href = data\.redirect/);
   expect(src).toMatch(/setPublishOpen\(true\)/);
   expect(src).toMatch(/codedSiteSnippet/);
-  expect(src).toMatch(/Your own website/);
+  expect(src).toMatch(/Custom-coded|Your own website/);
 });
 
 test("disconnect clears every last-mile adapter, not a guessed one", () => {
