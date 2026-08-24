@@ -1,9 +1,7 @@
 /**
  * Website Adapter facade — agents call this layer, not platform APIs.
  *
- * Today most operations delegate to existing PublishAdapter implementations
- * (lib/execution/adapters/*). managed_pages wraps the proxy adapter.
- * github is a safe stub: analyze → propose → approve → PR (not auto-edit prod).
+ * Delegates to PublishAdapter implementations in lib/execution/adapters/*.
  */
 
 import type { Brand } from "../brands";
@@ -19,10 +17,8 @@ import { DEFAULT_MANAGED_NAMESPACE } from "./capabilities";
 
 export type WebsiteAdapterMeta = {
   id: WebsiteAdapterId;
-  /** Advanced / internal label. */
   label: string;
-  /** Underlying SitePlatform when one exists. */
-  platform: "wordpress" | "shopify" | "webhook" | "proxy" | null;
+  platform: "wordpress" | "shopify" | "webhook" | "proxy" | "github" | "sanity" | null;
   capabilities: readonly WebsiteCapability[];
 };
 
@@ -31,7 +27,7 @@ const METAS: Record<WebsiteAdapterId, WebsiteAdapterMeta> = {
     id: "wordpress",
     label: "WordPress",
     platform: "wordpress",
-    capabilities: ["read_site", "create_page", "create_blog_post", "update_page"],
+    capabilities: ["read_site", "create_page", "create_blog_post", "update_page", "update_meta"],
   },
   shopify: {
     id: "shopify",
@@ -53,9 +49,15 @@ const METAS: Record<WebsiteAdapterId, WebsiteAdapterMeta> = {
   },
   github: {
     id: "github",
-    label: "GitHub / custom code",
-    platform: null,
-    capabilities: ["read_site"],
+    label: "GitHub",
+    platform: "github",
+    capabilities: ["read_site", "create_page", "create_blog_post", "update_page", "update_meta"],
+  },
+  sanity: {
+    id: "sanity",
+    label: "Sanity",
+    platform: "sanity",
+    capabilities: ["read_site", "create_page", "update_page", "update_meta"],
   },
 };
 
@@ -67,17 +69,12 @@ export function listWebsiteAdapters(): WebsiteAdapterMeta[] {
   return Object.values(METAS);
 }
 
-/** Map public adapter id → existing PublishAdapter when applicable. */
 export function publishAdapterFor(id: WebsiteAdapterId): PublishAdapter | null {
   const platform = METAS[id].platform;
   if (!platform) return null;
   return getAdapter(platform);
 }
 
-/**
- * Prefer the best supported publish path for a content intent.
- * Content strategy decides *what* to create; this picks *how*.
- */
 export function resolvePublishMethod(opts: {
   intent: "page" | "blog_post" | "meta" | "managed_page";
   available: WebsiteAdapterId[];
@@ -87,23 +84,26 @@ export function resolvePublishMethod(opts: {
 
   if (intent === "blog_post") {
     if (has("wordpress")) return "wordpress";
+    if (has("github")) return "github";
+    if (has("sanity")) return "sanity";
     if (has("managed_pages")) return "managed_pages";
     return null;
   }
   if (intent === "meta") {
     if (has("wordpress")) return "wordpress";
-    if (has("shopify")) return "shopify";
+    if (has("github")) return "github";
+    if (has("sanity")) return "sanity";
     return null;
   }
   if (intent === "managed_page") {
     return has("managed_pages") ? "managed_pages" : null;
   }
-  // page
   if (has("wordpress")) return "wordpress";
   if (has("shopify")) return "shopify";
+  if (has("sanity")) return "sanity";
+  if (has("github")) return "github";
   if (has("webhook")) return "webhook";
   if (has("managed_pages")) return "managed_pages";
-  if (has("github")) return "github";
   return null;
 }
 
@@ -112,14 +112,6 @@ export async function applyViaWebsiteAdapter(
   ctx: AdapterContext,
   change: SiteChange
 ): Promise<PublishResult> {
-  if (id === "github") {
-    return {
-      ok: false,
-      error:
-        "GitHub publishing uses analyze → propose → approval → pull request. Automatic production edits are not enabled.",
-      retryable: false,
-    };
-  }
   const adapter = publishAdapterFor(id);
   if (!adapter) {
     return { ok: false, error: `No publisher for ${id}.`, retryable: false };
@@ -127,7 +119,6 @@ export async function applyViaWebsiteAdapter(
   return adapter.apply(ctx, change);
 }
 
-/** Build proxy/managed_pages adapter context from brand columns. */
 export function managedPagesContext(brand: Brand): AdapterContext {
   return {
     brand,

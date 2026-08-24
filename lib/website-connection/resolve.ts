@@ -87,7 +87,7 @@ function adapterFromWriter(writer: string | null): {
     };
   }
   if (writer === "wordpress") {
-    return { id: "wordpress", label: "WordPress", method: "Native WordPress pages" };
+    return { id: "wordpress", label: "WordPress", method: "Native WordPress pages and posts" };
   }
   if (writer === "shopify") {
     return { id: "shopify", label: "Shopify", method: "Native Shopify pages" };
@@ -98,6 +98,16 @@ function adapterFromWriter(writer: string | null): {
       label: "Custom-coded site",
       method: "Signed publish receiver on your site",
     };
+  }
+  if (writer === "github") {
+    return {
+      id: "github",
+      label: "GitHub",
+      method: "Pull requests to your repository (never silent production edits)",
+    };
+  }
+  if (writer === "sanity") {
+    return { id: "sanity", label: "Sanity", method: "Sanity Content Lake documents" };
   }
   return null;
 }
@@ -137,12 +147,19 @@ export function capabilitiesForConnection(opts: {
             ? "needs_proof"
             : "not_configured",
     create_blog_post:
-      adapterId === "wordpress"
+      adapterId === "wordpress" || adapterId === "github"
         ? page
         : "not_configured",
     update_blog_post:
-      adapterId === "wordpress" ? page : "not_configured",
-    update_meta: meta === "unavailable" ? (adapterId ? "unavailable" : "not_configured") : meta,
+      adapterId === "wordpress" || adapterId === "github" ? page : "not_configured",
+    update_meta:
+      meta === "unavailable"
+        ? adapterId === "shopify" || adapterId === "managed_pages" || adapterId === "webhook"
+          ? "unavailable"
+          : adapterId
+            ? "not_configured"
+            : "not_configured"
+        : meta,
     update_schema: "not_configured",
     manage_internal_links: "not_configured",
     manage_redirects: "not_configured",

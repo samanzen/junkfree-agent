@@ -331,6 +331,8 @@ function publishingLabel(provider: string): string {
   if (provider === "shopify") return "Shopify";
   if (provider === "webhook") return "Custom-coded site";
   if (provider === "proxy") return "Volo Managed Pages";
+  if (provider === "github") return "GitHub";
+  if (provider === "sanity") return "Sanity";
   return provider;
 }
 

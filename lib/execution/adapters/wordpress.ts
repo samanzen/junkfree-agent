@@ -114,7 +114,9 @@ function wpError(r: { status: number; body: unknown; error?: string }): string {
 export const wordpressAdapter: PublishAdapter = {
   provider: "wordpress",
   label: "WordPress",
-  capabilities: ["upsert_page"],
+  // upsert_page covers both pages and posts (slug blog/* → posts).
+  // update_meta writes Yoast REST meta when available, else title + excerpt.
+  capabilities: ["upsert_page", "update_meta"],
 
   async check(ctx) {
     const r = await wpFetch(ctx, "/users/me?context=edit");
@@ -123,7 +125,15 @@ export const wordpressAdapter: PublishAdapter = {
       // A 200 that is not a WP user resource means this is not WordPress.
       if (!me) return { ok: false, detail: NOT_WORDPRESS };
       const named = me as WpPost & { name?: string };
-      return { ok: true, detail: `Authenticated to WordPress as ${named.name || me.slug || `user ${me.id}`}.` };
+      const yoast = await wpFetch(ctx, "/types/post?context=edit");
+      const yoastHint =
+        yoast.ok && JSON.stringify(yoast.body).includes("yoast")
+          ? " Yoast meta fields look available."
+          : " Meta updates use title/excerpt (and Yoast keys when registered).";
+      return {
+        ok: true,
+        detail: `Authenticated to WordPress as ${named.name || me.slug || `user ${me.id}`}.${yoastHint}`,
+      };
     }
     if (r.status === 401 || r.status === 403) {
       return { ok: false, detail: "WordPress rejected the credentials. Check the username and application password." };
@@ -138,6 +148,11 @@ export const wordpressAdapter: PublishAdapter = {
     if (change.type === "delete_page") {
       return deleteWpPage(ctx, change.slug, change.remoteId);
     }
+
+    if (change.type === "update_meta") {
+      return updateWpMeta(ctx, change);
+    }
+
     if (change.type !== "upsert_page") {
       return { ok: false, error: `WordPress adapter cannot perform "${change.type}".`, retryable: false };
     }
@@ -157,13 +172,19 @@ export const wordpressAdapter: PublishAdapter = {
     if (!collection) return { ok: false, error: NOT_WORDPRESS, retryable: false };
     const existing = collection[0];
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       title: change.title,
       content: markdownToHtml(change.bodyMarkdown),
       slug,
       status,
       excerpt: change.metaDescription || excerptFrom(change.bodyMarkdown),
     };
+    if (change.metaDescription) {
+      payload.meta = {
+        _yoast_wpseo_metadesc: change.metaDescription,
+        _yoast_wpseo_title: change.title,
+      };
+    }
 
     // Captured before the write so a later phase can offer rollback.
     const previous = existing
@@ -181,6 +202,19 @@ export const wordpressAdapter: PublishAdapter = {
       : await wpFetch(ctx, `/${endpoint}`, { method: "POST", body: JSON.stringify(payload) });
 
     if (!written.ok) {
+      // Retry without meta if Yoast keys are rejected.
+      if (payload.meta && (written.status === 400 || written.status === 403)) {
+        delete payload.meta;
+        const retry = existing
+          ? await wpFetch(ctx, `/${endpoint}/${existing.id}`, { method: "POST", body: JSON.stringify(payload) })
+          : await wpFetch(ctx, `/${endpoint}`, { method: "POST", body: JSON.stringify(payload) });
+        if (!retry.ok) {
+          return { ok: false, error: wpError(retry), retryable: retry.status === 0 || retry.status >= 500 || retry.status === 429 };
+        }
+        const postRetry = parseWpResource(retry.body);
+        if (!postRetry) return { ok: false, error: NOT_WORDPRESS, retryable: false };
+        return { ok: true, remoteId: String(postRetry.id), url: postRetry.link || null, previous };
+      }
       return { ok: false, error: wpError(written), retryable: written.status === 0 || written.status >= 500 || written.status === 429 };
     }
 
@@ -197,6 +231,60 @@ export const wordpressAdapter: PublishAdapter = {
     };
   },
 };
+
+async function updateWpMeta(
+  ctx: AdapterContext,
+  change: Extract<SiteChange, { type: "update_meta" }>
+): Promise<PublishResult> {
+  let path = "";
+  try {
+    path = new URL(change.url).pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return { ok: false, error: "Meta update needs an absolute page URL.", retryable: false };
+  }
+  const slug = path.split("/").filter(Boolean).pop() || "";
+  if (!slug) return { ok: false, error: "Could not derive a slug from the page URL.", retryable: false };
+
+  // Prefer pages, then posts.
+  for (const endpoint of ["pages", "posts"] as const) {
+    const found = await wpFetch(ctx, `/${endpoint}?slug=${encodeURIComponent(slug)}&status=any&context=edit&per_page=1`);
+    if (!found.ok) continue;
+    const collection = parseWpCollection(found.body);
+    if (!collection?.[0]) continue;
+    const existing = collection[0];
+    const payload: Record<string, unknown> = {};
+    if (change.title) payload.title = change.title;
+    if (change.metaDescription) {
+      payload.excerpt = change.metaDescription;
+      payload.meta = {
+        _yoast_wpseo_metadesc: change.metaDescription,
+        ...(change.title ? { _yoast_wpseo_title: change.title } : {}),
+      };
+    }
+    const written = await wpFetch(ctx, `/${endpoint}/${existing.id}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!written.ok && payload.meta) {
+      delete payload.meta;
+      const retry = await wpFetch(ctx, `/${endpoint}/${existing.id}`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!retry.ok) {
+        return { ok: false, error: wpError(retry), retryable: retry.status >= 500 };
+      }
+      const post = parseWpResource(retry.body);
+      return { ok: true, remoteId: String(existing.id), url: post?.link || change.url, previous: null };
+    }
+    if (!written.ok) {
+      return { ok: false, error: wpError(written), retryable: written.status >= 500 };
+    }
+    const post = parseWpResource(written.body);
+    return { ok: true, remoteId: String(existing.id), url: post?.link || change.url, previous: null };
+  }
+  return { ok: false, error: `No WordPress page or post found for slug "${slug}".`, retryable: false };
+}
 
 async function deleteWpPage(
   ctx: AdapterContext,

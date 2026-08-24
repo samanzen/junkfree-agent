@@ -24,3 +24,11 @@ export {
   websiteAdapterMeta,
   type WebsiteAdapterMeta,
 } from "./adapter";
+
+export {
+  detectWebsite,
+  FUNCTIONAL_CONNECTORS,
+  UNSUPPORTED_CONNECTORS,
+  type ConnectorOption,
+  type WebsiteDetectResult,
+} from "./detect";

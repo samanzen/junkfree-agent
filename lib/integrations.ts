@@ -24,7 +24,7 @@ import { encryptCredentials, decryptCredentials } from "./crypto";
 // The column is plain text by design, so adding these needs no migration.
 export type IntegrationProvider =
   | "ga4" | "highlevel" | "stripe" | "quickbooks" | "jobber"
-  | "wordpress" | "shopify" | "webhook"
+  | "wordpress" | "shopify" | "webhook" | "github" | "sanity"
   // One row per brand holds EVERY linked Google account and every Google
   // product selection (see lib/google/store.ts). Deliberately not one provider
   // per Google product: the table is unique on (brand_id, provider), and a

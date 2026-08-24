@@ -155,6 +155,10 @@ export function publicCanaryUrl(brand: Brand, writer: string, slug: string, adap
     const handle = slug.replace(/^blog\//, "").replace(/^\/+|\/+$/g, "");
     return absolutePageUrl(brand.site_url, `pages/${handle}`);
   }
+  // GitHub / Sanity prove against the system of record (PR raw file / API), not the live site.
+  if ((writer === "github" || writer === "sanity") && adapterUrl && /^https?:\/\//i.test(adapterUrl)) {
+    return adapterUrl;
+  }
   if (adapterUrl && /^https?:\/\//i.test(adapterUrl)) {
     try {
       const pageHost = new URL(adapterUrl).hostname.replace(/^www\./i, "").toLowerCase();
@@ -212,7 +216,7 @@ async function preconditions(brand: Brand): Promise<{ ok: true; writer: SitePlat
 
 async function recordCertFailure(
   brand: Brand,
-  writer: "wordpress" | "shopify" | "webhook" | "proxy",
+  writer: SitePlatform,
   reason: string,
   extra?: { last_execution_id?: string | null }
 ): Promise<void> {
@@ -328,15 +332,36 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
     if (phase === "verify_write") {
       if (!publicUrl) publicUrl = publicCanaryUrl(fresh, writer, slug, null);
       if (!publicUrl) throw new Error("stepCertify: missing public URL.");
-      const verified = await checkCertificationPage(
-        fresh,
-        { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "present" },
-        {
-          attempts: VERIFY_ATTEMPTS,
-          delayMs: VERIFY_DELAY_MS,
-          proxyDiagnostics: writer === "proxy",
+
+      let verified: { ok: boolean; reason?: string };
+      if (writer === "sanity" && (publicUrl.startsWith("sanity://") || remoteId)) {
+        const target = await resolvePublishTarget(fresh.id);
+        if (!target.ok) {
+          verified = { ok: false, reason: target.reason };
+        } else {
+          const { sanityDocumentContains } = await import("./adapters/sanity");
+          const id = remoteId || publicUrl.replace("sanity://document/", "");
+          const present = await sanityDocumentContains(
+            { brand: fresh, credentials: target.credentials, config: target.config },
+            id,
+            titleToken,
+            bodyToken
+          );
+          verified = present
+            ? { ok: true }
+            : { ok: false, reason: "The test document did not appear in Sanity." };
         }
-      );
+      } else {
+        verified = await checkCertificationPage(
+          fresh,
+          { url: publicUrl, siteUrl: fresh.site_url, titleToken, bodyToken, mode: "present" },
+          {
+            attempts: VERIFY_ATTEMPTS,
+            delayMs: VERIFY_DELAY_MS,
+            proxyDiagnostics: writer === "proxy",
+          }
+        );
+      }
       if (!verified.ok) {
         if (phaseAttempts + 1 < MAX_PHASE_JOBS) {
           await continuePhase("verify_write");
@@ -345,7 +370,7 @@ export async function stepCertify(brand: Brand, payload: CertifyPayload): Promis
         const appearReason =
           writer === "proxy" && verified.reason
             ? verified.reason
-            : FAILED_APPEAR_REASON;
+            : verified.reason || FAILED_APPEAR_REASON;
         await recordCertFailure(fresh, writer, appearReason, { last_execution_id: executionId });
         throw new Error(`stepCertify: ${verified.reason}`);
       }

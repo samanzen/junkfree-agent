@@ -53,7 +53,7 @@ test("proxy claims pages unverified and titles unsupported (CMS upsell)", () => 
   expect(map.upsert_page?.state).toBe("supported_unverified");
   expect(map.upsert_page?.writer).toBe("proxy");
   expect(map.update_meta?.state).toBe("unsupported");
-  expect(map.update_meta?.reason).toMatch(/WordPress or Shopify/i);
+  expect(map.update_meta?.reason).toMatch(/CMS or Git/i);
   expect(isOperationCertified(map, "upsert_page")).toBe(false);
 });
 

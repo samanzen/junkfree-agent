@@ -8,6 +8,7 @@ import { IconCheck, IconAlert, IconLink, IconExternal, IconSparkle } from "../ic
 import type { PublicConnectionState, ConnectionAction } from "@/lib/connections";
 import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
 import ProxySetup from "./_ProxySetup";
+import ConnectWebsite from "./_ConnectWebsite";
 
 type PublishPlatform = "wordpress" | "shopify" | "webhook" | "proxy";
 
@@ -740,15 +741,6 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
 
     if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
-      const platform =
-        action === "connect"
-          ? "proxy"
-          : platformFromDetail(row.detail, row.websiteAdvanced?.adapter);
-      setPublishForm({
-        ...emptyPublishForm(),
-        platform,
-        signingSecret: platform === "webhook" ? makeSigningSecret() : "",
-      });
       setPublishOpen(true);
       return;
     }
@@ -1030,11 +1022,12 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.key === "website_publishing" && publishOpen && publishForm.platform === "proxy" && (
-                  <ProxySetup
+                {row.key === "website_publishing" && publishOpen && (
+                  <ConnectWebsite
                     brandId={brandId}
+                    siteUrl={row.websiteAdvanced?.siteUrl || row.detail}
                     busy={!!busy}
-                    onBusy={(v) => setBusy(v ? "website_publishing:proxy" : null)}
+                    onBusy={(v) => setBusy(v ? "website_publishing:connect" : null)}
                     onDone={() => void load()}
                     onCancel={() => setPublishOpen(false)}
                     onCopy={copyText}
@@ -1043,19 +1036,6 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                       setPublishOpen(false);
                       void provePublishing();
                     }}
-                  />
-                )}
-
-                {row.key === "website_publishing" && publishOpen && publishForm.platform !== "proxy" && (
-                  <PublishingSetup
-                    form={publishForm}
-                    busy={busy === "website_publishing:connect"}
-                    onChange={(patch) => {
-                      setPublishForm((f) => ({ ...f, ...patch }));
-                    }}
-                    onCancel={() => setPublishOpen(false)}
-                    onSubmit={() => void connectPublishing()}
-                    onCopy={copyText}
                   />
                 )}
 

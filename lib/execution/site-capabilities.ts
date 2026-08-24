@@ -44,9 +44,9 @@ const ALL_OPS: readonly AdapterCapability[] = ["upsert_page", "update_meta"];
 
 const UNSUPPORTED_REASON: Record<SitePlatform, Record<AdapterCapability, string>> = {
   wordpress: {
-    upsert_page: "WordPress can receive new pages. Publishing is not proven yet.",
+    upsert_page: "WordPress can receive new pages and posts. Publishing is not proven yet.",
     update_meta:
-      "WordPress cannot update titles and descriptions until an SEO plugin is connected.",
+      "Titles and meta descriptions can be updated when Yoast (or compatible REST meta) is available. Not proven yet.",
   },
   shopify: {
     upsert_page: "Shopify can receive new pages. Publishing is not proven yet.",
@@ -61,7 +61,15 @@ const UNSUPPORTED_REASON: Record<SitePlatform, Record<AdapterCapability, string>
     upsert_page:
       "Volo Managed Pages can publish new pages on your domain. The connection is not proven yet.",
     update_meta:
-      "Editing existing pages needs a CMS connection (WordPress or Shopify).",
+      "Editing existing pages needs a CMS or Git connection.",
+  },
+  github: {
+    upsert_page: "GitHub can open pull requests for new content files. Not proven yet.",
+    update_meta: "GitHub can open pull requests to update frontmatter meta. Not proven yet.",
+  },
+  sanity: {
+    upsert_page: "Sanity can create and replace page documents. Not proven yet.",
+    update_meta: "Sanity can patch title and description fields. Not proven yet.",
   },
 };
 

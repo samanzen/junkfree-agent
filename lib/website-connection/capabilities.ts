@@ -42,7 +42,8 @@ export type WebsiteAdapterId =
   | "shopify"
   | "webhook"
   | "managed_pages"
-  | "github";
+  | "github"
+  | "sanity";
 
 export const CAPABILITY_LABELS: Record<WebsiteCapability, string> = {
   read_site: "Website reading",
