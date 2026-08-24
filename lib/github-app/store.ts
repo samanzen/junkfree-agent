@@ -112,14 +112,15 @@ export async function saveGitHubAppConnection(opts: {
   }
 
   const map = capabilityMapFor(githubAdapter);
-  const saved = await persistBrandWriter(opts.brandId, "github", map);
-  if (!saved.ok) {
+  try {
+    await persistBrandWriter(opts.brandId, "github", map);
+    await detectAndStoreSourceOfTruth(opts.brandId, brand.site_url || "", "github");
+    await confirmSourceOfTruth(opts.brandId, "github");
+  } catch {
     await disconnectIntegration(opts.brandId, "github");
     return { ok: false, error: "Could not save the publishing connection. Please try again." };
   }
 
-  await detectAndStoreSourceOfTruth(opts.brandId);
-  await confirmSourceOfTruth(opts.brandId, "github");
   return { ok: true };
 }
 

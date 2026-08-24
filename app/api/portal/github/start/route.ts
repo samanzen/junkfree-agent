@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const origin = url.origin;
   const state = signGitHubAppState({
     brandId,
-    userId: auth.user.id,
+    userId: auth.id,
     origin,
     siteUrl: siteUrl || null,
     nonce,
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   await createAuthAttempt({
     nonce,
     brandId,
-    userId: auth.user.id,
+    userId: auth.id,
     origin,
     siteUrl: siteUrl || null,
   });

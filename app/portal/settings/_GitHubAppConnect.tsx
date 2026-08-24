@@ -191,20 +191,33 @@ export default function GitHubAppConnect({
   }
 
   if (phase === "finding" || phase === "analyzing" || phase === "testing") {
-    const steps = [
-      { id: "authorizing", label: "Authorization confirmed", done: true },
-      { id: "finding", label: "Finding your website repository", done: phase !== "finding" },
-      { id: "analyzing", label: "Analyzing website structure", done: phase === "testing" || phase === "report" },
-      { id: "testing", label: "Testing publishing access", done: false },
-      { id: "report", label: "Preparing capability report", done: false },
+    const progress: { label: string; state: "done" | "active" | "todo" }[] = [
+      { label: "Authorization confirmed", state: "done" },
+      {
+        label: "Finding your website repository",
+        state: phase === "finding" ? "active" : "done",
+      },
+      {
+        label: "Analyzing website structure",
+        state: phase === "analyzing" ? "active" : phase === "finding" ? "todo" : "done",
+      },
+      {
+        label: "Testing publishing access",
+        state: phase === "testing" ? "active" : "todo",
+      },
+      { label: "Preparing capability report", state: "todo" },
     ];
     return (
       <div className="p-conn-setup-fields">
         <h3 className="p-conn-setup-title">Connecting GitHub</h3>
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {steps.map((s) => (
-            <li key={s.id} className="p-conn-meta" style={{ opacity: s.done || s.id === phase ? 1 : 0.5 }}>
-              {s.done ? "✓" : s.id === phase ? "…" : "○"} {s.label}
+          {progress.map((s) => (
+            <li
+              key={s.label}
+              className="p-conn-meta"
+              style={{ opacity: s.state === "todo" ? 0.5 : 1 }}
+            >
+              {s.state === "done" ? "✓" : s.state === "active" ? "…" : "○"} {s.label}
             </li>
           ))}
         </ul>
