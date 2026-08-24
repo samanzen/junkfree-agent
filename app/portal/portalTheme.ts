@@ -788,6 +788,7 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-wb-promo-text { margin:0; font-size:13px; color:var(--muted); line-height:1.55; max-width:42em; }
 .p-wb-promo-cta { flex-shrink:0; text-decoration:none; }
 .p-cap-report { display:flex; flex-direction:column; gap:10px; }
+.p-cap-report-body { margin-top:8px; display:flex; flex-direction:column; gap:10px; }
 .p-cap-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
 .p-cap-item { padding:10px 12px; border:1px solid var(--line-soft); border-radius:var(--r-sm); background:var(--surface); }
 .p-cap-row { display:flex; flex-direction:column; gap:4px; }

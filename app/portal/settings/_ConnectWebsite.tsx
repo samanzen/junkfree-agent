@@ -291,23 +291,20 @@ export default function ConnectWebsite({
           <p className="p-conn-setup-help">
             <strong>{chosen.label}</strong> — {chosen.reason}
           </p>
-          <button type="button" className="p-linkbtn" onClick={() => setShowDetectDetails((v) => !v)}>
-            {showDetectDetails ? "Hide detection details" : "View details"}
-          </button>
-          {showDetectDetails && (
-            <div className="p-conn-meta">
-              Detected: {detect.hint} ({detect.confidence} confidence)
-              {detect.signals?.length ? (
-                <ul style={{ margin: "6px 0 0", paddingLeft: "1.1em" }}>
-                  {detect.signals.slice(0, 5).map((s) => (
-                    <li key={s.id}>{s.evidence}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          )}
 
-          <CapabilityReport items={report} />
+          <div className="p-conn-actions">
+            <button type="button" className="p-btn ghost" onClick={() => setStep("url")} disabled={busy}>
+              <span>Back</span>
+            </button>
+            <button
+              type="button"
+              className="p-btn primary"
+              onClick={() => setStep(chosen.platform === "proxy" ? "proxy" : "authorize")}
+              disabled={busy || !chosen.connectable}
+            >
+              <span>Continue with {chosen.label}</span>
+            </button>
+          </div>
 
           <button type="button" className="p-linkbtn" onClick={() => setShowOther((v) => !v)}>
             Use a different connection method
@@ -332,19 +329,24 @@ export default function ConnectWebsite({
               ))}
             </div>
           )}
-          <div className="p-conn-actions">
-            <button type="button" className="p-btn ghost" onClick={() => setStep("url")} disabled={busy}>
-              <span>Back</span>
-            </button>
-            <button
-              type="button"
-              className="p-btn primary"
-              onClick={() => setStep(chosen.platform === "proxy" ? "proxy" : "authorize")}
-              disabled={busy || !chosen.connectable}
-            >
-              <span>Continue with {chosen.label}</span>
-            </button>
-          </div>
+
+          <button type="button" className="p-linkbtn" onClick={() => setShowDetectDetails((v) => !v)}>
+            {showDetectDetails ? "Hide detection details" : "View detection details"}
+          </button>
+          {showDetectDetails && (
+            <div className="p-conn-meta">
+              Detected: {detect.hint} ({detect.confidence} confidence)
+              {detect.signals?.length ? (
+                <ul style={{ margin: "6px 0 0", paddingLeft: "1.1em" }}>
+                  {detect.signals.slice(0, 5).map((s) => (
+                    <li key={s.id}>{s.evidence}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          )}
+
+          <CapabilityReport items={report} collapsed />
         </div>
       )}
 
@@ -554,6 +556,7 @@ export default function ConnectWebsite({
             items={report}
             access={access}
             busy={busy}
+            collapsed
             onRecheckAccess={() => void runDetect({ silent: true })}
             onRecheckConnection={() => void recheckConnection()}
           />

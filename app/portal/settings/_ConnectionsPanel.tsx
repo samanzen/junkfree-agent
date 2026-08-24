@@ -854,6 +854,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   <div style={{ marginTop: 10 }}>
                     <CapabilityReport
                       items={row.capabilityReport}
+                      collapsed
                       access={
                         row.websiteAdvanced?.adapter
                           ? accessTransparency(row.websiteAdvanced.adapter as WebsiteAdapterId)
@@ -896,21 +897,13 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                       onRecheckConnection={() => void provePublishing()}
                     />
                   </div>
-                ) : row.websiteCapabilities?.length ? (
-                  <div className="p-conn-caps" style={{ marginTop: 8 }}>
-                    {row.websiteCapabilities.map((cap) => (
-                      <div className="p-conn-meta" key={cap.key}>
-                        {cap.label} — {cap.statusLabel}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  row.operations?.map((op) => (
+                ) : row.key !== "website_publishing" && row.operations?.length ? (
+                  row.operations.map((op) => (
                     <div className="p-conn-meta" key={op.label}>
                       {op.label} — {op.stateLabel}
                     </div>
                   ))
-                )}
+                ) : null}
 
                 {row.websiteAdvanced && (row.status === "connected" || row.status === "limited") && (
                   <details className="p-conn-advanced" style={{ marginTop: 8 }}>

@@ -4,7 +4,8 @@ import { useState } from "react";
 import type { CapabilityReportItem } from "@/lib/website-connection/capability-report";
 
 /**
- * Progressive capability list — summary first, details on demand.
+ * Capability report with progressive disclosure.
+ * When collapsed, only a single “What this connection can do” control is shown.
  */
 export default function CapabilityReport({
   items,
@@ -12,17 +13,23 @@ export default function CapabilityReport({
   onRecheckAccess,
   onRecheckConnection,
   busy,
+  collapsed = false,
+  summaryLabel = "What this connection can do",
 }: {
   items: CapabilityReportItem[];
   access?: { weAccess: string[]; weDoNotAccess: string[] } | null;
   onRecheckAccess?: () => void;
   onRecheckConnection?: () => void;
   busy?: boolean;
+  /** Hide the full list until the customer asks. */
+  collapsed?: boolean;
+  summaryLabel?: string;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(!collapsed);
 
-  return (
-    <div className="p-cap-report">
+  const body = (
+    <>
       {access && (
         <details className="p-cap-access">
           <summary>What we access</summary>
@@ -57,7 +64,7 @@ export default function CapabilityReport({
                   <span className="p-cap-label">{item.label}</span>
                   <span className={`p-cap-status p-cap-status-${item.status}`}>{item.statusLabel}</span>
                 </div>
-                <p className="p-cap-summary">{item.summary}</p>
+                {open && <p className="p-cap-summary">{item.summary}</p>}
                 <button
                   type="button"
                   className="p-linkbtn"
@@ -116,6 +123,19 @@ export default function CapabilityReport({
           )}
         </div>
       )}
-    </div>
+    </>
   );
+
+  if (collapsed) {
+    return (
+      <div className="p-cap-report">
+        <button type="button" className="p-linkbtn" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? `Hide — ${summaryLabel}` : summaryLabel}
+        </button>
+        {expanded ? <div className="p-cap-report-body">{body}</div> : null}
+      </div>
+    );
+  }
+
+  return <div className="p-cap-report">{body}</div>;
 }
