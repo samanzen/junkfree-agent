@@ -776,7 +776,7 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-conn-setup-help { margin:0; font-size:12.5px; color:var(--muted); line-height:1.55; }
 .p-conn-setup-help strong { color:var(--text); font-weight:600; }
 .p-conn-snippet { font-family:var(--font-mono); font-size:11px; line-height:1.5; }
-.p-conn-setup-title { margin:0; font-size:15px; font-weight:650; letter-spacing:-.02em; }
+.p-conn-setup-title { margin:0; font-size:15px; font-weight:600; letter-spacing:-.02em; }
 .p-wb-promo {
   display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;
   margin:0 0 22px; padding:18px 20px;
@@ -793,7 +793,7 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-cap-row { display:flex; flex-direction:column; gap:4px; }
 .p-cap-main { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px; }
 .p-cap-label { font-size:13px; font-weight:600; }
-.p-cap-status { font-size:11px; font-weight:650; letter-spacing:.01em; }
+.p-cap-status { font-size:11px; font-weight:600; letter-spacing:.01em; }
 .p-cap-status-auto_manage { color:var(--green); }
 .p-cap-status-approval_required { color:var(--amber, #b45309); }
 .p-cap-status-guided { color:var(--muted); }
@@ -803,10 +803,10 @@ ${down.md} { .p-2col { grid-template-columns:1fr; } }
 .p-cap-details p { margin:0 0 6px; }
 .p-cap-details strong { color:var(--text); font-weight:600; }
 .p-cap-access { font-size:12.5px; color:var(--muted); }
-.p-cap-access summary { cursor:pointer; color:var(--text); font-weight:550; }
+.p-cap-access summary { cursor:pointer; color:var(--text); font-weight:500; }
 .p-cap-access-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
-@media (max-width:560px) { .p-cap-access-cols { grid-template-columns:1fr; } }
-.p-cap-access-h { font-size:11.5px; font-weight:650; color:var(--text); margin-bottom:4px; }
+${down.sm} { .p-cap-access-cols { grid-template-columns:1fr; } }
+.p-cap-access-h { font-size:11.5px; font-weight:600; color:var(--text); margin-bottom:4px; }
 .p-cap-access ul { margin:0; padding-left:1.1em; line-height:1.55; }
 .p-inline-link { color:var(--accent); text-decoration:none; white-space:nowrap; }
 .p-inline-link:hover { text-decoration:underline; }

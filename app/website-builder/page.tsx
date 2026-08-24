@@ -30,6 +30,16 @@ export default function WebsiteBuilderComingSoonPage() {
         .wb-soon .back:hover { color: #c5d4cb; }
         .wb-soon .note { font-family: "Segoe UI", system-ui, sans-serif; margin-top: 28px; font-size: 13px; color: #8a9e93; line-height: 1.55; }
         .wb-soon .flow { font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; color: #c5d4cb; line-height: 1.7; margin: 0 0 12px; }
+        .wb-notify .fld-label { color: #9db5a8 !important; }
+        .wb-notify-input {
+          width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.25); color: #fff; font-size: 15px;
+        }
+        .wb-notify-btn {
+          width: 100%; margin-top: 14px; padding: 13px 16px; border: 0; border-radius: 10px;
+          background: #3ecf8e; color: #0b1612; font-weight: 700; font-size: 15px; cursor: pointer;
+        }
+        .wb-notify-done { margin: 0; color: #3ecf8e; font-weight: 600; }
       `}</style>
       <div className="wb-soon-inner">
         <div className="wb-soon-mark">Coming soon</div>

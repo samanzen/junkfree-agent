@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Field from "@/app/_components/Field";
 
 /** Local interest capture until the waitlist backend exists. */
 export default function NotifyInterestForm() {
@@ -9,6 +10,7 @@ export default function NotifyInterestForm() {
 
   return (
     <form
+      className="wb-notify"
       onSubmit={(e) => {
         e.preventDefault();
         if (!email.trim()) return;
@@ -24,47 +26,21 @@ export default function NotifyInterestForm() {
         setDone(true);
       }}
     >
-      <label htmlFor="wb-email" style={{ display: "block", fontSize: 13, color: "#9db5a8", marginBottom: 6 }}>
-        Notify me when this opens
-      </label>
       {done ? (
-        <p style={{ margin: 0, color: "#3ecf8e", fontWeight: 600 }}>Thanks — we&apos;ll be in touch.</p>
+        <p className="wb-notify-done">Thanks — we&apos;ll be in touch.</p>
       ) : (
         <>
-          <input
-            id="wb-email"
-            name="email"
+          <Field
+            label="Notify me when this opens"
             type="email"
+            name="email"
             required
             placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(0,0,0,0.25)",
-              color: "#fff",
-              fontSize: 15,
-              marginBottom: 14,
-            }}
+            inputClassName="wb-notify-input"
           />
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              padding: "13px 16px",
-              border: 0,
-              borderRadius: 10,
-              background: "#3ecf8e",
-              color: "#0b1612",
-              fontWeight: 700,
-              fontSize: 15,
-              cursor: "pointer",
-            }}
-          >
+          <button type="submit" className="wb-notify-btn">
             Notify Me
           </button>
         </>
