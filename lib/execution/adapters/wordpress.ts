@@ -153,10 +153,7 @@ export const wordpressAdapter: PublishAdapter = {
       return updateWpMeta(ctx, change);
     }
 
-    if (change.type !== "upsert_page") {
-      return { ok: false, error: `WordPress adapter cannot perform "${change.type}".`, retryable: false };
-    }
-
+    if (change.type === "upsert_page") {
     const { endpoint, slug } = routeFor(change.slug);
     const status = ctx.config.status === "draft" ? "draft" : "publish";
 
@@ -229,6 +226,9 @@ export const wordpressAdapter: PublishAdapter = {
       url: post.link || null,
       previous,
     };
+    }
+
+    return { ok: false, error: "WordPress adapter received an unsupported change.", retryable: false };
   },
 };
 

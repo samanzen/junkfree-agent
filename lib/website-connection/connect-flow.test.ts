@@ -105,7 +105,7 @@ test("POMO managed pages still describe as connected + managed_pages available",
         fail_count: 0,
       },
     },
-  } as Brand;
+  } as unknown as Brand;
   const view = describeWebsiteConnection(brand);
   expect(view.connected).toBe(true);
   expect(view.adapterId).toBe("managed_pages");

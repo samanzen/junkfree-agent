@@ -45,7 +45,7 @@ function pomoProven(): Brand {
         fail_count: 0,
       },
     },
-  } as Brand;
+  } as unknown as Brand;
 }
 
 test("default managed namespace is guides", () => {
