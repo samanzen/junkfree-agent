@@ -9,6 +9,10 @@ import type { PublicConnectionState, ConnectionAction } from "@/lib/connections"
 import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
 import ProxySetup from "./_ProxySetup";
 import ConnectWebsite from "./_ConnectWebsite";
+import WebsiteBuilderPromo from "./_WebsiteBuilderPromo";
+import CapabilityReport from "./_CapabilityReport";
+import { accessTransparency } from "@/lib/website-connection/capability-report";
+import type { WebsiteAdapterId } from "@/lib/website-connection/capabilities";
 
 type PublishPlatform = "wordpress" | "shopify" | "webhook" | "proxy";
 
@@ -814,6 +818,8 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
         sub="Where your data comes from, whether each connection is healthy, and what to do when it isn't."
       />
 
+      <WebsiteBuilderPromo />
+
       {failed && (
         <div className="p-conn-note error" role="status">
           <IconAlert size={14} />
@@ -842,7 +848,55 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                 {/* Why this status — always present, so no state is unexplained. */}
                 <div className="p-conn-why">{row.why}</div>
 
-                {row.websiteCapabilities?.length ? (
+                {row.key === "website_publishing" &&
+                row.capabilityReport?.length &&
+                (row.status === "connected" || row.status === "limited") ? (
+                  <div style={{ marginTop: 10 }}>
+                    <CapabilityReport
+                      items={row.capabilityReport}
+                      access={
+                        row.websiteAdvanced?.adapter
+                          ? accessTransparency(row.websiteAdvanced.adapter as WebsiteAdapterId)
+                          : accessTransparency(null)
+                      }
+                      busy={!!busy}
+                      onRecheckAccess={
+                        row.websiteAdvanced?.siteUrl
+                          ? () => {
+                              void (async () => {
+                                setBusy("website_publishing:recheck-access");
+                                try {
+                                  const res = await authedFetch("/api/portal/website-detect", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      brand_id: brandId,
+                                      url: row.websiteAdvanced!.siteUrl,
+                                    }),
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) {
+                                    toast.error(data.error || "Could not recheck access");
+                                    return;
+                                  }
+                                  toast.success(
+                                    "Access rechecked",
+                                    data.recommended?.label || "Public site re-analyzed."
+                                  );
+                                  await load();
+                                } catch {
+                                  toast.error("Could not recheck access");
+                                } finally {
+                                  setBusy(null);
+                                }
+                              })();
+                            }
+                          : undefined
+                      }
+                      onRecheckConnection={() => void provePublishing()}
+                    />
+                  </div>
+                ) : row.websiteCapabilities?.length ? (
                   <div className="p-conn-caps" style={{ marginTop: 8 }}>
                     {row.websiteCapabilities.map((cap) => (
                       <div className="p-conn-meta" key={cap.key}>
@@ -1054,7 +1108,13 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                           data-busy={isBusy || undefined}
                           title={blocked ? "Choose a website first" : undefined}
                         >
-                          <span>{isBusy ? "Working…" : ACTION_LABEL[a]}</span>
+                          <span>
+                            {isBusy
+                              ? "Working…"
+                              : row.key === "website_publishing" && a === "connect"
+                                ? "Analyze & Connect"
+                                : ACTION_LABEL[a]}
+                          </span>
                         </button>
                       );
                     })}

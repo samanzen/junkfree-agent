@@ -25,6 +25,10 @@ import {
   type WebsiteAdapterId,
   type WebsiteCapability,
 } from "./capabilities";
+import {
+  buildCapabilityReport,
+  type CapabilityReportItem,
+} from "./capability-report";
 
 export type WebsiteConnectionView = {
   /** Customer-facing connection title. */
@@ -41,6 +45,8 @@ export type WebsiteConnectionView = {
   adapterLabel: string | null;
   managedNamespace: string | null;
   capabilities: CapabilityView[];
+  /** Full customer capability report (Auto-Manage / Guided / …). */
+  capabilityReport: CapabilityReportItem[];
   /** Technical diagnostics for Advanced. */
   advanced: {
     adapter: string | null;
@@ -203,6 +209,12 @@ export function describeWebsiteConnection(
   let writer = pinned;
   if (proxyActive) writer = "proxy";
   if (!writer && !opts?.hasPublisher) {
+    const emptyCaps = capabilitiesForConnection({
+      adapterId: null,
+      map: {},
+      certifying: false,
+      connected: false,
+    });
     return {
       name: "Website connection",
       purpose: "Connect your website so Volo can read it and publish approved work where it fits.",
@@ -213,11 +225,11 @@ export function describeWebsiteConnection(
       adapterId: null,
       adapterLabel: null,
       managedNamespace: null,
-      capabilities: capabilitiesForConnection({
+      capabilities: emptyCaps,
+      capabilityReport: buildCapabilityReport({
         adapterId: null,
         map: {},
-        certifying: false,
-        connected: false,
+        executionMode: brand.execution_mode || "approval",
       }),
       advanced: {
         adapter: null,
@@ -268,6 +280,11 @@ export function describeWebsiteConnection(
       map,
       certifying,
       connected,
+    }),
+    capabilityReport: buildCapabilityReport({
+      adapterId: adapter?.id || null,
+      map,
+      executionMode: brand.execution_mode || "approval",
     }),
     advanced: {
       adapter: adapter?.id || null,

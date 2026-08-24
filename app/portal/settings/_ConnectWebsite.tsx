@@ -5,9 +5,16 @@ import { useToast } from "@/app/_components/Notify";
 import Field from "@/app/_components/Field";
 import { codedSiteSnippet } from "@/lib/execution/receiver-snippet";
 import type { ConnectorOption, WebsiteDetectResult } from "@/lib/website-connection/detect";
+import type { WebsiteAdapterId } from "@/lib/website-connection/capabilities";
+import {
+  accessTransparency,
+  buildCapabilityReport,
+} from "@/lib/website-connection/capability-report";
 import ProxySetup from "./_ProxySetup";
+import CapabilityReport from "./_CapabilityReport";
 
 type Mode = "approval" | "hybrid" | "autopilot";
+type Step = "url" | "recommend" | "authorize" | "proxy" | "capabilities" | "mode";
 
 function makeSigningSecret(): string {
   const bytes = new Uint8Array(32);
@@ -15,9 +22,24 @@ function makeSigningSecret(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function asAdapterId(opt: ConnectorOption | null): WebsiteAdapterId | null {
+  if (!opt?.connectable) return null;
+  if (
+    opt.id === "wordpress" ||
+    opt.id === "shopify" ||
+    opt.id === "github" ||
+    opt.id === "sanity" ||
+    opt.id === "webhook" ||
+    opt.id === "managed_pages"
+  ) {
+    return opt.id;
+  }
+  return null;
+}
+
 /**
- * URL-first Connect Website flow.
- * Detect → recommend → authorize → (proxy setup) → prove → mode.
+ * URL-first Connect Website flow (progressive disclosure).
+ * Analyze → recommend → authorize → prove capabilities → mode.
  */
 export default function ConnectWebsite({
   brandId,
@@ -41,14 +63,14 @@ export default function ConnectWebsite({
   lastFailReason?: string | null;
 }) {
   const toast = useToast();
-  const [step, setStep] = useState<"url" | "recommend" | "authorize" | "proxy" | "mode">("url");
+  const [step, setStep] = useState<Step>("url");
   const [url, setUrl] = useState(siteUrl || "");
   const [detect, setDetect] = useState<WebsiteDetectResult | null>(null);
   const [chosen, setChosen] = useState<ConnectorOption | null>(null);
   const [showOther, setShowOther] = useState(false);
+  const [showDetectDetails, setShowDetectDetails] = useState(false);
   const [mode, setMode] = useState<Mode>("approval");
 
-  // Authorize form fields
   const [wpUser, setWpUser] = useState("");
   const [wpPass, setWpPass] = useState("");
   const [shop, setShop] = useState("");
@@ -65,77 +87,21 @@ export default function ConnectWebsite({
   const [signingSecret, setSigningSecret] = useState(() => makeSigningSecret());
 
   const platform = chosen?.platform;
+  const adapterId = asAdapterId(chosen);
 
-  const capabilityPreview = useMemo(() => {
-    if (!chosen) return [];
-    if (chosen.id === "wordpress") {
-      return [
-        { label: "Create blog posts", status: "Available after prove" },
-        { label: "Create new pages", status: "Available after prove" },
-        { label: "Edit existing content", status: "Available after prove" },
-        { label: "Update titles and meta descriptions", status: "Available after prove" },
-        { label: "Manage images and alt text", status: "Unsupported" },
-        { label: "Add internal links", status: "Unsupported" },
-        { label: "Add or update schema", status: "Unsupported" },
-        { label: "Handle technical SEO changes", status: "Unsupported" },
-      ];
-    }
-    if (chosen.id === "shopify") {
-      return [
-        { label: "Create blog posts", status: "Unsupported" },
-        { label: "Create new pages", status: "Available after prove" },
-        { label: "Edit existing content", status: "Limited (pages upsert)" },
-        { label: "Update titles and meta descriptions", status: "Unsupported" },
-        { label: "Manage images and alt text", status: "Unsupported" },
-        { label: "Add internal links", status: "Unsupported" },
-        { label: "Add or update schema", status: "Unsupported" },
-        { label: "Handle technical SEO changes", status: "Unsupported" },
-      ];
-    }
-    if (chosen.id === "github") {
-      return [
-        { label: "Create blog posts", status: "Via pull request (markdown)" },
-        { label: "Create new pages", status: "Via pull request" },
-        { label: "Edit existing content", status: "Via pull request" },
-        { label: "Update titles and meta descriptions", status: "Via pull request (frontmatter)" },
-        { label: "Manage images and alt text", status: "Unsupported" },
-        { label: "Add internal links", status: "Unsupported" },
-        { label: "Add or update schema", status: "Unsupported" },
-        { label: "Handle technical SEO changes", status: "Unsupported" },
-      ];
-    }
-    if (chosen.id === "sanity") {
-      return [
-        { label: "Create blog posts", status: "If document type supports it" },
-        { label: "Create new pages", status: "Available after prove" },
-        { label: "Edit existing content", status: "Available after prove" },
-        { label: "Update titles and meta descriptions", status: "Available after prove" },
-        { label: "Manage images and alt text", status: "Unsupported" },
-        { label: "Add internal links", status: "Unsupported" },
-        { label: "Add or update schema", status: "Unsupported" },
-        { label: "Handle technical SEO changes", status: "Unsupported" },
-      ];
-    }
-    if (chosen.id === "managed_pages") {
-      return [
-        { label: "Create blog posts", status: "Unsupported (managed pages only)" },
-        { label: "Create new pages", status: "Available after prove" },
-        { label: "Edit existing content", status: "Unsupported" },
-        { label: "Update titles and meta descriptions", status: "Unsupported on existing site pages" },
-        { label: "Manage images and alt text", status: "Unsupported" },
-        { label: "Add internal links", status: "Unsupported" },
-        { label: "Add or update schema", status: "Unsupported" },
-        { label: "Handle technical SEO changes", status: "Unsupported" },
-      ];
-    }
-    return [
-      { label: "Create new pages", status: "Available after prove" },
-      { label: "Create blog posts", status: "Unsupported" },
-      { label: "Update titles and meta descriptions", status: "Unsupported" },
-    ];
-  }, [chosen]);
+  const report = useMemo(
+    () =>
+      buildCapabilityReport({
+        adapterId,
+        map: {},
+        executionMode: mode,
+      }),
+    [adapterId, mode]
+  );
 
-  async function runDetect() {
+  const access = useMemo(() => accessTransparency(adapterId), [adapterId]);
+
+  async function runDetect(opts?: { silent?: boolean }) {
     onBusy(true);
     try {
       const res = await authedFetch("/api/portal/website-detect", {
@@ -145,15 +111,15 @@ export default function ConnectWebsite({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error || "We couldn't check that website");
+        toast.error(data.error || "We couldn't analyze that website");
         return;
       }
       setDetect(data);
       setChosen(data.recommended);
-      setStep("recommend");
-      toast.success("Website checked", data.recommended?.label);
+      if (!opts?.silent) setStep("recommend");
+      toast.success(opts?.silent ? "Access rechecked" : "Website analyzed", data.recommended?.label);
     } catch {
-      toast.error("We couldn't check that website", "Try again in a moment.");
+      toast.error("We couldn't analyze that website", "Try again in a moment.");
     } finally {
       onBusy(false);
     }
@@ -223,11 +189,36 @@ export default function ConnectWebsite({
         toast.error(data.error || "We couldn't connect", data.detail || undefined);
         return;
       }
-      toast.success("Connected", data.message);
-      setStep("mode");
+      toast.success("Connection tested", data.message);
+      setStep("capabilities");
       onDone();
     } catch {
       toast.error("We couldn't connect", "Check the details and try again.");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function recheckConnection() {
+    onBusy(true);
+    try {
+      const res = await authedFetch("/api/portal/certify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand_id: brandId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Could not recheck connection");
+        return;
+      }
+      toast.success(
+        data.queued ? "Rechecking connection" : "Already testing",
+        data.message || undefined
+      );
+      onDone();
+    } catch {
+      toast.error("Could not recheck connection");
     } finally {
       onBusy(false);
     }
@@ -263,11 +254,13 @@ export default function ConnectWebsite({
     <div className="p-conn-setup">
       {step === "url" && (
         <div className="p-conn-setup-fields">
+          <h3 className="p-conn-setup-title">Connect Your Website</h3>
           <p className="p-conn-setup-help">
-            Enter your website address. We&apos;ll detect what it uses and recommend the best connection.
+            Enter your website URL. We&apos;ll analyze what&apos;s publicly available and recommend
+            the best connection — one step at a time.
           </p>
           <Field
-            label="Website URL"
+            label="Enter your website URL"
             type="url"
             inputMode="url"
             placeholder="https://www.example.com"
@@ -280,8 +273,13 @@ export default function ConnectWebsite({
             <button type="button" className="p-btn ghost" onClick={onCancel} disabled={busy}>
               <span>Cancel</span>
             </button>
-            <button type="button" className="p-btn primary" onClick={() => void runDetect()} disabled={busy || !url.trim()}>
-              <span>{busy ? "Checking…" : "Continue"}</span>
+            <button
+              type="button"
+              className="p-btn primary"
+              onClick={() => void runDetect()}
+              disabled={busy || !url.trim()}
+            >
+              <span>{busy ? "Analyzing…" : "Analyze & Connect"}</span>
             </button>
           </div>
         </div>
@@ -289,17 +287,28 @@ export default function ConnectWebsite({
 
       {step === "recommend" && detect && chosen && (
         <div className="p-conn-setup-fields">
+          <h3 className="p-conn-setup-title">Recommended connection</h3>
           <p className="p-conn-setup-help">
-            Recommended: <strong>{chosen.label}</strong> — {chosen.reason}
+            <strong>{chosen.label}</strong> — {chosen.reason}
           </p>
-          <div className="p-conn-meta">
-            Detected: {detect.hint} ({detect.confidence} confidence)
-          </div>
-          {capabilityPreview.map((c) => (
-            <div className="p-conn-meta" key={c.label}>
-              {c.label} — {c.status}
+          <button type="button" className="p-linkbtn" onClick={() => setShowDetectDetails((v) => !v)}>
+            {showDetectDetails ? "Hide detection details" : "View details"}
+          </button>
+          {showDetectDetails && (
+            <div className="p-conn-meta">
+              Detected: {detect.hint} ({detect.confidence} confidence)
+              {detect.signals?.length ? (
+                <ul style={{ margin: "6px 0 0", paddingLeft: "1.1em" }}>
+                  {detect.signals.slice(0, 5).map((s) => (
+                    <li key={s.id}>{s.evidence}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
-          ))}
+          )}
+
+          <CapabilityReport items={report} />
+
           <button type="button" className="p-linkbtn" onClick={() => setShowOther((v) => !v)}>
             Use a different connection method
           </button>
@@ -311,14 +320,14 @@ export default function ConnectWebsite({
                   type="button"
                   className={`p-btn ${chosen.id === opt.id ? "primary" : "ghost"}`}
                   onClick={() => setChosen(opt)}
-                  disabled={busy}
+                  disabled={busy || !opt.connectable}
                 >
                   <span>{opt.label}</span>
                 </button>
               ))}
               {detect.unavailable.map((opt) => (
                 <div className="p-conn-meta" key={opt.id}>
-                  {opt.label} — Not available yet
+                  {opt.label} — Guided Implementation available (connector not ready). {opt.reason}
                 </div>
               ))}
             </div>
@@ -341,11 +350,42 @@ export default function ConnectWebsite({
 
       {step === "authorize" && chosen && platform && platform !== "proxy" && (
         <div className="p-conn-setup-fields">
-          <p className="p-conn-setup-help">Authorize {chosen.label}. We test the connection before saving.</p>
+          <h3 className="p-conn-setup-title">Authorize {chosen.label}</h3>
+          <p className="p-conn-setup-help">
+            We&apos;ll test the connection before saving. Only the access needed to publish SEO work
+            is requested.
+          </p>
+          <details className="p-cap-access">
+            <summary>What we access</summary>
+            <div className="p-cap-access-cols">
+              <div>
+                <div className="p-cap-access-h">We can access</div>
+                <ul>
+                  {access.weAccess.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <div className="p-cap-access-h">We do not access</div>
+                <ul>
+                  {access.weDoNotAccess.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </details>
           {platform === "wordpress" && (
             <>
               <Field label="Website address" value={detect?.origin || url} readOnly />
-              <Field label="WordPress username" value={wpUser} onChange={(e) => setWpUser(e.target.value)} disabled={busy} required />
+              <Field
+                label="WordPress username"
+                value={wpUser}
+                onChange={(e) => setWpUser(e.target.value)}
+                disabled={busy}
+                required
+              />
               <Field
                 label="Application password"
                 type="password"
@@ -359,34 +399,117 @@ export default function ConnectWebsite({
           )}
           {platform === "shopify" && (
             <>
-              <Field label="Store name" placeholder="mystore.myshopify.com" value={shop} onChange={(e) => setShop(e.target.value)} disabled={busy} required />
-              <Field label="Admin access token" type="password" value={shopToken} onChange={(e) => setShopToken(e.target.value)} disabled={busy} required />
+              <Field
+                label="Store name"
+                placeholder="mystore.myshopify.com"
+                value={shop}
+                onChange={(e) => setShop(e.target.value)}
+                disabled={busy}
+                required
+              />
+              <Field
+                label="Admin access token"
+                type="password"
+                value={shopToken}
+                onChange={(e) => setShopToken(e.target.value)}
+                disabled={busy}
+                required
+              />
             </>
           )}
           {platform === "github" && (
             <>
-              <Field label="Owner" placeholder="your-org" value={ghOwner} onChange={(e) => setGhOwner(e.target.value)} disabled={busy} required />
-              <Field label="Repository" placeholder="your-site" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} disabled={busy} required />
-              <Field label="Personal access token" type="password" value={ghToken} onChange={(e) => setGhToken(e.target.value)} disabled={busy} required helper="Needs repo scope. Changes open as pull requests only." />
-              <Field label="Base branch" value={ghBranch} onChange={(e) => setGhBranch(e.target.value)} disabled={busy} />
-              <Field label="Content folder" value={ghPath} onChange={(e) => setGhPath(e.target.value)} disabled={busy} helper="Markdown/MDX files will be proposed under this path." />
+              <Field
+                label="Owner"
+                placeholder="your-org"
+                value={ghOwner}
+                onChange={(e) => setGhOwner(e.target.value)}
+                disabled={busy}
+                required
+              />
+              <Field
+                label="Repository"
+                placeholder="your-site"
+                value={ghRepo}
+                onChange={(e) => setGhRepo(e.target.value)}
+                disabled={busy}
+                required
+              />
+              <Field
+                label="Personal access token"
+                type="password"
+                value={ghToken}
+                onChange={(e) => setGhToken(e.target.value)}
+                disabled={busy}
+                required
+                helper="Needs repo scope. Changes open as pull requests only — never silent production edits."
+              />
+              <Field
+                label="Base branch"
+                value={ghBranch}
+                onChange={(e) => setGhBranch(e.target.value)}
+                disabled={busy}
+              />
+              <Field
+                label="Content folder"
+                value={ghPath}
+                onChange={(e) => setGhPath(e.target.value)}
+                disabled={busy}
+                helper="Markdown/MDX files will be proposed under this path."
+              />
             </>
           )}
           {platform === "sanity" && (
             <>
-              <Field label="Project ID" value={sanityProject} onChange={(e) => setSanityProject(e.target.value)} disabled={busy} required />
-              <Field label="Write token" type="password" value={sanityToken} onChange={(e) => setSanityToken(e.target.value)} disabled={busy} required />
-              <Field label="Dataset" value={sanityDataset} onChange={(e) => setSanityDataset(e.target.value)} disabled={busy} />
+              <Field
+                label="Project ID"
+                value={sanityProject}
+                onChange={(e) => setSanityProject(e.target.value)}
+                disabled={busy}
+                required
+              />
+              <Field
+                label="Write token"
+                type="password"
+                value={sanityToken}
+                onChange={(e) => setSanityToken(e.target.value)}
+                disabled={busy}
+                required
+              />
+              <Field
+                label="Dataset"
+                value={sanityDataset}
+                onChange={(e) => setSanityDataset(e.target.value)}
+                disabled={busy}
+              />
             </>
           )}
           {platform === "webhook" && (
             <>
-              <Field as="textarea" label="Code for your site" readOnly rows={10} value={codedSiteSnippet(signingSecret)} inputClassName="p-conn-snippet" />
-              <button type="button" className="p-btn ghost" onClick={() => onCopy(codedSiteSnippet(signingSecret), "Code")} disabled={busy}>
+              <Field
+                as="textarea"
+                label="Code for your site"
+                readOnly
+                rows={10}
+                value={codedSiteSnippet(signingSecret)}
+                inputClassName="p-conn-snippet"
+              />
+              <button
+                type="button"
+                className="p-btn ghost"
+                onClick={() => onCopy(codedSiteSnippet(signingSecret), "Code")}
+                disabled={busy}
+              >
                 <span>Copy code</span>
               </button>
               <Field label="Your secret" value={signingSecret} readOnly />
-              <Field label="Receiver HTTPS URL" value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} disabled={busy} required />
+              <Field
+                label="Receiver HTTPS URL"
+                value={endpointUrl}
+                onChange={(e) => setEndpointUrl(e.target.value)}
+                disabled={busy}
+                required
+              />
             </>
           )}
           <div className="p-conn-actions">
@@ -394,7 +517,7 @@ export default function ConnectWebsite({
               <span>Back</span>
             </button>
             <button type="button" className="p-btn primary" onClick={() => void connectChosen()} disabled={busy}>
-              <span>{busy ? "Connecting…" : "Connect & test"}</span>
+              <span>{busy ? "Connecting…" : "Authorize & test"}</span>
             </button>
           </div>
         </div>
@@ -406,28 +529,63 @@ export default function ConnectWebsite({
           busy={busy}
           onBusy={onBusy}
           onDone={() => {
-            setStep("mode");
+            setStep("capabilities");
             onDone();
           }}
           onCancel={onCancel}
           onCopy={onCopy}
           lastFailReason={lastFailReason}
           onProve={() => {
-            setStep("mode");
+            setStep("capabilities");
             onProve();
           }}
           siteHost={detect?.origin ? detect.origin.replace(/^https?:\/\//, "") : null}
         />
       )}
 
+      {step === "capabilities" && (
+        <div className="p-conn-setup-fields">
+          <h3 className="p-conn-setup-title">What this connection can do</h3>
+          <p className="p-conn-setup-help">
+            Statuses reflect proven behavior for this connection — not theoretical platform support.
+            Auto-Manage appears only after a capability is proven.
+          </p>
+          <CapabilityReport
+            items={report}
+            access={access}
+            busy={busy}
+            onRecheckAccess={() => void runDetect({ silent: true })}
+            onRecheckConnection={() => void recheckConnection()}
+          />
+          <div className="p-conn-actions">
+            <button type="button" className="p-btn primary" onClick={() => setStep("mode")} disabled={busy}>
+              <span>Continue</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {step === "mode" && (
         <div className="p-conn-setup-fields">
+          <h3 className="p-conn-setup-title">Publishing mode</h3>
           <p className="p-conn-setup-help">How should Volo publish after work is ready?</p>
           {(
             [
-              { id: "approval" as const, label: "Approval", detail: "Nothing goes live until you approve." },
-              { id: "hybrid" as const, label: "Hybrid", detail: "Safe changes can auto-publish; bigger changes need approval." },
-              { id: "autopilot" as const, label: "Autopilot", detail: "Proven capabilities may publish automatically." },
+              {
+                id: "approval" as const,
+                label: "Approval",
+                detail: "Nothing goes live until you approve.",
+              },
+              {
+                id: "hybrid" as const,
+                label: "Hybrid",
+                detail: "Safe proven changes can auto-publish; bigger changes need approval.",
+              },
+              {
+                id: "autopilot" as const,
+                label: "Autopilot",
+                detail: "Proven Auto-Manage capabilities may publish automatically.",
+              },
             ] as const
           ).map((m) => (
             <button
@@ -444,6 +602,9 @@ export default function ConnectWebsite({
             </button>
           ))}
           <div className="p-conn-actions">
+            <button type="button" className="p-btn ghost" onClick={() => setStep("capabilities")} disabled={busy}>
+              <span>Back</span>
+            </button>
             <button type="button" className="p-btn primary" onClick={() => void saveModeAndFinish()} disabled={busy}>
               <span>{busy ? "Saving…" : "Save & prove connection"}</span>
             </button>

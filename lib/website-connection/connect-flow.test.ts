@@ -75,6 +75,8 @@ test("Connect Website wizard and detect API exist", () => {
   expect(wizard).toMatch(/Use a different connection method/);
   expect(wizard).toMatch(/execution_mode/);
   expect(wizard).toMatch(/Approval|Hybrid|Autopilot/);
+  expect(wizard).toMatch(/Analyze & Connect/);
+  expect(wizard).not.toMatch(/\bUnsupported\b/);
 });
 
 test("POMO managed pages still describe as connected + managed_pages available", () => {

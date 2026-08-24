@@ -32,3 +32,21 @@ export {
   type ConnectorOption,
   type WebsiteDetectResult,
 } from "./detect";
+
+export {
+  STATUS_LABELS,
+  accessTransparency,
+  buildCapabilityReport,
+  type CapabilityLimitReason,
+  type CapabilityReportItem,
+  type CustomerCapabilityStatus,
+} from "./capability-report";
+
+export {
+  CONNECTOR_WATCH_SOURCES,
+  createConnectorReviewTask,
+  watcherMayAutoEnableCapability,
+  type ConnectorReviewTask,
+  type ConnectorWatchFinding,
+  type ConnectorWatchTarget,
+} from "./watcher";
