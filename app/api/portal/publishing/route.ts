@@ -158,6 +158,16 @@ export async function POST(req: NextRequest) {
       status: body.publishStatus === "draft" ? "draft" : "publish",
     };
   } else if (platform === "github") {
+    // Customer onboarding uses the GitHub App flow (/api/portal/github/*).
+    // PAT connect is a hidden admin migration path only.
+    if (process.env.GITHUB_ALLOW_PAT_FALLBACK !== "1") {
+      return NextResponse.json(
+        {
+          error: "Connect GitHub from the website connection flow. Personal access tokens are not used for customer setup.",
+        },
+        { status: 400 }
+      );
+    }
     const owner = (body.owner || "").trim();
     const repo = (body.repo || "").trim();
     const ghToken = (body.token || body.accessToken || "").trim();
@@ -172,8 +182,8 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    credentials = { token: ghToken };
-    config = { owner, repo, baseBranch, contentPath };
+    credentials = { token: ghToken, authType: "pat" };
+    config = { owner, repo, baseBranch, contentPath, authType: "pat" };
   } else if (platform === "sanity") {
     const projectId = (body.projectId || "").trim();
     const sanityToken = (body.token || "").trim();

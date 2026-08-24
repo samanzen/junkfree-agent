@@ -39,6 +39,7 @@ test("GitHub check fails closed without token/repo", async () => {
     config: {},
   });
   expect(r.ok).toBe(false);
+  expect(r.detail).toMatch(/Connect GitHub|not selected|not connected/i);
 });
 
 test("Sanity check fails closed without project/token", async () => {
@@ -71,11 +72,14 @@ test("Connect Website wizard and detect API exist", () => {
   expect(fs.existsSync("app/api/portal/website-detect/route.ts")).toBe(true);
   const panel = fs.readFileSync("app/portal/settings/_ConnectionsPanel.tsx", "utf8");
   expect(panel).toMatch(/ConnectWebsite/);
+  expect(panel).toMatch(/GitHubAppConnect/);
   const wizard = fs.readFileSync("app/portal/settings/_ConnectWebsite.tsx", "utf8");
   expect(wizard).toMatch(/Use a different connection method/);
   expect(wizard).toMatch(/execution_mode/);
   expect(wizard).toMatch(/Approval|Hybrid|Autopilot/);
   expect(wizard).toMatch(/Analyze & Connect/);
+  expect(wizard).toMatch(/GitHubAppConnect/);
+  expect(wizard).not.toMatch(/Personal access token/);
   expect(wizard).not.toMatch(/\bUnsupported\b/);
 });
 

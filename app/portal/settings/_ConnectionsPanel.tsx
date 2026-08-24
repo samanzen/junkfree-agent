@@ -11,6 +11,7 @@ import ProxySetup from "./_ProxySetup";
 import ConnectWebsite from "./_ConnectWebsite";
 import WebsiteBuilderPromo from "./_WebsiteBuilderPromo";
 import CapabilityReport from "./_CapabilityReport";
+import GitHubAppConnect from "./_GitHubAppConnect";
 import { accessTransparency } from "@/lib/website-connection/capability-report";
 import type { WebsiteAdapterId } from "@/lib/website-connection/capabilities";
 
@@ -433,6 +434,29 @@ function PublishingSetup({
   );
 }
 
+const GITHUB_RETURN: Record<string, { kind: "success" | "info" | "error"; title: string; detail: string }> = {
+  installed: {
+    kind: "success",
+    title: "Authorization confirmed",
+    detail: "Finding your website repository…",
+  },
+  cancelled: {
+    kind: "info",
+    title: "GitHub authorization cancelled",
+    detail: "Nothing was changed. You can connect GitHub whenever you're ready.",
+  },
+  pending_approval: {
+    kind: "info",
+    title: "Approval needed",
+    detail: "Your organization admin must approve the Volo GitHub App. We'll be ready when they do.",
+  },
+  failed: {
+    kind: "error",
+    title: "GitHub connection failed",
+    detail: "We couldn't complete authorization. Please try Connect GitHub again.",
+  },
+};
+
 export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -443,6 +467,14 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
   const [googlePick, setGooglePick] = useState<Record<string, PickState>>({});
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishForm, setPublishForm] = useState<PublishForm>(emptyPublishForm());
+  const [githubResume, setGithubResume] = useState(false);
+  const [githubStatus, setGithubStatus] = useState<{
+    connected: boolean;
+    repository?: string;
+    framework?: string | null;
+    defaultBranch?: string;
+    manageAccessUrl?: string;
+  } | null>(null);
 
   const [sotChoice, setSotChoice] = useState("");
 
@@ -542,6 +574,63 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
     load();
   }, [toast, load, loadGoogleOptions]);
+
+  // GitHub App Setup URL returns here after install/authorize.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("github");
+    if (!result) return;
+
+    const msg = GITHUB_RETURN[result] || GITHUB_RETURN.failed;
+    if (result === "failed") {
+      const reason = params.get("reason");
+      const detail =
+        reason === "replay"
+          ? "That authorization link was already used. Start Connect GitHub again."
+          : reason === "invalid_state"
+            ? "The authorization session expired or was invalid. Try Connect GitHub again."
+            : reason === "suspended"
+              ? "The GitHub App installation is suspended."
+              : msg.detail;
+      toast.error(msg.title, detail);
+    } else {
+      toast[msg.kind](msg.title, msg.detail);
+    }
+
+    if (result === "installed") {
+      setGithubResume(true);
+      setPublishOpen(false);
+    }
+
+    params.delete("github");
+    params.delete("brand");
+    params.delete("reason");
+    const qs = params.toString();
+    window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    load();
+  }, [toast, load]);
+
+  useEffect(() => {
+    const ghRow = rows?.find((r) => r.key === "website_publishing");
+    if (!ghRow || (ghRow.status !== "connected" && ghRow.status !== "limited")) {
+      setGithubStatus(null);
+      return;
+    }
+    if (ghRow.websiteAdvanced?.adapter !== "github") {
+      setGithubStatus(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await authedFetch(`/api/portal/github/status?brand=${encodeURIComponent(brandId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.connected) setGithubStatus(data);
+        else setGithubStatus(null);
+      } catch {
+        setGithubStatus(null);
+      }
+    })();
+  }, [rows, brandId]);
 
 
   async function saveGoogleChoice(row: PublicConnectionState) {
@@ -1069,7 +1158,83 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   </div>
                 )}
 
-                {row.key === "website_publishing" && publishOpen && (
+                {row.key === "website_publishing" && githubResume && (
+                  <GitHubAppConnect
+                    brandId={brandId}
+                    siteUrl={row.websiteAdvanced?.siteUrl || null}
+                    busy={busy === "website_publishing:github"}
+                    onBusy={(v) => setBusy(v ? "website_publishing:github" : null)}
+                    onCancel={() => setGithubResume(false)}
+                    onDone={async () => {
+                      setGithubResume(false);
+                      await load();
+                    }}
+                    onProve={() => void provePublishing()}
+                    mode="resume"
+                  />
+                )}
+
+                {row.key === "website_publishing" && githubStatus?.connected && !githubResume && (
+                  <div className="p-conn-meta" style={{ marginTop: 10 }}>
+                    <div>
+                      <strong>GitHub connected</strong>
+                    </div>
+                    {githubStatus.repository ? <div>Repository: {githubStatus.repository}</div> : null}
+                    {githubStatus.framework ? <div>Detected framework: {githubStatus.framework}</div> : null}
+                    {githubStatus.defaultBranch ? (
+                      <div>Default branch: {githubStatus.defaultBranch}</div>
+                    ) : null}
+                    <div>Publishing method: Pull requests</div>
+                    <div className="p-conn-actions" style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="p-btn ghost"
+                        disabled={!!busy}
+                        onClick={() => {
+                          void (async () => {
+                            setBusy("website_publishing:github-recheck");
+                            try {
+                              const res = await authedFetch("/api/portal/github/status", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ brand_id: brandId }),
+                              });
+                              const data = await res.json().catch(() => ({}));
+                              if (!res.ok) {
+                                toast.error(data.error || "Could not recheck GitHub");
+                                return;
+                              }
+                              toast.success("Connection rechecked", data.message);
+                              await load();
+                            } catch {
+                              toast.error("Could not recheck GitHub");
+                            } finally {
+                              setBusy(null);
+                            }
+                          })();
+                        }}
+                      >
+                        <span>
+                          {busy === "website_publishing:github-recheck"
+                            ? "Rechecking…"
+                            : "Recheck connection"}
+                        </span>
+                      </button>
+                      {githubStatus.manageAccessUrl ? (
+                        <a
+                          className="p-btn ghost"
+                          href={githubStatus.manageAccessUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <span>Manage GitHub access</span>
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+
+                {row.key === "website_publishing" && publishOpen && !githubResume && (
                   <ConnectWebsite
                     brandId={brandId}
                     siteUrl={row.websiteAdvanced?.siteUrl || row.detail}
@@ -1086,7 +1251,7 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                   />
                 )}
 
-                {row.actions.length > 0 && !(row.key === "website_publishing" && publishOpen) && (
+                {row.actions.length > 0 && !(row.key === "website_publishing" && (publishOpen || githubResume)) && (
                   <div className="p-conn-actions">
                     {row.actions.map((a) => {
                       const key = `${row.key}:${a}`;
