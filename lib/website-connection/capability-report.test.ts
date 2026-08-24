@@ -137,15 +137,26 @@ test("Connect Website UX includes promo, Analyze & Connect, and Coming Soon page
   expect(wizard).toMatch(/onRecheckAccess/);
   expect(wizard).toMatch(/onRecheckConnection/);
   expect(wizard).toMatch(/Use a different connection method/);
+  expect(wizard).toMatch(/Continue with \{chosen\.label\}/);
+  // Recommendation step: CTA before the capability dump; caps stay collapsed.
+  const recommendIdx = wizard.indexOf('step === "recommend"');
+  const continueIdx = wizard.indexOf("Continue with {chosen.label}", recommendIdx);
+  const capsIdx = wizard.indexOf("<CapabilityReport", recommendIdx);
+  expect(continueIdx).toBeGreaterThan(recommendIdx);
+  expect(capsIdx).toBeGreaterThan(continueIdx);
+  expect(wizard).toMatch(/<CapabilityReport items=\{report\} collapsed/);
   expect(wizard).not.toMatch(/Unsupported/);
 
   const reportUi = fs.readFileSync("app/portal/settings/_CapabilityReport.tsx", "utf8");
   expect(reportUi).toMatch(/Recheck Access/);
   expect(reportUi).toMatch(/Recheck Connection/);
+  expect(reportUi).toMatch(/collapsed/);
+  expect(reportUi).toMatch(/What this connection can do/);
 
   const panel = fs.readFileSync("app/portal/settings/_ConnectionsPanel.tsx", "utf8");
   expect(panel).toMatch(/WebsiteBuilderPromo/);
   expect(panel).toMatch(/Analyze & Connect/);
+  expect(panel).toMatch(/collapsed/);
 
   expect(fs.existsSync("app/website-builder/page.tsx")).toBe(true);
   expect(fs.existsSync("app/portal/settings/_WebsiteBuilderPromo.tsx")).toBe(true);
