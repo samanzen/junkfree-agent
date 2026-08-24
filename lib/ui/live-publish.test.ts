@@ -106,10 +106,11 @@ test("certification canaries force live publish status even when the brand prefe
   expect(src).toMatch(/status: "publish"/);
 });
 
-test("README lists honesty migrations and documents website publishing", () => {
+test("README lists honesty migrations and documents website connection", () => {
   const readme = read("README.md");
   expect(readme).toMatch(/020_execution_honesty\.sql/);
   expect(readme).toMatch(/021_source_of_truth\.sql/);
-  expect(readme).toMatch(/## Website publishing/);
-  expect(readme).toMatch(/Prove publishing/);
+  expect(readme).toMatch(/## Website connection/);
+  expect(readme).toMatch(/Prove connection|Prove publishing/);
+  expect(readme).toMatch(/Volo Managed Pages/);
 });

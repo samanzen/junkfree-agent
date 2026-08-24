@@ -41,10 +41,11 @@ const emptyPublishForm = (): PublishForm => ({
   accessToken: "",
 });
 
-function platformFromDetail(detail: string | null): PublishPlatform {
-  if (/path on your|\/[a-z0-9-]+\//i.test(detail || "")) return "proxy";
+function platformFromDetail(detail: string | null, advancedAdapter?: string | null): PublishPlatform {
+  if (advancedAdapter === "managed_pages" || advancedAdapter === "proxy") return "proxy";
+  if (/managed pages|path on your|\/[a-z0-9-]+\//i.test(detail || "")) return "proxy";
   if (/shopify/i.test(detail || "")) return "shopify";
-  if (/own website|webhook|API/i.test(detail || "")) return "webhook";
+  if (/own website|webhook|custom-coded|API/i.test(detail || "")) return "webhook";
   return "wordpress";
 }
 
@@ -64,7 +65,7 @@ const BADGE: Record<PublicConnectionState["status"], { cls: string; label: strin
   not_connected: { cls: "", label: "Not connected" },
   expired: { cls: "amber", label: "Access expired" },
   error: { cls: "red", label: "Needs attention" },
-  limited: { cls: "amber", label: "Not proven yet" },
+  limited: { cls: "amber", label: "Needs proof" },
   unavailable: { cls: "", label: "Not available yet" },
 };
 
@@ -219,7 +220,7 @@ function PublishingSetup({
           onClick={() => pick("proxy")}
           disabled={busy}
         >
-          <span>Path on your site</span>
+          <span>Volo Managed Pages</span>
         </button>
         <button
           type="button"
@@ -249,13 +250,13 @@ function PublishingSetup({
           onClick={() => pick("webhook")}
           disabled={busy}
         >
-          <span>Your own website</span>
+          <span>Custom-coded</span>
         </button>
       </div>
 
       {form.platform === "proxy" ? (
         <p className="p-conn-setup-help">
-          Continue below — we&apos;ll check that the path is free, give you a rewrite for your host, then prove publishing.
+          Continue below — we&apos;ll check your site, give you one host setting, then prove the connection.
         </p>
       ) : form.platform === "wordpress" ? (
         <div className="p-conn-setup-fields">
@@ -356,7 +357,7 @@ function PublishingSetup({
             Paste this code into your site once, put the secret below into it,
             and deploy. The Persist / Delete comments must write to your real
             content store — returning ok without saving will not prove
-            publishing. The README under Website publishing has a complete
+            publishing. The README under Website connection has a complete
             receiver example you can copy. We ping the HTTPS address before
             saving, so it has to be live.
           </p>
@@ -739,7 +740,10 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
     }
 
     if (row.key === "website_publishing" && (action === "connect" || action === "reconnect")) {
-      const platform = action === "connect" ? "proxy" : platformFromDetail(row.detail);
+      const platform =
+        action === "connect"
+          ? "proxy"
+          : platformFromDetail(row.detail, row.websiteAdvanced?.adapter);
       setPublishForm({
         ...emptyPublishForm(),
         platform,
@@ -846,11 +850,38 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
                 {/* Why this status — always present, so no state is unexplained. */}
                 <div className="p-conn-why">{row.why}</div>
 
-                {row.operations?.map((op) => (
-                  <div className="p-conn-meta" key={op.label}>
-                    {op.label} — {op.stateLabel}
+                {row.websiteCapabilities?.length ? (
+                  <div className="p-conn-caps" style={{ marginTop: 8 }}>
+                    {row.websiteCapabilities.map((cap) => (
+                      <div className="p-conn-meta" key={cap.key}>
+                        {cap.label} — {cap.statusLabel}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  row.operations?.map((op) => (
+                    <div className="p-conn-meta" key={op.label}>
+                      {op.label} — {op.stateLabel}
+                    </div>
+                  ))
+                )}
+
+                {row.websiteAdvanced && (row.status === "connected" || row.status === "limited") && (
+                  <details className="p-conn-advanced" style={{ marginTop: 8 }}>
+                    <summary>Advanced</summary>
+                    <div className="p-conn-meta" style={{ marginTop: 6 }}>
+                      {row.websiteAdvanced.siteUrl && <>Site: {row.websiteAdvanced.siteUrl}<br /></>}
+                      {row.websiteAdvanced.publishingMethod && (
+                        <>Method: {row.websiteAdvanced.publishingMethod}<br /></>
+                      )}
+                      <>Verification: {row.websiteAdvanced.verification}<br /></>
+                      {row.websiteAdvanced.managedPath && (
+                        <>Managed path: {row.websiteAdvanced.managedPath}<br /></>
+                      )}
+                      {row.websiteAdvanced.adapter && <>Adapter: {row.websiteAdvanced.adapter}</>}
+                    </div>
+                  </details>
+                )}
 
                 {row.publishingProof && (
                   <div className="p-conn-pick" style={{ marginTop: 8 }}>

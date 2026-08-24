@@ -98,24 +98,24 @@ a one-brand sweep from that page (`POST /api/cron/ai-visibility`); customers
 wait for the weekly cron. The report covers assistants, questions, places,
 languages, competitors, cited pages and the questions nobody named you for.
 
-## Website publishing (last mile)
+## Website connection
 
-Connections → **Website publishing** lets a customer attach WordPress, Shopify,
-a coded-site receiver, or a **subdirectory proxy** on their domain so Approve
-can push pages live.
+Connections → **Website connection** is Volo’s overall ability to work with a
+customer’s site. One connection, many capabilities, different adapters
+underneath (WordPress, Shopify, custom-coded receiver, **Volo Managed Pages**).
 
-1. Run migrations `020`–`023` (`execution_honesty`, `source_of_truth`,
-   `proxy_publishing`, `content_meta`).
+1. Run migrations `020`–`024` (`execution_honesty`, `source_of_truth`,
+   `proxy_publishing`, `content_meta`, `proxy_nav_nudge`).
 2. Set `INTEGRATION_ENCRYPTION_KEY` (see `.env.example`) for WP/Shopify/webhook.
 3. In Portal → Settings → Connections, connect the site.
-4. Confirm **where new pages are saved** (Source of Truth). For proxy, SoT is
-   this platform under the chosen path (`platform_proxy`).
-5. Click **Prove publishing** — temporary canary page, live verify, delete.
+4. Confirm **where new pages are saved** (Source of Truth) when needed. For
+   Managed Pages, SoT is `platform_proxy` (default managed path `/guides/`).
+5. Click **Prove connection** — temporary canary page, live verify, delete.
 6. Approve a draft — live publish only marks published after proof.
 
-**Proxy:** pages are stored in `content` and served at
-`/s/{proxy_site_token}/{namespace}/{slug}` on this app. Customer CDN rewrite
-must keep the namespace in the destination, e.g. Vercel:
+**Volo Managed Pages** (internal adapter id `proxy`): pages are stored in
+`content` and served at `/s/{proxy_site_token}/{namespace}/{slug}` on this app.
+Customer CDN rewrite must keep the namespace in the destination, e.g. Vercel:
 
 ```json
 { "rewrites": [{
@@ -125,10 +125,11 @@ must keep the namespace in the destination, e.g. Vercel:
 ```
 
 Canonicals use the customer host (`X-Forwarded-Host`, validated against
-`brands.site_url`). Sitemap: `/{namespace}/sitemap.xml`. Connect UI for
-namespace + snippets is the next slice.
+`brands.site_url`). Sitemap: `/{namespace}/sitemap.xml`. Path selection is
+Advanced-only; primary onboarding defaults to `/guides/`.
 
-Coded-site API receiver remains a developer escape hatch.
+Coded-site API receiver remains a developer escape hatch. GitHub/custom-code
+editing uses analyze → propose → approval → PR (not automatic production edits).
 
 Title/meta-only updates on existing CMS pages still need WordPress/Shopify.
 

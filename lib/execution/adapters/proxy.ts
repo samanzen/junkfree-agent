@@ -19,21 +19,22 @@ function namespaceOf(ctx: AdapterContext): string {
 
 export const proxyAdapter: PublishAdapter = {
   provider: "proxy",
-  label: "Subdirectory on your site",
+  // Customer-facing: Volo Managed Pages. Internal platform id stays "proxy".
+  label: "Volo Managed Pages",
   capabilities: ["upsert_page"],
 
   async check(ctx) {
     const token = (ctx.credentials.siteToken || "").trim();
     const namespace = namespaceOf(ctx);
     if (!isProxySiteToken(token)) {
-      return { ok: false, detail: "Publishing token is missing or invalid. Reconnect website publishing." };
+      return { ok: false, detail: "Managed Pages token is missing or invalid. Reconnect your website." };
     }
     if (!isProxyNamespace(namespace)) {
-      return { ok: false, detail: "Choose a path name for new pages (for example guides)." };
+      return { ok: false, detail: "Managed Pages path is missing. Reconnect your website." };
     }
     return {
       ok: true,
-      detail: `Pages under /${namespace}/ will be served through this connection once publishing is proven.`,
+      detail: `Volo Managed Pages are ready under /${namespace}/ once the connection is proven.`,
     };
   },
 
