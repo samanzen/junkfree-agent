@@ -155,7 +155,7 @@ export async function getRepoContent(
   repo: string,
   path: string,
   ref?: string
-): Promise<{ ok: true; text: string } | { ok: false; status: number }> {
+): Promise<{ ok: true; text: string } | { ok: false; status: number; error?: string }> {
   const q = ref ? `?ref=${encodeURIComponent(ref)}` : "";
   const encoded = path
     .split("/")
@@ -163,7 +163,7 @@ export async function getRepoContent(
     .map(encodeURIComponent)
     .join("/");
   const r = await appRequest(`/repos/${owner}/${repo}/contents/${encoded}${q}`, {}, installationToken);
-  if (!r.ok) return { ok: false, status: r.status };
+  if (!r.ok) return { ok: false, status: r.status, error: r.error };
   const body = r.body as { content?: string; encoding?: string; type?: string } | null;
   if (!body || body.type === "dir" || !body.content) return { ok: false, status: 404 };
   const text = Buffer.from(body.content.replace(/\n/g, ""), "base64").toString("utf8");
