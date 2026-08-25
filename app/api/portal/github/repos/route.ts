@@ -4,16 +4,19 @@ import { db } from "@/lib/supabase";
 import {
   createInstallationToken,
   listInstallationRepos,
-  analyzeRepository,
+  analysisFromMetadata,
   rankReposForSite,
   githubAppConfigureUrl,
-  pickReposToAnalyze,
   isRateLimitMessage,
 } from "@/lib/github-app";
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-/** List + analyze repos for a pending GitHub App installation. */
+/**
+ * List authorized repos for a pending GitHub App installation.
+ * Metadata-only — no per-repo content scans (those run on Confirm for one repo).
+ * This keeps the return-from-GitHub step to ~2 API calls and avoids rate limits.
+ */
 export async function GET(req: NextRequest) {
   const auth = await requireAuth(req);
   if (isAuthError(auth)) return auth;
@@ -33,89 +36,86 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No pending GitHub authorization for this brand." }, { status: 404 });
   }
 
-  const token = await createInstallationToken(Number(pending.installation_id));
+  const installationId = Number(pending.installation_id);
+  const addRepoUrl = githubAppConfigureUrl(installationId);
+
+  const token = await createInstallationToken(installationId);
   if (!token.ok) {
-    const friendly = isRateLimitMessage(token.error)
-      ? "GitHub is briefly rate-limiting us. Wait a minute, then try again."
-      : token.error;
-    return NextResponse.json({ error: friendly }, { status: 422 });
+    const rateLimited = isRateLimitMessage(token.error);
+    return NextResponse.json(
+      {
+        error: rateLimited
+          ? "GitHub needs a short break after too many requests. Wait about 10 minutes, then try once."
+          : token.error,
+        rateLimited,
+        retryAfterSeconds: rateLimited ? 600 : undefined,
+        addRepoUrl,
+      },
+      { status: rateLimited ? 429 : 422 }
+    );
   }
 
   const listed = await listInstallationRepos(token.token);
   if (!listed.ok) {
-    const friendly = isRateLimitMessage(listed.error)
-      ? "GitHub is briefly rate-limiting us. Wait a minute, then try again."
-      : listed.error;
-    return NextResponse.json({ error: friendly }, { status: 422 });
+    const rateLimited = isRateLimitMessage(listed.error);
+    return NextResponse.json(
+      {
+        error: rateLimited
+          ? "GitHub needs a short break after too many requests. Wait about 10 minutes, then try once."
+          : listed.error,
+        rateLimited,
+        retryAfterSeconds: rateLimited ? 600 : undefined,
+        addRepoUrl,
+      },
+      { status: rateLimited ? 429 : 422 }
+    );
   }
 
   if (!listed.repos.length) {
     return NextResponse.json({
-      installationId: pending.installation_id,
+      installationId,
       accountLogin: pending.account_login,
       accountType: pending.account_type,
       repos: [],
       suggestedRepoId: null,
       ambiguous: false,
-      addRepoUrl: githubAppConfigureUrl(pending.installation_id),
+      addRepoUrl,
       message: "No repositories were authorized. Add repository access on GitHub, then return here.",
     });
   }
 
   const siteUrl = pending.site_url || null;
-  // Metadata pre-sort, then deep-analyze only top candidates (avoids rate limits).
-  const toAnalyze = pickReposToAnalyze(listed.repos, siteUrl, 8);
-  const analyses = [];
-  let hitRateLimit = false;
-  for (const repo of toAnalyze) {
-    try {
-      const analysis = await analyzeRepository(token.token, repo, siteUrl);
-      analyses.push(analysis);
-      if (analysis.evidence.some((e) => /rate limit/i.test(e))) {
-        hitRateLimit = true;
-        break;
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (isRateLimitMessage(msg)) {
-        hitRateLimit = true;
-        break;
-      }
-    }
-  }
-
-  // If deep analysis couldn't run, still offer metadata-only cards so the customer can pick.
-  if (!analyses.length) {
-    for (const repo of toAnalyze.slice(0, 12)) {
-      const [owner, name] = repo.fullName.split("/");
-      analyses.push({
-        repoId: repo.id,
-        fullName: repo.fullName,
-        owner: owner || repo.ownerLogin,
-        name: name || repo.name,
-        private: repo.private,
-        defaultBranch: repo.defaultBranch,
-        framework: null,
-        packageManager: null,
-        contentPath: null,
-        hasBlogHints: false,
-        hasSitemapHints: false,
-        deploymentProvider: null,
-        likelyDomain: repo.homepage || siteUrl,
-        confidence: "low" as const,
-        confidenceScore: 10,
-        evidence: hitRateLimit ? ["Shown from GitHub access — detailed scan deferred"] : [],
-        canCreateBranch: true,
-        canOpenPullRequest: true,
-        canUpdateContent: true,
-      });
-    }
-  }
+  const analyses = listed.repos
+    .slice(0, 50)
+    .map((repo) => analysisFromMetadata(repo, siteUrl))
+    .sort((a, b) => b.confidenceScore - a.confidenceScore);
 
   const ranked = rankReposForSite(analyses);
 
+  // Cache minimal repo list on the pending row so Confirm can resolve without re-listing.
+  // Ignore errors if migration 026 hasn't been applied yet.
+  const { error: cacheErr } = await db
+    .from("github_app_pending_installs")
+    .update({
+      repos_cache: listed.repos.slice(0, 50).map((r) => ({
+        id: r.id,
+        name: r.name,
+        fullName: r.fullName,
+        private: r.private,
+        defaultBranch: r.defaultBranch,
+        htmlUrl: r.htmlUrl,
+        homepage: r.homepage,
+        description: r.description,
+        ownerLogin: r.ownerLogin,
+      })),
+    })
+    .eq("brand_id", brandId);
+  if (cacheErr) {
+    console.error("[github/repos] repos_cache update skipped", cacheErr.message);
+  }
+
   return NextResponse.json({
-    installationId: pending.installation_id,
+    installationId,
     accountLogin: pending.account_login,
     accountType: pending.account_type,
     siteUrl: pending.site_url,
@@ -138,10 +138,6 @@ export async function GET(req: NextRequest) {
       ranked.best?.repoId ?? (analyses.length === 1 ? analyses[0].repoId : null),
     needsSelection: analyses.length !== 1,
     ambiguous: ranked.ambiguous,
-    addRepoUrl: githubAppConfigureUrl(pending.installation_id),
-    rateLimited: hitRateLimit,
-    message: hitRateLimit
-      ? "GitHub briefly limited deep scanning. You can still pick your repository."
-      : undefined,
+    addRepoUrl,
   });
 }

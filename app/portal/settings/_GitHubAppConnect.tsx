@@ -31,9 +31,9 @@ type Phase =
 
 const PHASE_PROGRESS: Record<Exclude<Phase, "idle" | "report" | "empty" | "error">, { pct: number; label: string }> = {
   authorizing: { pct: 15, label: "Opening GitHub…" },
-  finding: { pct: 35, label: "Finding your website repository…" },
-  analyzing: { pct: 65, label: "Analyzing website structure…" },
-  testing: { pct: 85, label: "Testing publishing access…" },
+  finding: { pct: 40, label: "Loading your authorized repositories…" },
+  analyzing: { pct: 70, label: "Matching repositories to your website…" },
+  testing: { pct: 90, label: "Preparing your choices…" },
 };
 
 function ProgressPanel({
@@ -118,27 +118,37 @@ export default function GitHubAppConnect({
     publishingMethod: string;
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [retryAt, setRetryAt] = useState<number | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
   const startedRef = useRef(false);
   const toastOnceRef = useRef(false);
 
+  useEffect(() => {
+    if (!retryAt) return;
+    const t = window.setInterval(() => setNowTs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [retryAt]);
+
+  const retrySecondsLeft = retryAt ? Math.max(0, Math.ceil((retryAt - nowTs) / 1000)) : 0;
+
   const friendlyError = useCallback((raw: string) => {
-    if (/rate limit/i.test(raw)) {
-      return "GitHub is briefly busy. Wait about a minute, then try again.";
+    if (/rate limit|short break|10 minutes/i.test(raw)) {
+      return "GitHub needs a short break after too many requests. Wait about 10 minutes, then try once.";
     }
     return raw;
   }, []);
 
   const loadRepos = useCallback(async () => {
+    if (retryAt && Date.now() < retryAt) return;
     onBusy(true);
     setPhase("finding");
     setProgressPct(25);
     setErrorMsg(null);
     toastOnceRef.current = false;
 
-    // Smooth progress while the server analyzes (single request).
     const tick = window.setInterval(() => {
-      setProgressPct((p) => (p < 88 ? p + 3 : p));
-    }, 700);
+      setProgressPct((p) => (p < 88 ? p + 4 : p));
+    }, 400);
 
     try {
       setPhase("analyzing");
@@ -149,12 +159,15 @@ export default function GitHubAppConnect({
         setPhase("error");
         const msg = friendlyError(data.error || "Could not load repositories.");
         setErrorMsg(msg);
+        const waitSec = Number(data.retryAfterSeconds) || (/rate|10 minutes|short break/i.test(msg) ? 600 : 0);
+        if (waitSec > 0) setRetryAt(Date.now() + waitSec * 1000);
         if (!toastOnceRef.current) {
           toastOnceRef.current = true;
           toast.error("Couldn’t finish setup", msg);
         }
         return;
       }
+      setRetryAt(null);
       setAddRepoUrl(data.addRepoUrl || null);
       const list = (data.repos || []) as RepoCard[];
       setRepos(list);
@@ -169,10 +182,6 @@ export default function GitHubAppConnect({
       setChosen(suggested);
       setProgressPct(100);
       setPhase("report");
-      if (data.rateLimited && data.message && !toastOnceRef.current) {
-        toastOnceRef.current = true;
-        toast.info("Almost ready", data.message);
-      }
     } catch {
       setPhase("error");
       setErrorMsg("Could not load repositories.");
@@ -184,7 +193,7 @@ export default function GitHubAppConnect({
       window.clearInterval(tick);
       onBusy(false);
     }
-  }, [brandId, onBusy, toast, friendlyError]);
+  }, [brandId, onBusy, toast, friendlyError, retryAt]);
 
   useEffect(() => {
     if (mode !== "resume") return;
@@ -221,12 +230,18 @@ export default function GitHubAppConnect({
 
   async function confirmConnection() {
     if (!chosen) return;
+    const selectedRepo = repos.find((r) => r.id === chosen);
     onBusy(true);
     try {
       const res = await authedFetch("/api/portal/github/select", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brand_id: brandId, repo_id: chosen }),
+        body: JSON.stringify({
+          brand_id: brandId,
+          repo_id: chosen,
+          owner: selectedRepo?.owner,
+          name: selectedRepo?.name,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -325,10 +340,18 @@ export default function GitHubAppConnect({
   }
 
   if (phase === "error") {
+    const mins = Math.ceil(retrySecondsLeft / 60);
+    const canRetry = retrySecondsLeft <= 0;
     return (
       <div className="p-conn-setup-fields">
         <h3 className="p-conn-setup-title">Couldn&apos;t finish GitHub setup</h3>
         <p className="p-conn-setup-help">{errorMsg || "Something went wrong."}</p>
+        {!canRetry ? (
+          <div className="p-conn-meta">
+            Try again in about {mins} minute{mins === 1 ? "" : "s"}
+            {retrySecondsLeft > 0 && retrySecondsLeft < 120 ? ` (${retrySecondsLeft}s)` : ""}.
+          </div>
+        ) : null}
         <div className="p-conn-actions">
           <button type="button" className="p-btn ghost" onClick={onCancel} disabled={busy}>
             <span>Cancel</span>
@@ -340,9 +363,9 @@ export default function GitHubAppConnect({
               startedRef.current = false;
               void loadRepos();
             }}
-            disabled={busy}
+            disabled={busy || !canRetry}
           >
-            <span>Try again</span>
+            <span>{canRetry ? "Try again" : "Please wait…"}</span>
           </button>
         </div>
       </div>

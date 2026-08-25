@@ -66,6 +66,47 @@ export function scoreRepoMetadata(repo: InstallationRepo, siteUrl: string | null
   return score;
 }
 
+/** Build a selectable card from list API metadata only — zero content API calls. */
+export function analysisFromMetadata(repo: InstallationRepo, siteUrl: string | null): RepoAnalysis {
+  const siteHost = siteHostFrom(siteUrl);
+  const score = scoreRepoMetadata(repo, siteUrl);
+  const [owner, name] = repo.fullName.split("/");
+  const evidence: string[] = [];
+  if (repo.homepage) evidence.push(`Homepage set to ${repo.homepage}`);
+  if (
+    siteHost &&
+    (repo.name.toLowerCase().includes(siteHost.split(".")[0] || "") ||
+      repo.fullName.toLowerCase().includes(siteHost.split(".")[0] || ""))
+  ) {
+    evidence.push("Repository name relates to the website host");
+  }
+  let confidence: RepoAnalysis["confidence"] = "low";
+  if (score >= 45) confidence = "high";
+  else if (score >= 20) confidence = "medium";
+
+  return {
+    repoId: repo.id,
+    fullName: repo.fullName,
+    owner: owner || repo.ownerLogin,
+    name: name || repo.name,
+    private: repo.private,
+    defaultBranch: repo.defaultBranch,
+    framework: null,
+    packageManager: null,
+    contentPath: null,
+    hasBlogHints: false,
+    hasSitemapHints: false,
+    deploymentProvider: null,
+    likelyDomain: repo.homepage || (siteHost ? `https://${siteHost}` : null),
+    confidence,
+    confidenceScore: score,
+    evidence,
+    canCreateBranch: true,
+    canOpenPullRequest: true,
+    canUpdateContent: true,
+  };
+}
+
 /**
  * Lightweight repo analysis — few API calls to avoid installation rate limits.
  * Uses root directory listing + package.json instead of probing many paths.
