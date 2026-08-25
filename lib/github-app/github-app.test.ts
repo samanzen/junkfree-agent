@@ -84,11 +84,12 @@ test("state HMAC verify rejects tampering", async () => {
 test("customer UI has Connect GitHub and no PAT form fields", () => {
   const wizard = read("app/portal/settings/_ConnectWebsite.tsx");
   const ghUi = read("app/portal/settings/_GitHubAppConnect.tsx");
-  expect(wizard).toMatch(/GitHubAppConnect/);
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(wizard).toMatch(/\/api\/portal\/github\/start/);
+  expect(wizard).toMatch(/Redirecting to GitHub/);
   expect(wizard).not.toMatch(/Personal access token/);
   expect(wizard).not.toMatch(/ghOwner|ghToken|ghPath/);
-  expect(ghUi).toMatch(/Connect GitHub/);
-  expect(ghUi).toMatch(/How GitHub access works/);
+  expect(panel).toMatch(/GitHubAppConnect/);
   expect(ghUi).toMatch(/Which repository contains this website/);
   expect(ghUi).toMatch(/Confirm connection/);
   expect(ghUi).not.toMatch(/Personal access token/);

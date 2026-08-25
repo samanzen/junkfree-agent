@@ -78,7 +78,8 @@ test("Connect Website wizard and detect API exist", () => {
   expect(wizard).toMatch(/execution_mode/);
   expect(wizard).toMatch(/Approval|Hybrid|Autopilot/);
   expect(wizard).toMatch(/Analyze & Connect/);
-  expect(wizard).toMatch(/GitHubAppConnect/);
+  expect(wizard).toMatch(/\/api\/portal\/github\/start/);
+  expect(wizard).toMatch(/Redirecting to GitHub/);
   expect(wizard).not.toMatch(/Personal access token/);
   expect(wizard).not.toMatch(/\bUnsupported\b/);
 });
