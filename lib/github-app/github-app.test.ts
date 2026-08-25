@@ -92,7 +92,19 @@ test("customer UI has Connect GitHub and no PAT form fields", () => {
   expect(panel).toMatch(/GitHubAppConnect/);
   expect(ghUi).toMatch(/Which repository contains this website/);
   expect(ghUi).toMatch(/Confirm connection/);
+  expect(ghUi).toMatch(/progressbar/);
+  expect(ghUi).toMatch(/% complete/);
+  expect(ghUi).toMatch(/startedRef/);
   expect(ghUi).not.toMatch(/Personal access token/);
+});
+
+test("repo discovery pre-filters and rate-limit soft-fails", () => {
+  const repos = read("app/api/portal/github/repos/route.ts");
+  const analyze = read("lib/github-app/analyze.ts");
+  expect(repos).toMatch(/pickReposToAnalyze/);
+  expect(repos).toMatch(/rateLimited/);
+  expect(analyze).toMatch(/scoreRepoMetadata/);
+  expect(analyze).toMatch(/listRepoDir/);
 });
 
 test("GitHub App API routes and webhook exist", () => {

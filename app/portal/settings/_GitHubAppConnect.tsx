@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { authedFetch } from "@/lib/authedFetch";
 import { useToast } from "@/app/_components/Notify";
 
@@ -29,6 +29,56 @@ type Phase =
   | "empty"
   | "error";
 
+const PHASE_PROGRESS: Record<Exclude<Phase, "idle" | "report" | "empty" | "error">, { pct: number; label: string }> = {
+  authorizing: { pct: 15, label: "Opening GitHub…" },
+  finding: { pct: 35, label: "Finding your website repository…" },
+  analyzing: { pct: 65, label: "Analyzing website structure…" },
+  testing: { pct: 85, label: "Testing publishing access…" },
+};
+
+function ProgressPanel({
+  percent,
+  label,
+}: {
+  percent: number;
+  label: string;
+}) {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <div className="p-conn-setup-fields">
+      <h3 className="p-conn-setup-title">Connecting GitHub</h3>
+      <p className="p-conn-setup-help">{label}</p>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={clamped}
+        aria-label="GitHub connection progress"
+        style={{
+          width: "100%",
+          height: 10,
+          borderRadius: 999,
+          background: "rgba(15, 23, 42, 0.08)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${clamped}%`,
+            height: "100%",
+            borderRadius: 999,
+            background: "linear-gradient(90deg, #5b4bdb, #7c6cf0)",
+            transition: "width 0.45s ease",
+          }}
+        />
+      </div>
+      <div className="p-conn-meta" style={{ marginTop: 8 }}>
+        {clamped}% complete
+      </div>
+    </div>
+  );
+}
+
 /**
  * Customer GitHub App connect UX — no PAT / owner / repo typing.
  */
@@ -54,6 +104,7 @@ export default function GitHubAppConnect({
 }) {
   const toast = useToast();
   const [phase, setPhase] = useState<Phase>(mode === "resume" ? "finding" : "idle");
+  const [progressPct, setProgressPct] = useState(mode === "resume" ? 20 : 0);
   const [repos, setRepos] = useState<RepoCard[]>([]);
   const [chosen, setChosen] = useState<number | null>(null);
   const [addRepoUrl, setAddRepoUrl] = useState<string | null>(null);
@@ -67,48 +118,85 @@ export default function GitHubAppConnect({
     publishingMethod: string;
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const startedRef = useRef(false);
+  const toastOnceRef = useRef(false);
+
+  const friendlyError = useCallback((raw: string) => {
+    if (/rate limit/i.test(raw)) {
+      return "GitHub is briefly busy. Wait about a minute, then try again.";
+    }
+    return raw;
+  }, []);
 
   const loadRepos = useCallback(async () => {
     onBusy(true);
     setPhase("finding");
+    setProgressPct(25);
     setErrorMsg(null);
+    toastOnceRef.current = false;
+
+    // Smooth progress while the server analyzes (single request).
+    const tick = window.setInterval(() => {
+      setProgressPct((p) => (p < 88 ? p + 3 : p));
+    }, 700);
+
     try {
       setPhase("analyzing");
+      setProgressPct((p) => Math.max(p, 45));
       const res = await authedFetch(`/api/portal/github/repos?brand=${encodeURIComponent(brandId)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPhase("error");
-        setErrorMsg(data.error || "Could not load repositories.");
-        toast.error(data.error || "Could not load repositories");
+        const msg = friendlyError(data.error || "Could not load repositories.");
+        setErrorMsg(msg);
+        if (!toastOnceRef.current) {
+          toastOnceRef.current = true;
+          toast.error("Couldn’t finish setup", msg);
+        }
         return;
       }
       setAddRepoUrl(data.addRepoUrl || null);
       const list = (data.repos || []) as RepoCard[];
       setRepos(list);
       if (!list.length) {
+        setProgressPct(100);
         setPhase("empty");
         return;
       }
       setPhase("testing");
+      setProgressPct(92);
       const suggested = data.suggestedRepoId ? Number(data.suggestedRepoId) : list[0].id;
       setChosen(suggested);
+      setProgressPct(100);
       setPhase("report");
+      if (data.rateLimited && data.message && !toastOnceRef.current) {
+        toastOnceRef.current = true;
+        toast.info("Almost ready", data.message);
+      }
     } catch {
       setPhase("error");
       setErrorMsg("Could not load repositories.");
-      toast.error("Could not load repositories");
+      if (!toastOnceRef.current) {
+        toastOnceRef.current = true;
+        toast.error("Couldn’t finish setup", "Check your connection and try again.");
+      }
     } finally {
+      window.clearInterval(tick);
       onBusy(false);
     }
-  }, [brandId, onBusy, toast]);
+  }, [brandId, onBusy, toast, friendlyError]);
 
   useEffect(() => {
-    if (mode === "resume") void loadRepos();
+    if (mode !== "resume") return;
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void loadRepos();
   }, [mode, loadRepos]);
 
   async function startInstall() {
     onBusy(true);
     setPhase("authorizing");
+    setProgressPct(10);
     try {
       const qs = new URLSearchParams({ brand: brandId });
       if (siteUrl) qs.set("site_url", siteUrl);
@@ -117,13 +205,16 @@ export default function GitHubAppConnect({
       if (!res.ok || !data.url) {
         toast.error(data.error || "Connecting with GitHub isn't available right now.");
         setPhase("idle");
+        setProgressPct(0);
         onBusy(false);
         return;
       }
+      setProgressPct(20);
       window.location.href = data.url;
     } catch {
       toast.error("Could not start GitHub connection");
       setPhase("idle");
+      setProgressPct(0);
       onBusy(false);
     }
   }
@@ -139,7 +230,7 @@ export default function GitHubAppConnect({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error || "Could not save GitHub connection");
+        toast.error("Couldn’t save connection", friendlyError(data.error || "Please try again."));
         return;
       }
       setConnection(data.connection || null);
@@ -147,7 +238,7 @@ export default function GitHubAppConnect({
       onProve?.();
       onDone();
     } catch {
-      toast.error("Could not save GitHub connection");
+      toast.error("Couldn’t save connection", "Check your connection and try again.");
     } finally {
       onBusy(false);
     }
@@ -155,7 +246,7 @@ export default function GitHubAppConnect({
 
   const selected = repos.find((r) => r.id === chosen) || null;
 
-  if (phase === "idle" || phase === "authorizing") {
+  if (phase === "idle") {
     return (
       <div className="p-conn-setup-fields">
         <h3 className="p-conn-setup-title">Connect GitHub</h3>
@@ -173,7 +264,7 @@ export default function GitHubAppConnect({
             onClick={() => void startInstall()}
             disabled={busy}
           >
-            <span>{phase === "authorizing" ? "Redirecting…" : "Connect GitHub"}</span>
+            <span>Connect GitHub</span>
           </button>
         </div>
         <button type="button" className="p-linkbtn" onClick={() => setShowHow((v) => !v)}>
@@ -190,38 +281,13 @@ export default function GitHubAppConnect({
     );
   }
 
-  if (phase === "finding" || phase === "analyzing" || phase === "testing") {
-    const progress: { label: string; state: "done" | "active" | "todo" }[] = [
-      { label: "Authorization confirmed", state: "done" },
-      {
-        label: "Finding your website repository",
-        state: phase === "finding" ? "active" : "done",
-      },
-      {
-        label: "Analyzing website structure",
-        state: phase === "analyzing" ? "active" : phase === "finding" ? "todo" : "done",
-      },
-      {
-        label: "Testing publishing access",
-        state: phase === "testing" ? "active" : "todo",
-      },
-      { label: "Preparing capability report", state: "todo" },
-    ];
+  if (phase === "authorizing" || phase === "finding" || phase === "analyzing" || phase === "testing") {
+    const fallback = PHASE_PROGRESS[phase];
     return (
-      <div className="p-conn-setup-fields">
-        <h3 className="p-conn-setup-title">Connecting GitHub</h3>
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {progress.map((s) => (
-            <li
-              key={s.label}
-              className="p-conn-meta"
-              style={{ opacity: s.state === "todo" ? 0.5 : 1 }}
-            >
-              {s.state === "done" ? "✓" : s.state === "active" ? "…" : "○"} {s.label}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <ProgressPanel
+        percent={Math.max(progressPct, fallback.pct)}
+        label={fallback.label}
+      />
     );
   }
 
@@ -242,7 +308,15 @@ export default function GitHubAppConnect({
               <span>Add repository access</span>
             </a>
           ) : null}
-          <button type="button" className="p-btn ghost" onClick={() => void loadRepos()} disabled={busy}>
+          <button
+            type="button"
+            className="p-btn ghost"
+            onClick={() => {
+              startedRef.current = false;
+              void loadRepos();
+            }}
+            disabled={busy}
+          >
             <span>I already added access</span>
           </button>
         </div>
@@ -259,7 +333,15 @@ export default function GitHubAppConnect({
           <button type="button" className="p-btn ghost" onClick={onCancel} disabled={busy}>
             <span>Cancel</span>
           </button>
-          <button type="button" className="p-btn primary" onClick={() => void loadRepos()} disabled={busy}>
+          <button
+            type="button"
+            className="p-btn primary"
+            onClick={() => {
+              startedRef.current = false;
+              void loadRepos();
+            }}
+            disabled={busy}
+          >
             <span>Try again</span>
           </button>
         </div>
@@ -270,7 +352,8 @@ export default function GitHubAppConnect({
   // report
   return (
     <div className="p-conn-setup-fields">
-      <h3 className="p-conn-setup-title">
+      <ProgressPanel percent={100} label="Ready — choose your website repository" />
+      <h3 className="p-conn-setup-title" style={{ marginTop: 12 }}>
         {repos.length === 1 ? "Confirm your repository" : "Which repository contains this website?"}
       </h3>
       <p className="p-conn-setup-help">

@@ -16,7 +16,7 @@ export {
   type InstallationRepo,
 } from "./api";
 
-export { analyzeRepository, rankReposForSite, type RepoAnalysis } from "./analyze";
+export { analyzeRepository, rankReposForSite, pickReposToAnalyze, isRateLimitMessage, type RepoAnalysis } from "./analyze";
 
 export {
   saveGitHubAppConnection,

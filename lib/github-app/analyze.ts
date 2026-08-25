@@ -23,32 +23,53 @@ export type RepoAnalysis = {
   canUpdateContent: boolean;
 };
 
-const CONTENT_CANDIDATES = [
+const CONTENT_FROM_ROOT = [
   "content",
-  "src/content",
-  "app/content",
+  "src",
+  "app",
   "data",
   "docs",
   "blog",
   "posts",
   "pages",
-  "src/pages",
-  "app/(marketing)",
 ];
 
 function scoreDomainMatch(siteHost: string | null, candidates: (string | null | undefined)[]): number {
   if (!siteHost) return 0;
   const host = siteHost.replace(/^www\./, "").toLowerCase();
+  const stem = host.split(".")[0] || "___";
   let score = 0;
   for (const c of candidates) {
     if (!c) continue;
     const v = c.toLowerCase();
     if (v.includes(host)) score += 40;
-    if (v.includes(host.split(".")[0] || "___")) score += 10;
+    if (v.includes(stem)) score += 10;
   }
   return score;
 }
 
+function siteHostFrom(siteUrl: string | null): string | null {
+  try {
+    if (!siteUrl) return null;
+    return new URL(siteUrl).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+/** Cheap metadata-only score — no GitHub content API calls. */
+export function scoreRepoMetadata(repo: InstallationRepo, siteUrl: string | null): number {
+  const siteHost = siteHostFrom(siteUrl);
+  let score = 5;
+  score += scoreDomainMatch(siteHost, [repo.homepage, repo.description, repo.htmlUrl, repo.name, repo.fullName]);
+  if (repo.homepage) score += 5;
+  return score;
+}
+
+/**
+ * Lightweight repo analysis — few API calls to avoid installation rate limits.
+ * Uses root directory listing + package.json instead of probing many paths.
+ */
 export async function analyzeRepository(
   installationToken: string,
   repo: InstallationRepo,
@@ -56,7 +77,7 @@ export async function analyzeRepository(
 ): Promise<RepoAnalysis> {
   const [owner, name] = repo.fullName.split("/");
   const evidence: string[] = [];
-  let score = 10;
+  let score = scoreRepoMetadata(repo, siteUrl);
   let framework: string | null = null;
   let packageManager: string | null = null;
   let contentPath: string | null = null;
@@ -64,86 +85,68 @@ export async function analyzeRepository(
   let hasSitemapHints = false;
   let deploymentProvider: string | null = null;
   let likelyDomain: string | null = repo.homepage || null;
+  const siteHost = siteHostFrom(siteUrl);
 
-  let siteHost: string | null = null;
-  try {
-    if (siteUrl) siteHost = new URL(siteUrl).hostname.replace(/^www\./, "");
-  } catch {
-    siteHost = null;
-  }
-
-  score += scoreDomainMatch(siteHost, [repo.homepage, repo.description, repo.htmlUrl, repo.name, repo.fullName]);
   if (repo.homepage) evidence.push(`Homepage set to ${repo.homepage}`);
-
-  const pkg = await getRepoContent(installationToken, owner, name, "package.json", repo.defaultBranch);
-  if (pkg.ok) {
-    evidence.push("Found package.json");
-    score += 15;
-    try {
-      const json = JSON.parse(pkg.text) as {
-        dependencies?: Record<string, string>;
-        devDependencies?: Record<string, string>;
-        scripts?: Record<string, string>;
-      };
-      const deps = { ...(json.dependencies || {}), ...(json.devDependencies || {}) };
-      if (deps.next) {
-        framework = "Next.js";
-        score += 20;
-        evidence.push("Next.js dependency detected");
-      } else if (deps.nuxt) {
-        framework = "Nuxt";
-        score += 15;
-      } else if (deps.astro) {
-        framework = "Astro";
-        score += 15;
-      } else if (deps.gatsby) {
-        framework = "Gatsby";
-        score += 10;
-      } else if (deps.react) {
-        framework = "React";
-        score += 8;
-      } else if (deps.vue) {
-        framework = "Vue";
-        score += 8;
-      }
-      const scripts = Object.values(json.scripts || {}).join(" ");
-      if (/contentlayer|mdx|markdown/i.test(scripts + JSON.stringify(deps))) {
-        hasBlogHints = true;
-        evidence.push("Markdown/MDX tooling detected");
-      }
-    } catch {
-      /* ignore */
-    }
+  if (siteHost && (repo.name.toLowerCase().includes(siteHost.split(".")[0] || "") || repo.fullName.toLowerCase().includes(siteHost.split(".")[0] || ""))) {
+    evidence.push("Repository name relates to the website host");
   }
 
-  const lock =
-    (await getRepoContent(installationToken, owner, name, "pnpm-lock.yaml", repo.defaultBranch)).ok
-      ? "pnpm"
-      : (await getRepoContent(installationToken, owner, name, "yarn.lock", repo.defaultBranch)).ok
-        ? "yarn"
-        : (await getRepoContent(installationToken, owner, name, "package-lock.json", repo.defaultBranch)).ok
-          ? "npm"
-          : null;
-  if (lock) packageManager = lock;
+  const root = await listRepoDir(installationToken, owner, name, "", repo.defaultBranch);
+  const rootSet = new Set(root.map((n) => n.toLowerCase()));
 
-  if ((await getRepoContent(installationToken, owner, name, "vercel.json", repo.defaultBranch)).ok) {
+  if (rootSet.has("pnpm-lock.yaml")) packageManager = "pnpm";
+  else if (rootSet.has("yarn.lock")) packageManager = "yarn";
+  else if (rootSet.has("package-lock.json")) packageManager = "npm";
+
+  if (rootSet.has("vercel.json")) {
     deploymentProvider = "Vercel";
     score += 15;
     evidence.push("vercel.json present");
-  } else if ((await getRepoContent(installationToken, owner, name, "netlify.toml", repo.defaultBranch)).ok) {
+  } else if (rootSet.has("netlify.toml")) {
     deploymentProvider = "Netlify";
     score += 12;
     evidence.push("netlify.toml present");
-  } else if (
-    (await getRepoContent(installationToken, owner, name, "wrangler.toml", repo.defaultBranch)).ok
-  ) {
+  } else if (rootSet.has("wrangler.toml")) {
     deploymentProvider = "Cloudflare";
     score += 10;
   }
 
-  for (const candidate of CONTENT_CANDIDATES) {
-    const entries = await listRepoDir(installationToken, owner, name, candidate, repo.defaultBranch);
-    if (entries.length) {
+  if (
+    rootSet.has("next.config.js") ||
+    rootSet.has("next.config.mjs") ||
+    rootSet.has("next.config.ts")
+  ) {
+    framework = "Next.js";
+    score += 10;
+    evidence.push("Next.js config file present");
+  }
+
+  for (const candidate of CONTENT_FROM_ROOT) {
+    if (rootSet.has(candidate.toLowerCase()) || rootSet.has(candidate)) {
+      if (candidate === "src" || candidate === "app") {
+        // Prefer nested content dirs when present; probe once.
+        const nested = await listRepoDir(
+          installationToken,
+          owner,
+          name,
+          candidate === "src" ? "src/content" : "app",
+          repo.defaultBranch
+        );
+        if (candidate === "src" && nested.length) {
+          contentPath = "src/content";
+          score += 8;
+          evidence.push("Content folder candidate: src/content");
+          break;
+        }
+        if (candidate === "app" && nested.some((n) => /page|blog|content/i.test(n))) {
+          contentPath = "app";
+          score += 6;
+          evidence.push("App router structure detected");
+          break;
+        }
+        continue;
+      }
       contentPath = candidate;
       score += 8;
       evidence.push(`Content folder candidate: ${candidate}`);
@@ -152,28 +155,49 @@ export async function analyzeRepository(
     }
   }
 
-  const nextConfig =
-    (await getRepoContent(installationToken, owner, name, "next.config.js", repo.defaultBranch)).ok ||
-    (await getRepoContent(installationToken, owner, name, "next.config.mjs", repo.defaultBranch)).ok ||
-    (await getRepoContent(installationToken, owner, name, "next.config.ts", repo.defaultBranch)).ok;
-  if (nextConfig) {
-    framework = framework || "Next.js";
-    score += 10;
-    evidence.push("Next.js config file present");
-  }
-
-  const readme = await getRepoContent(installationToken, owner, name, "README.md", repo.defaultBranch);
-  if (readme.ok) {
-    score += scoreDomainMatch(siteHost, [readme.text.slice(0, 4000)]);
-    if (/sitemap/i.test(readme.text)) hasSitemapHints = true;
-    if (/vercel|netlify|cloudflare/i.test(readme.text) && !deploymentProvider) {
-      const m = readme.text.match(/\b(Vercel|Netlify|Cloudflare)\b/i);
-      if (m) deploymentProvider = m[1];
+  if (rootSet.has("package.json")) {
+    const pkg = await getRepoContent(installationToken, owner, name, "package.json", repo.defaultBranch);
+    if (pkg.ok) {
+      evidence.push("Found package.json");
+      score += 15;
+      try {
+        const json = JSON.parse(pkg.text) as {
+          dependencies?: Record<string, string>;
+          devDependencies?: Record<string, string>;
+          scripts?: Record<string, string>;
+        };
+        const deps = { ...(json.dependencies || {}), ...(json.devDependencies || {}) };
+        if (deps.next) {
+          framework = "Next.js";
+          score += 20;
+          evidence.push("Next.js dependency detected");
+        } else if (deps.nuxt) {
+          framework = "Nuxt";
+          score += 15;
+        } else if (deps.astro) {
+          framework = "Astro";
+          score += 15;
+        } else if (deps.gatsby) {
+          framework = "Gatsby";
+          score += 10;
+        } else if (deps.react) {
+          framework = framework || "React";
+          score += 8;
+        } else if (deps.vue) {
+          framework = framework || "Vue";
+          score += 8;
+        }
+        const scripts = Object.values(json.scripts || {}).join(" ");
+        if (/contentlayer|mdx|markdown/i.test(scripts + JSON.stringify(deps))) {
+          hasBlogHints = true;
+          evidence.push("Markdown/MDX tooling detected");
+        }
+      } catch {
+        /* ignore */
+      }
+    } else if (/rate limit/i.test(pkg.error || "")) {
+      evidence.push("Analysis limited by GitHub rate limits");
     }
-  }
-
-  if (siteHost && (repo.name.toLowerCase().includes(siteHost.split(".")[0] || "") || repo.fullName.toLowerCase().includes(siteHost.split(".")[0] || ""))) {
-    evidence.push("Repository name relates to the website host");
   }
 
   let confidence: RepoAnalysis["confidence"] = "low";
@@ -183,8 +207,8 @@ export async function analyzeRepository(
   return {
     repoId: repo.id,
     fullName: repo.fullName,
-    owner,
-    name,
+    owner: owner || repo.ownerLogin,
+    name: name || repo.name,
     private: repo.private,
     defaultBranch: repo.defaultBranch,
     framework,
@@ -214,4 +238,19 @@ export function rankReposForSite(
     return { best, ambiguous: false };
   }
   return { best: best.confidence !== "low" ? best : null, ambiguous: true };
+}
+
+/** Pre-sort repos by metadata, deep-analyze only the top N. */
+export function pickReposToAnalyze(
+  repos: InstallationRepo[],
+  siteUrl: string | null,
+  limit = 8
+): InstallationRepo[] {
+  return [...repos]
+    .sort((a, b) => scoreRepoMetadata(b, siteUrl) - scoreRepoMetadata(a, siteUrl))
+    .slice(0, Math.max(1, limit));
+}
+
+export function isRateLimitMessage(msg: string | null | undefined): boolean {
+  return !!msg && /rate limit/i.test(msg);
 }

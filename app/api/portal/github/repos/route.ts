@@ -7,6 +7,8 @@ import {
   analyzeRepository,
   rankReposForSite,
   githubAppConfigureUrl,
+  pickReposToAnalyze,
+  isRateLimitMessage,
 } from "@/lib/github-app";
 
 export const maxDuration = 60;
@@ -33,12 +35,18 @@ export async function GET(req: NextRequest) {
 
   const token = await createInstallationToken(Number(pending.installation_id));
   if (!token.ok) {
-    return NextResponse.json({ error: token.error }, { status: 422 });
+    const friendly = isRateLimitMessage(token.error)
+      ? "GitHub is briefly rate-limiting us. Wait a minute, then try again."
+      : token.error;
+    return NextResponse.json({ error: friendly }, { status: 422 });
   }
 
   const listed = await listInstallationRepos(token.token);
   if (!listed.ok) {
-    return NextResponse.json({ error: listed.error }, { status: 422 });
+    const friendly = isRateLimitMessage(listed.error)
+      ? "GitHub is briefly rate-limiting us. Wait a minute, then try again."
+      : listed.error;
+    return NextResponse.json({ error: friendly }, { status: 422 });
   }
 
   if (!listed.repos.length) {
@@ -54,10 +62,56 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const siteUrl = pending.site_url || null;
+  // Metadata pre-sort, then deep-analyze only top candidates (avoids rate limits).
+  const toAnalyze = pickReposToAnalyze(listed.repos, siteUrl, 8);
   const analyses = [];
-  for (const repo of listed.repos.slice(0, 40)) {
-    analyses.push(await analyzeRepository(token.token, repo, pending.site_url || null));
+  let hitRateLimit = false;
+  for (const repo of toAnalyze) {
+    try {
+      const analysis = await analyzeRepository(token.token, repo, siteUrl);
+      analyses.push(analysis);
+      if (analysis.evidence.some((e) => /rate limit/i.test(e))) {
+        hitRateLimit = true;
+        break;
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isRateLimitMessage(msg)) {
+        hitRateLimit = true;
+        break;
+      }
+    }
   }
+
+  // If deep analysis couldn't run, still offer metadata-only cards so the customer can pick.
+  if (!analyses.length) {
+    for (const repo of toAnalyze.slice(0, 12)) {
+      const [owner, name] = repo.fullName.split("/");
+      analyses.push({
+        repoId: repo.id,
+        fullName: repo.fullName,
+        owner: owner || repo.ownerLogin,
+        name: name || repo.name,
+        private: repo.private,
+        defaultBranch: repo.defaultBranch,
+        framework: null,
+        packageManager: null,
+        contentPath: null,
+        hasBlogHints: false,
+        hasSitemapHints: false,
+        deploymentProvider: null,
+        likelyDomain: repo.homepage || siteUrl,
+        confidence: "low" as const,
+        confidenceScore: 10,
+        evidence: hitRateLimit ? ["Shown from GitHub access — detailed scan deferred"] : [],
+        canCreateBranch: true,
+        canOpenPullRequest: true,
+        canUpdateContent: true,
+      });
+    }
+  }
+
   const ranked = rankReposForSite(analyses);
 
   return NextResponse.json({
@@ -82,9 +136,12 @@ export async function GET(req: NextRequest) {
     })),
     suggestedRepoId:
       ranked.best?.repoId ?? (analyses.length === 1 ? analyses[0].repoId : null),
-    // Multiple repos always need a visual choice; high-confidence is only preselected.
     needsSelection: analyses.length !== 1,
     ambiguous: ranked.ambiguous,
     addRepoUrl: githubAppConfigureUrl(pending.installation_id),
+    rateLimited: hitRateLimit,
+    message: hitRateLimit
+      ? "GitHub briefly limited deep scanning. You can still pick your repository."
+      : undefined,
   });
 }
