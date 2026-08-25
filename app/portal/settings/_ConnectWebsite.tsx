@@ -12,7 +12,6 @@ import {
 } from "@/lib/website-connection/capability-report";
 import ProxySetup from "./_ProxySetup";
 import CapabilityReport from "./_CapabilityReport";
-import GitHubAppConnect from "./_GitHubAppConnect";
 
 type Mode = "approval" | "hybrid" | "autopilot";
 type Step = "url" | "recommend" | "authorize" | "proxy" | "capabilities" | "mode";
@@ -121,6 +120,39 @@ export default function ConnectWebsite({
     }
   }
 
+  async function startGitHubInstall() {
+    onBusy(true);
+    try {
+      const qs = new URLSearchParams({ brand: brandId });
+      const site = detect?.origin || url;
+      if (site) qs.set("site_url", site);
+      const res = await authedFetch(`/api/portal/github/start?${qs}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        toast.error(data.error || "Connecting with GitHub isn't available right now.");
+        onBusy(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      toast.error("Could not start GitHub connection");
+      onBusy(false);
+    }
+  }
+
+  async function continueWithChosen() {
+    if (!chosen?.connectable) return;
+    if (chosen.platform === "proxy") {
+      setStep("proxy");
+      return;
+    }
+    if (chosen.platform === "github") {
+      await startGitHubInstall();
+      return;
+    }
+    setStep("authorize");
+  }
+
   async function connectChosen() {
     if (!chosen?.connectable || !platform) return;
     if (platform === "proxy") {
@@ -128,7 +160,7 @@ export default function ConnectWebsite({
       return;
     }
     if (platform === "github") {
-      // GitHub App flow is handled by GitHubAppConnect — never PAT form.
+      // GitHub App install starts from Continue — never PAT form.
       return;
     }
     onBusy(true);
@@ -288,10 +320,14 @@ export default function ConnectWebsite({
             <button
               type="button"
               className="p-btn primary"
-              onClick={() => setStep(chosen.platform === "proxy" ? "proxy" : "authorize")}
+              onClick={() => void continueWithChosen()}
               disabled={busy || !chosen.connectable}
             >
-              <span>Continue with {chosen.label}</span>
+              <span>
+                {busy && chosen.platform === "github"
+                  ? "Redirecting to GitHub…"
+                  : `Continue with ${chosen.label}`}
+              </span>
             </button>
           </div>
 
@@ -337,22 +373,6 @@ export default function ConnectWebsite({
 
           <CapabilityReport items={report} collapsed />
         </div>
-      )}
-
-      {step === "authorize" && chosen && platform === "github" && (
-        <GitHubAppConnect
-          brandId={brandId}
-          siteUrl={detect?.origin || url}
-          busy={busy}
-          onBusy={onBusy}
-          onCancel={() => setStep("recommend")}
-          onDone={() => {
-            setStep("capabilities");
-            onDone();
-          }}
-          onProve={onProve}
-          mode="authorize"
-        />
       )}
 
       {step === "authorize" && chosen && platform && platform !== "proxy" && platform !== "github" && (
