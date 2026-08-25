@@ -12,6 +12,7 @@ import {
 } from "@/lib/website-connection/capability-report";
 import ProxySetup from "./_ProxySetup";
 import CapabilityReport from "./_CapabilityReport";
+import GitHubAppConnect from "./_GitHubAppConnect";
 
 type Mode = "approval" | "hybrid" | "autopilot";
 type Step = "url" | "recommend" | "authorize" | "proxy" | "capabilities" | "mode";
@@ -75,11 +76,6 @@ export default function ConnectWebsite({
   const [wpPass, setWpPass] = useState("");
   const [shop, setShop] = useState("");
   const [shopToken, setShopToken] = useState("");
-  const [ghOwner, setGhOwner] = useState("");
-  const [ghRepo, setGhRepo] = useState("");
-  const [ghToken, setGhToken] = useState("");
-  const [ghBranch, setGhBranch] = useState("main");
-  const [ghPath, setGhPath] = useState("content");
   const [sanityProject, setSanityProject] = useState("");
   const [sanityToken, setSanityToken] = useState("");
   const [sanityDataset, setSanityDataset] = useState("production");
@@ -131,6 +127,10 @@ export default function ConnectWebsite({
       setStep("proxy");
       return;
     }
+    if (platform === "github") {
+      // GitHub App flow is handled by GitHubAppConnect — never PAT form.
+      return;
+    }
     onBusy(true);
     try {
       const payload =
@@ -151,17 +151,6 @@ export default function ConnectWebsite({
                 shop,
                 accessToken: shopToken,
               }
-            : platform === "github"
-              ? {
-                  brand_id: brandId,
-                  action: "connect" as const,
-                  platform: "github" as const,
-                  owner: ghOwner,
-                  repo: ghRepo,
-                  token: ghToken,
-                  baseBranch: ghBranch,
-                  contentPath: ghPath,
-                }
               : platform === "sanity"
                 ? {
                     brand_id: brandId,
@@ -350,7 +339,23 @@ export default function ConnectWebsite({
         </div>
       )}
 
-      {step === "authorize" && chosen && platform && platform !== "proxy" && (
+      {step === "authorize" && chosen && platform === "github" && (
+        <GitHubAppConnect
+          brandId={brandId}
+          siteUrl={detect?.origin || url}
+          busy={busy}
+          onBusy={onBusy}
+          onCancel={() => setStep("recommend")}
+          onDone={() => {
+            setStep("capabilities");
+            onDone();
+          }}
+          onProve={onProve}
+          mode="authorize"
+        />
+      )}
+
+      {step === "authorize" && chosen && platform && platform !== "proxy" && platform !== "github" && (
         <div className="p-conn-setup-fields">
           <h3 className="p-conn-setup-title">Authorize {chosen.label}</h3>
           <p className="p-conn-setup-help">
@@ -416,48 +421,6 @@ export default function ConnectWebsite({
                 onChange={(e) => setShopToken(e.target.value)}
                 disabled={busy}
                 required
-              />
-            </>
-          )}
-          {platform === "github" && (
-            <>
-              <Field
-                label="Owner"
-                placeholder="your-org"
-                value={ghOwner}
-                onChange={(e) => setGhOwner(e.target.value)}
-                disabled={busy}
-                required
-              />
-              <Field
-                label="Repository"
-                placeholder="your-site"
-                value={ghRepo}
-                onChange={(e) => setGhRepo(e.target.value)}
-                disabled={busy}
-                required
-              />
-              <Field
-                label="Personal access token"
-                type="password"
-                value={ghToken}
-                onChange={(e) => setGhToken(e.target.value)}
-                disabled={busy}
-                required
-                helper="Needs repo scope. Changes open as pull requests only — never silent production edits."
-              />
-              <Field
-                label="Base branch"
-                value={ghBranch}
-                onChange={(e) => setGhBranch(e.target.value)}
-                disabled={busy}
-              />
-              <Field
-                label="Content folder"
-                value={ghPath}
-                onChange={(e) => setGhPath(e.target.value)}
-                disabled={busy}
-                helper="Markdown/MDX files will be proposed under this path."
               />
             </>
           )}

@@ -4,24 +4,66 @@
  * Never writes directly to the default branch. Flow:
  *   check token/repo → create branch → commit file(s) → open PR
  *
- * Credentials: { token }
- * Config: { owner, repo, baseBranch?, contentPath?, defaultBranch? }
+ * Credentials (GitHub App): { authType: "github_app", installationId? }
+ * Credentials (legacy PAT, admin-only): { token } when GITHUB_ALLOW_PAT_FALLBACK=1
+ * Config: { owner, repo, baseBranch?, contentPath?, installationId?, authType?, ... }
+ *
+ * Installation access tokens are minted short-lived server-side and never persisted.
  */
 
 import type { AdapterContext, PublishAdapter, PublishResult, SiteChange } from "../types";
+import { createInstallationToken } from "@/lib/github-app/api";
 
 type GhFile = { path: string; sha?: string; content?: string };
+
+type CtxWithTokenCache = AdapterContext & { _ghInstallToken?: string };
 
 function cfg(ctx: AdapterContext) {
   const owner = String(ctx.config.owner || "").trim();
   const repo = String(ctx.config.repo || "").trim();
   const baseBranch = String(ctx.config.baseBranch || ctx.config.defaultBranch || "main").trim() || "main";
-  const contentPath = String(ctx.config.contentPath || "content").trim().replace(/^\/+|\/+$/g, "") || "content";
+  const rawPath = ctx.config.contentPath;
+  const contentPath =
+    rawPath == null || String(rawPath).trim() === ""
+      ? "content"
+      : String(rawPath).trim().replace(/^\/+|\/+$/g, "") || "content";
   return { owner, repo, baseBranch, contentPath };
 }
 
-function token(ctx: AdapterContext): string {
-  return (ctx.credentials.token || ctx.credentials.accessToken || "").trim();
+function isGitHubApp(ctx: AdapterContext): boolean {
+  const authType = String(ctx.credentials.authType || ctx.config.authType || "");
+  return authType === "github_app" || !!Number(ctx.credentials.installationId || ctx.config.installationId || 0);
+}
+
+/** Resolve a short-lived token for this request. Never log the value. */
+async function resolveToken(
+  ctx: AdapterContext
+): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  const cached = (ctx as CtxWithTokenCache)._ghInstallToken;
+  if (cached) return { ok: true, token: cached };
+
+  if (isGitHubApp(ctx)) {
+    const installationId = Number(ctx.credentials.installationId || ctx.config.installationId || 0);
+    if (!installationId) {
+      return { ok: false, error: "GitHub App installation is missing. Reconnect GitHub." };
+    }
+    const minted = await createInstallationToken(installationId);
+    if (!minted.ok) return { ok: false, error: minted.error };
+    (ctx as CtxWithTokenCache)._ghInstallToken = minted.token;
+    return { ok: true, token: minted.token };
+  }
+
+  const pat = (ctx.credentials.token || ctx.credentials.accessToken || "").trim();
+  if (pat) {
+    // Existing stored PATs may still publish; new PAT connects are gated in the API route.
+    (ctx as CtxWithTokenCache)._ghInstallToken = pat;
+    return { ok: true, token: pat };
+  }
+
+  return {
+    ok: false,
+    error: "GitHub is not connected. Use Connect GitHub to authorize repository access.",
+  };
 }
 
 async function gh(
@@ -29,14 +71,14 @@ async function gh(
   path: string,
   init: RequestInit = {}
 ): Promise<{ ok: boolean; status: number; body: unknown; error?: string }> {
-  const t = token(ctx);
-  if (!t) return { ok: false, status: 0, body: null, error: "GitHub token is required." };
+  const resolved = await resolveToken(ctx);
+  if (!resolved.ok) return { ok: false, status: 0, body: null, error: resolved.error };
   try {
     const res = await fetch(`https://api.github.com${path}`, {
       ...init,
       headers: {
         Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${t}`,
+        Authorization: `Bearer ${resolved.token}`,
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
         "User-Agent": "Volo-Website-Connection",
@@ -164,13 +206,24 @@ export const githubAdapter: PublishAdapter = {
 
   async check(ctx) {
     const { owner, repo, baseBranch } = cfg(ctx);
-    if (!owner || !repo) return { ok: false, detail: "GitHub owner and repository are required." };
-    if (!token(ctx)) return { ok: false, detail: "A GitHub personal access token with repo access is required." };
+    if (!owner || !repo) return { ok: false, detail: "GitHub repository is not selected yet." };
+    const resolved = await resolveToken(ctx);
+    if (!resolved.ok) return { ok: false, detail: resolved.error };
     const r = await gh(ctx, `/repos/${owner}/${repo}`);
     if (r.status === 401 || r.status === 403) {
-      return { ok: false, detail: "GitHub rejected the token. Check scopes (repo) and access to this repository." };
+      return {
+        ok: false,
+        detail: isGitHubApp(ctx)
+          ? "GitHub App access was rejected. Reconnect GitHub or update repository access on GitHub."
+          : "GitHub rejected the credentials. Reconnect with Connect GitHub.",
+      };
     }
-    if (r.status === 404) return { ok: false, detail: "Repository not found. Check owner/repo and token access." };
+    if (r.status === 404) {
+      return {
+        ok: false,
+        detail: "Repository not found or not authorized for this GitHub App installation.",
+      };
+    }
     if (!r.ok) {
       return { ok: false, detail: (r.body as { message?: string } | null)?.message || `GitHub HTTP ${r.status}` };
     }

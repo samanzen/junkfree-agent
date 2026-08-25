@@ -155,7 +155,7 @@ test("Connect UI ships Managed Pages ProxySetup and claim-check API", () => {
   expect(panel).toMatch(/ProxySetup/);
   expect(panel).toMatch(/proxyNavNudge/);
   expect(panel).toMatch(/Volo Managed Pages/);
-  expect(panel).toMatch(/websiteCapabilities/);
+  expect(panel).toMatch(/capabilityReport/);
   const nudge = fs.readFileSync(path.join(root, "app/portal/_components/ProxyNavNudgeCard.tsx"), "utf8");
   expect(nudge).toMatch(/Add one link/);
   expect(fs.existsSync(path.join(root, "app/api/proxy/claim-check/route.ts"))).toBe(true);
