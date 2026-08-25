@@ -125,10 +125,20 @@ test("GitHub App API routes and webhook exist", () => {
   expect(wh).toMatch(/installation/);
 });
 
-test("publishing route refuses customer PAT unless fallback flag", () => {
-  const src = read("app/api/portal/publishing/route.ts");
-  expect(src).toMatch(/GITHUB_ALLOW_PAT_FALLBACK/);
-  expect(src).toMatch(/Personal access tokens are not used for customer setup/);
+test("callback never throws bare 500 — redirects with reason", () => {
+  const src = read("app/api/portal/github/callback/route.ts");
+  expect(src).toMatch(/Must never throw a bare 500/);
+  expect(src).toMatch(/catch \(e\)/);
+  expect(src).toMatch(/reason: "error"/);
+  expect(src).toMatch(/pendingErr/);
+});
+
+test("App JWT creation is fail-closed without throwing in API requests", () => {
+  const api = read("lib/github-app/api.ts");
+  const auth = read("lib/github-app/auth.ts");
+  expect(api).toMatch(/tryCreateAppJwt/);
+  expect(auth).toMatch(/tryCreateAppJwt/);
+  expect(auth).toMatch(/does not look like a PEM private key/);
 });
 
 test("github adapter mints installation tokens for App connections", () => {

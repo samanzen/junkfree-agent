@@ -8,8 +8,8 @@ export async function createAuthAttempt(opts: {
   userId: string;
   origin: string;
   siteUrl: string | null;
-}): Promise<void> {
-  await db.from("github_app_auth_attempts").upsert({
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await db.from("github_app_auth_attempts").upsert({
     nonce: opts.nonce,
     brand_id: opts.brandId,
     user_id: opts.userId,
@@ -19,6 +19,16 @@ export async function createAuthAttempt(opts: {
     consumed_at: null,
     installation_id: null,
   });
+  if (error) {
+    return {
+      ok: false,
+      error:
+        /relation|does not exist|schema cache/i.test(error.message)
+          ? "GitHub connection tables are missing. Apply supabase/025_github_app_connection.sql."
+          : "Could not start GitHub authorization. Please try again.",
+    };
+  }
+  return { ok: true };
 }
 
 export async function consumeAuthAttempt(

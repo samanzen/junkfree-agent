@@ -591,7 +591,13 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
             ? "The authorization session expired or was invalid. Try Connect GitHub again."
             : reason === "suspended"
               ? "The GitHub App installation is suspended."
-              : msg.detail;
+              : reason === "installation"
+                ? "We couldn't verify the GitHub App installation. Check the App private key in Vercel, then try again."
+                : reason === "db"
+                  ? "Database setup is incomplete. Apply migration 025_github_app_connection.sql, then try again."
+                  : reason === "session"
+                    ? "The authorization session was missing. Apply migration 025 if you haven't, then try Connect GitHub again."
+                    : msg.detail;
       toast.error(msg.title, detail);
     } else {
       toast[msg.kind](msg.title, msg.detail);
