@@ -48,15 +48,72 @@ async function appRequest(
   }
 }
 
-/** Short-lived installation token — never persist permanently. */
+/** Short-lived installation token — never persist permanently.
+ * In-memory reuse until near expiry avoids burning GitHub secondary rate limits
+ * when the customer retries Connect within the same server instance.
+ */
+type CachedInstallToken = { token: string; expiresAtMs: number };
+const installTokenCache = new Map<number, CachedInstallToken>();
+
 export async function createInstallationToken(installationId: number): Promise<
   { ok: true; token: string; expiresAt: string } | { ok: false; error: string }
 > {
+  const cached = installTokenCache.get(installationId);
+  if (cached && cached.expiresAtMs > Date.now() + 60_000) {
+    return {
+      ok: true,
+      token: cached.token,
+      expiresAt: new Date(cached.expiresAtMs).toISOString(),
+    };
+  }
+
   const r = await appRequest(`/app/installations/${installationId}/access_tokens`, { method: "POST" });
   if (!r.ok) return { ok: false, error: r.error || "Could not create installation token." };
   const body = r.body as { token?: string; expires_at?: string } | null;
   if (!body?.token) return { ok: false, error: "GitHub did not return an installation token." };
-  return { ok: true, token: body.token, expiresAt: body.expires_at || "" };
+
+  const expiresAtMs = body.expires_at ? Date.parse(body.expires_at) : Date.now() + 50 * 60_000;
+  installTokenCache.set(installationId, { token: body.token, expiresAtMs });
+
+  return { ok: true, token: body.token, expiresAt: body.expires_at || new Date(expiresAtMs).toISOString() };
+}
+
+/** Fetch one repo the installation can access — cheaper than re-listing everything. */
+export async function getInstallationRepo(
+  installationToken: string,
+  owner: string,
+  repo: string
+): Promise<{ ok: true; repo: InstallationRepo } | { ok: false; error: string; status?: number }> {
+  const r = await appRequest(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {}, installationToken);
+  if (!r.ok) return { ok: false, error: r.error || "Repository not found.", status: r.status };
+  const body = r.body as {
+    id?: number;
+    name?: string;
+    full_name?: string;
+    private?: boolean;
+    default_branch?: string;
+    html_url?: string;
+    homepage?: string | null;
+    description?: string | null;
+    owner?: { login?: string };
+  } | null;
+  if (!body?.id || !body.name || !body.full_name) {
+    return { ok: false, error: "Repository payload incomplete." };
+  }
+  return {
+    ok: true,
+    repo: {
+      id: body.id,
+      name: body.name,
+      fullName: body.full_name,
+      private: !!body.private,
+      defaultBranch: body.default_branch || "main",
+      htmlUrl: body.html_url || "",
+      homepage: body.homepage || null,
+      description: body.description || null,
+      ownerLogin: body.owner?.login || body.full_name.split("/")[0] || "",
+    },
+  };
 }
 
 export async function getInstallation(installationId: number): Promise<

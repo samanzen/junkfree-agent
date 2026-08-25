@@ -12,11 +12,19 @@ export {
 export {
   createInstallationToken,
   getInstallation,
+  getInstallationRepo,
   listInstallationRepos,
   type InstallationRepo,
 } from "./api";
 
-export { analyzeRepository, rankReposForSite, pickReposToAnalyze, isRateLimitMessage, type RepoAnalysis } from "./analyze";
+export {
+  analyzeRepository,
+  analysisFromMetadata,
+  rankReposForSite,
+  pickReposToAnalyze,
+  isRateLimitMessage,
+  type RepoAnalysis,
+} from "./analyze";
 
 export {
   saveGitHubAppConnection,
