@@ -594,9 +594,9 @@ export default function ConnectionsPanel({ brandId }: { brandId: string }) {
               : reason === "installation"
                 ? "We couldn't verify the GitHub App installation. Check the App private key in Vercel, then try again."
                 : reason === "db"
-                  ? "Database setup is incomplete. Apply migration 025_github_app_connection.sql, then try again."
+                  ? "Database setup is incomplete. Ask your admin to finish GitHub App setup, then try again."
                   : reason === "session"
-                    ? "The authorization session was missing. Apply migration 025 if you haven't, then try Connect GitHub again."
+                    ? "The authorization session was missing. Try Connect GitHub again in a moment."
                     : msg.detail;
       toast.error(msg.title, detail);
     } else {

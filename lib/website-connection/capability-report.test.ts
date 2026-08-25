@@ -137,10 +137,10 @@ test("Connect Website UX includes promo, Analyze & Connect, and Coming Soon page
   expect(wizard).toMatch(/onRecheckAccess/);
   expect(wizard).toMatch(/onRecheckConnection/);
   expect(wizard).toMatch(/Use a different connection method/);
-  expect(wizard).toMatch(/Continue with \{chosen\.label\}/);
+  expect(wizard).toMatch(/Continue with \$\{chosen\.label\}/);
   // Recommendation step: CTA before the capability dump; caps stay collapsed.
   const recommendIdx = wizard.indexOf('step === "recommend"');
-  const continueIdx = wizard.indexOf("Continue with {chosen.label}", recommendIdx);
+  const continueIdx = wizard.indexOf("Continue with ${chosen.label}", recommendIdx);
   const capsIdx = wizard.indexOf("<CapabilityReport", recommendIdx);
   expect(continueIdx).toBeGreaterThan(recommendIdx);
   expect(capsIdx).toBeGreaterThan(continueIdx);
