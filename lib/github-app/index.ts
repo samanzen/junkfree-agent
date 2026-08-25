@@ -5,6 +5,7 @@ export {
   signGitHubAppState,
   verifyGitHubAppState,
   createAppJwt,
+  tryCreateAppJwt,
   callbackPath,
 } from "./auth";
 

@@ -84,11 +84,12 @@ test("state HMAC verify rejects tampering", async () => {
 test("customer UI has Connect GitHub and no PAT form fields", () => {
   const wizard = read("app/portal/settings/_ConnectWebsite.tsx");
   const ghUi = read("app/portal/settings/_GitHubAppConnect.tsx");
-  expect(wizard).toMatch(/GitHubAppConnect/);
+  const panel = read("app/portal/settings/_ConnectionsPanel.tsx");
+  expect(wizard).toMatch(/\/api\/portal\/github\/start/);
+  expect(wizard).toMatch(/Redirecting to GitHub/);
   expect(wizard).not.toMatch(/Personal access token/);
   expect(wizard).not.toMatch(/ghOwner|ghToken|ghPath/);
-  expect(ghUi).toMatch(/Connect GitHub/);
-  expect(ghUi).toMatch(/How GitHub access works/);
+  expect(panel).toMatch(/GitHubAppConnect/);
   expect(ghUi).toMatch(/Which repository contains this website/);
   expect(ghUi).toMatch(/Confirm connection/);
   expect(ghUi).not.toMatch(/Personal access token/);
@@ -125,10 +126,20 @@ test("GitHub App API routes and webhook exist", () => {
   expect(wh).toMatch(/installation/);
 });
 
-test("publishing route refuses customer PAT unless fallback flag", () => {
-  const src = read("app/api/portal/publishing/route.ts");
-  expect(src).toMatch(/GITHUB_ALLOW_PAT_FALLBACK/);
-  expect(src).toMatch(/Personal access tokens are not used for customer setup/);
+test("callback never throws bare 500 — redirects with reason", () => {
+  const src = read("app/api/portal/github/callback/route.ts");
+  expect(src).toMatch(/Must never throw a bare 500/);
+  expect(src).toMatch(/catch \(e\)/);
+  expect(src).toMatch(/reason: "error"/);
+  expect(src).toMatch(/pendingErr/);
+});
+
+test("App JWT creation is fail-closed without throwing in API requests", () => {
+  const api = read("lib/github-app/api.ts");
+  const auth = read("lib/github-app/auth.ts");
+  expect(api).toMatch(/tryCreateAppJwt/);
+  expect(auth).toMatch(/tryCreateAppJwt/);
+  expect(auth).toMatch(/does not look like a PEM private key/);
 });
 
 test("github adapter mints installation tokens for App connections", () => {

@@ -1,4 +1,4 @@
-import { createAppJwt, githubAppConfigured } from "./auth";
+import { tryCreateAppJwt, githubAppConfigured } from "./auth";
 
 export type GhJson = Record<string, unknown> | unknown[] | null;
 
@@ -7,14 +7,21 @@ async function appRequest(
   init: RequestInit = {},
   token?: string
 ): Promise<{ ok: boolean; status: number; body: GhJson; error?: string }> {
-  const auth = token || (githubAppConfigured() ? `Bearer ${createAppJwt()}` : "");
+  let auth = "";
+  if (token) {
+    auth = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+  } else if (githubAppConfigured()) {
+    const jwt = tryCreateAppJwt();
+    if (!jwt.ok) return { ok: false, status: 0, body: null, error: jwt.error };
+    auth = `Bearer ${jwt.jwt}`;
+  }
   if (!auth) return { ok: false, status: 0, body: null, error: "GitHub App is not configured." };
   try {
     const res = await fetch(`https://api.github.com${path}`, {
       ...init,
       headers: {
         Accept: "application/vnd.github+json",
-        Authorization: auth.startsWith("Bearer ") ? auth : `Bearer ${auth}`,
+        Authorization: auth,
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "Volo-Website-Connection",
         "Content-Type": "application/json",

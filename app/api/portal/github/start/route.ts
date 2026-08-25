@@ -44,13 +44,17 @@ export async function GET(req: NextRequest) {
     nonce,
   });
 
-  await createAuthAttempt({
+  const created = await createAuthAttempt({
     nonce,
     brandId,
     userId: auth.id,
     origin,
     siteUrl: siteUrl || null,
   });
+  if (!created.ok) {
+    console.error("[github/start] auth attempt failed", created.error);
+    return NextResponse.json({ error: created.error, configured: true }, { status: 503 });
+  }
 
   return NextResponse.json({
     url: githubAppInstallUrl(state),
